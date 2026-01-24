@@ -1,5 +1,19 @@
 """Training and evaluation utilities."""
 
+from src.training.cv import (
+    CONDITIONS,
+    BEARING_IDS,
+    BEARINGS_PER_CONDITION,
+    CVFold,
+    CVSplit,
+    generate_cv_folds,
+    get_bearing_groups,
+    leave_one_bearing_out,
+    leave_one_condition_out,
+    stratified_split,
+    time_series_split,
+    validate_no_leakage,
+)
 from src.training.metrics import (
     MetricsSummary,
     aggregate_bearing_metrics,
@@ -15,6 +29,20 @@ from src.training.metrics import (
 )
 
 __all__ = [
+    # CV utilities
+    "CONDITIONS",
+    "BEARING_IDS",
+    "BEARINGS_PER_CONDITION",
+    "CVFold",
+    "CVSplit",
+    "generate_cv_folds",
+    "get_bearing_groups",
+    "leave_one_bearing_out",
+    "leave_one_condition_out",
+    "stratified_split",
+    "time_series_split",
+    "validate_no_leakage",
+    # Metrics
     "rmse",
     "mae",
     "mape",
