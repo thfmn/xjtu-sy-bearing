@@ -1,6 +1,18 @@
 """Feature extraction modules."""
 
-from src.features import frequency_domain, time_domain
+from src.features import frequency_domain, fusion, time_domain
+from src.features.fusion import (
+    ExtractionMode,
+    FeatureExtractor,
+    FeatureInfo,
+    NUM_ALL_FEATURES,
+    NUM_FREQ_FEATURES,
+    NUM_TIME_FEATURES,
+    extract_all_features,
+    extract_all_features_dict,
+    get_all_feature_names,
+    get_feature_groups,
+)
 from src.features.time_domain import (
     CHANNEL_FEATURES as TIME_DOMAIN_FEATURES,
     NUM_FEATURES_PER_CHANNEL as NUM_TIME_FEATURES_PER_CHANNEL,
@@ -26,6 +38,18 @@ __all__ = [
     # Submodules
     "time_domain",
     "frequency_domain",
+    "fusion",
+    # Fusion exports (unified interface)
+    "ExtractionMode",
+    "FeatureExtractor",
+    "FeatureInfo",
+    "NUM_ALL_FEATURES",
+    "NUM_FREQ_FEATURES",
+    "NUM_TIME_FEATURES",
+    "extract_all_features",
+    "extract_all_features_dict",
+    "get_all_feature_names",
+    "get_feature_groups",
     # Time-domain exports
     "TIME_DOMAIN_FEATURES",
     "NUM_TIME_FEATURES_PER_CHANNEL",
