@@ -21,6 +21,15 @@ from src.models.baselines.lgbm_baseline import (
     train_with_cv,
 )
 
+from src.models.baselines.cnn1d_baseline import (
+    CNN1DBaseline,
+    CNN1DConfig,
+    build_cnn1d_model,
+    create_default_cnn1d,
+    get_model_summary,
+    print_model_summary,
+)
+
 __all__ = [
     # Trending baselines
     "HealthIndicatorFusion",
@@ -39,4 +48,11 @@ __all__ = [
     "plot_feature_importance",
     "plot_shap_summary",
     "train_with_cv",
+    # 1D CNN baseline
+    "CNN1DBaseline",
+    "CNN1DConfig",
+    "build_cnn1d_model",
+    "create_default_cnn1d",
+    "get_model_summary",
+    "print_model_summary",
 ]
