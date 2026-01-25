@@ -27,6 +27,16 @@ from src.training.metrics import (
     print_evaluation_report,
     rmse,
 )
+from src.training.config import (
+    OptimizerConfig,
+    LossConfig,
+    CallbackConfig,
+    TrainingConfig,
+    MLflowCallback,
+    build_callbacks,
+    compile_model,
+    DEFAULT_CONFIG,
+)
 
 __all__ = [
     # CV utilities
@@ -54,4 +64,13 @@ __all__ = [
     "per_bearing_metrics",
     "aggregate_bearing_metrics",
     "print_evaluation_report",
+    # Training config
+    "OptimizerConfig",
+    "LossConfig",
+    "CallbackConfig",
+    "TrainingConfig",
+    "MLflowCallback",
+    "build_callbacks",
+    "compile_model",
+    "DEFAULT_CONFIG",
 ]

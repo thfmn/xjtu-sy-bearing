@@ -1,0 +1,50 @@
+# Default Training Configuration for Bearing RUL Prediction
+# This file contains the standard training hyperparameters.
+# Override specific values by creating a new YAML file or modifying programmatically.
+
+# Basic training parameters
+batch_size: 32
+epochs: 100
+validation_split: 0.2
+shuffle: true
+verbose: 1
+
+# Random seed for reproducibility
+seed: 42
+
+# Optimizer configuration
+optimizer:
+  name: adamw          # Options: adam, adamw, sgd
+  learning_rate: 0.001
+  weight_decay: 0.0001 # For AdamW
+  beta_1: 0.9
+  beta_2: 0.999
+  epsilon: 0.0000001
+  momentum: 0.9        # For SGD
+
+# Loss function configuration
+loss:
+  name: huber          # Options: huber, mse, mae
+  delta: 10.0          # Huber loss delta parameter
+
+# Callback configuration
+callbacks:
+  # ModelCheckpoint settings
+  checkpoint_dir: outputs/models/checkpoints
+  save_best_only: true
+  monitor: val_loss
+  mode: min
+
+  # ReduceLROnPlateau settings
+  lr_reduce_factor: 0.5
+  lr_reduce_patience: 10
+  lr_min: 0.000001
+
+  # EarlyStopping settings
+  early_stop_patience: 20
+  restore_best_weights: true
+
+  # MLflow experiment tracking
+  mlflow_tracking: true
+  mlflow_tracking_uri: mlruns
+  mlflow_experiment_name: bearing_rul_prediction
