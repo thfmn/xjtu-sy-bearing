@@ -1,6 +1,6 @@
 """Feature extraction modules."""
 
-from src.features import frequency_domain, fusion, time_domain
+from src.features import frequency_domain, fusion, stft, time_domain
 from src.features.fusion import (
     ExtractionMode,
     FeatureExtractor,
@@ -33,12 +33,24 @@ from src.features.frequency_domain import (
     extract_features_dict as extract_freq_features_dict,
     get_feature_names as get_freq_feature_names,
 )
+from src.features.stft import (
+    STFTConfig,
+    NormalizationMode,
+    extract_spectrogram,
+    generate_mel_spectrogram,
+    generate_spectrogram_dual_channel,
+    generate_linear_spectrogram,
+    create_mel_filterbank,
+    compute_stft,
+    get_default_config as get_default_stft_config,
+)
 
 __all__ = [
     # Submodules
     "time_domain",
     "frequency_domain",
     "fusion",
+    "stft",
     # Fusion exports (unified interface)
     "ExtractionMode",
     "FeatureExtractor",
@@ -68,4 +80,14 @@ __all__ = [
     "extract_freq_features",
     "extract_freq_features_dict",
     "get_freq_feature_names",
+    # STFT/Spectrogram exports
+    "STFTConfig",
+    "NormalizationMode",
+    "extract_spectrogram",
+    "generate_mel_spectrogram",
+    "generate_spectrogram_dual_channel",
+    "generate_linear_spectrogram",
+    "create_mel_filterbank",
+    "compute_stft",
+    "get_default_stft_config",
 ]
