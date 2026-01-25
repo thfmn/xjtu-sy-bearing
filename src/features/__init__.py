@@ -1,6 +1,6 @@
 """Feature extraction modules."""
 
-from src.features import frequency_domain, fusion, stft, time_domain
+from src.features import envelope, frequency_domain, fusion, stft, time_domain
 from src.features.fusion import (
     ExtractionMode,
     FeatureExtractor,
@@ -44,6 +44,25 @@ from src.features.stft import (
     compute_stft,
     get_default_config as get_default_stft_config,
 )
+from src.features.envelope import (
+    EnvelopeConfig,
+    FilterType,
+    ENVELOPE_FEATURE_NAMES,
+    NUM_ENVELOPE_FEATURES,
+    get_default_config as get_default_envelope_config,
+    design_bandpass_filter,
+    apply_bandpass_filter,
+    compute_envelope,
+    compute_envelope_spectrum,
+    extract_envelope_statistics,
+    extract_envelope_features,
+    extract_envelope_features_dual_channel,
+    extract_envelope_features_dict,
+    get_envelope_feature_names,
+    get_dual_channel_feature_names as get_envelope_dual_channel_feature_names,
+    detect_fault_signatures,
+    analyze_bearing_health,
+)
 
 __all__ = [
     # Submodules
@@ -51,6 +70,7 @@ __all__ = [
     "frequency_domain",
     "fusion",
     "stft",
+    "envelope",
     # Fusion exports (unified interface)
     "ExtractionMode",
     "FeatureExtractor",
@@ -90,4 +110,22 @@ __all__ = [
     "create_mel_filterbank",
     "compute_stft",
     "get_default_stft_config",
+    # Envelope analysis exports
+    "EnvelopeConfig",
+    "FilterType",
+    "ENVELOPE_FEATURE_NAMES",
+    "NUM_ENVELOPE_FEATURES",
+    "get_default_envelope_config",
+    "design_bandpass_filter",
+    "apply_bandpass_filter",
+    "compute_envelope",
+    "compute_envelope_spectrum",
+    "extract_envelope_statistics",
+    "extract_envelope_features",
+    "extract_envelope_features_dual_channel",
+    "extract_envelope_features_dict",
+    "get_envelope_feature_names",
+    "get_envelope_dual_channel_feature_names",
+    "detect_fault_signatures",
+    "analyze_bearing_health",
 ]
