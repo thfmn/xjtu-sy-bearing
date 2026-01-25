@@ -1,6 +1,6 @@
 """Feature extraction modules."""
 
-from src.features import envelope, frequency_domain, fusion, stft, time_domain
+from src.features import cwt, envelope, frequency_domain, fusion, stft, time_domain
 from src.features.fusion import (
     ExtractionMode,
     FeatureExtractor,
@@ -63,6 +63,18 @@ from src.features.envelope import (
     detect_fault_signatures,
     analyze_bearing_health,
 )
+from src.features.cwt import (
+    CWTConfig,
+    NormalizationMode as CWTNormalizationMode,
+    extract_scalogram,
+    generate_scalogram,
+    generate_scalogram_dual_channel,
+    generate_scalograms_batched,
+    compute_cwt,
+    get_default_config as get_default_cwt_config,
+    get_scale_frequencies,
+    estimate_memory_usage as estimate_cwt_memory_usage,
+)
 
 __all__ = [
     # Submodules
@@ -71,6 +83,7 @@ __all__ = [
     "fusion",
     "stft",
     "envelope",
+    "cwt",
     # Fusion exports (unified interface)
     "ExtractionMode",
     "FeatureExtractor",
@@ -128,4 +141,15 @@ __all__ = [
     "get_envelope_dual_channel_feature_names",
     "detect_fault_signatures",
     "analyze_bearing_health",
+    # CWT/Scalogram exports
+    "CWTConfig",
+    "CWTNormalizationMode",
+    "extract_scalogram",
+    "generate_scalogram",
+    "generate_scalogram_dual_channel",
+    "generate_scalograms_batched",
+    "compute_cwt",
+    "get_default_cwt_config",
+    "get_scale_frequencies",
+    "estimate_cwt_memory_usage",
 ]
