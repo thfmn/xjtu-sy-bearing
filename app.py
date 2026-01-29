@@ -403,7 +403,24 @@ def create_app() -> gr.Blocks:
                     if scatter_png.exists():
                         gr.Image(value=str(scatter_png), label="Predicted vs Actual")
                 else:
-                    gr.Markdown("*Interactive components coming next.*")
+                    # --- Bearing selector dropdown ---
+                    bearing_list = sorted(DATA.get("predictions", {}).keys())
+                    pred_bearing_dd = gr.Dropdown(
+                        choices=bearing_list,
+                        value=bearing_list[0] if bearing_list else None,
+                        label="Select Bearing",
+                    )
+
+                    # --- RUL prediction curve ---
+                    rul_curve_plot = gr.Plot(
+                        value=plot_rul_curve(bearing_list[0]) if bearing_list else None,
+                        label="RUL Prediction Curve",
+                    )
+                    pred_bearing_dd.change(
+                        fn=plot_rul_curve,
+                        inputs=pred_bearing_dd,
+                        outputs=rul_curve_plot,
+                    )
             with gr.Tab("Audio Analysis"):
                 gr.Markdown("*Coming in READY-10*")
     return app
