@@ -254,7 +254,57 @@ def create_app() -> gr.Blocks:
                     outputs=dist_plot,
                 )
             with gr.Tab("Model Results"):
-                gr.Markdown("*Coming in READY-8*")
+                gr.Markdown("### Model Comparison")
+                # --- Model comparison table ---
+                comparison_df = DATA["model_comparison"][
+                    ["Model", "Type", "RMSE", "MAE", "PHM08 (norm)"]
+                ].round(2)
+                gr.Dataframe(
+                    value=comparison_df,
+                    label="Model Comparison (all models)",
+                    interactive=False,
+                )
+
+                # --- Feature importance chart with slider ---
+                gr.Markdown("### Feature Importance (LightGBM)")
+                fi_slider = gr.Slider(
+                    minimum=5,
+                    maximum=65,
+                    value=20,
+                    step=1,
+                    label="Top N Features",
+                )
+                fi_plot = gr.Plot(
+                    value=plot_feature_importance(20),
+                    label="Feature Importance",
+                )
+                fi_slider.change(
+                    fn=plot_feature_importance,
+                    inputs=fi_slider,
+                    outputs=fi_plot,
+                )
+
+                # --- Per-bearing performance table ---
+                gr.Markdown("### Per-Bearing Performance (LightGBM CV)")
+                per_bearing_df = DATA["per_bearing"][
+                    ["bearing_id", "n_samples", "rmse", "mae"]
+                ].round(2)
+                gr.Dataframe(
+                    value=per_bearing_df,
+                    label="Per-Bearing Metrics",
+                    interactive=False,
+                )
+
+                # --- SHAP plot (pre-generated image) ---
+                gr.Markdown("### SHAP Feature Importance")
+                shap_path = MODELS_DIR / "lgbm_shap_bar.png"
+                if shap_path.exists():
+                    gr.Image(
+                        value=str(shap_path),
+                        label="SHAP Bar Plot",
+                    )
+                else:
+                    gr.Markdown("*SHAP image not found.*")
             with gr.Tab("Predictions"):
                 gr.Markdown("*Coming in READY-9*")
             with gr.Tab("Audio Analysis"):
