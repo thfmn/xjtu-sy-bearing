@@ -242,6 +242,18 @@ def plot_scatter_all_predictions() -> go.Figure:
     return fig
 
 
+def get_audio_path(condition: str, bearing_id: str, stage_key: str) -> str | None:
+    """Return path to WAV file, or None if not found.
+
+    Args:
+        condition: Operating condition, e.g. "35Hz12kN".
+        bearing_id: Bearing identifier, e.g. "Bearing1_1".
+        stage_key: Lifecycle stage key, e.g. "healthy_0pct".
+    """
+    path = AUDIO_DIR / condition / bearing_id / f"{bearing_id}_{stage_key}_h.wav"
+    return str(path) if path.exists() else None
+
+
 def plot_feature_distribution(feature_name: str) -> go.Figure:
     """Box plot of a selected feature across the 3 operating conditions."""
     df = DATA["features_df"]
