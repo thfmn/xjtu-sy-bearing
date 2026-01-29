@@ -448,6 +448,17 @@ def create_app() -> gr.Blocks:
                             )
                         else:
                             gr.Markdown("*Uncertainty vs RUL image not found.*")
+
+                    # --- Per-bearing error table ---
+                    gr.Markdown("### Per-Bearing Error Breakdown (LightGBM CV)")
+                    pred_per_bearing_df = DATA["per_bearing"][
+                        ["bearing_id", "n_samples", "rmse", "mae"]
+                    ].round(2)
+                    gr.Dataframe(
+                        value=pred_per_bearing_df,
+                        label="Per-Bearing Metrics",
+                        interactive=False,
+                    )
             with gr.Tab("Audio Analysis"):
                 gr.Markdown("*Coming in READY-10*")
     return app
