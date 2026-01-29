@@ -128,6 +128,21 @@ def normalize_audio(
     return data
 
 
+def normalize_amplitude(data: np.ndarray) -> np.ndarray:
+    """Normalize signal amplitude to [-1, 1] range.
+
+    Scales the signal so that the maximum absolute value equals 1.0.
+    Handles all-zeros input gracefully (returns as-is).
+
+    Args:
+        data: Input 1D signal array.
+
+    Returns:
+        Signal scaled to [-1.0, 1.0] range.
+    """
+    return normalize_audio(data, target_peak=1.0)
+
+
 def signal_to_wav(
     data: np.ndarray,
     output_path: Union[str, Path],
@@ -272,6 +287,55 @@ def convert_vibration_to_audio(
         target_peak=config.target_peak,
         bit_depth=config.bit_depth,
     )
+
+
+def generate_bearing_audio(
+    condition: str,
+    bearing_id: str,
+    file_indices: list[int],
+    output_dir: Union[str, Path],
+    data_loader=None,
+    config: AudioConfig | None = None,
+) -> list[Path]:
+    """Generate WAV audio files for specific bearing lifecycle stages.
+
+    Loads vibration data for the given file indices and converts each to a
+    WAV audio file. By default, normalization is disabled to preserve
+    relative amplitude differences between lifecycle stages.
+
+    Args:
+        condition: Operating condition (e.g., "35Hz12kN").
+        bearing_id: Bearing identifier (e.g., "Bearing1_1").
+        file_indices: List of file numbers (CSV filename stems, e.g., [1, 60, 120]).
+        output_dir: Directory to write WAV files into.
+        data_loader: XJTUBearingLoader instance (required).
+        config: Audio configuration. Defaults to AudioConfig(normalize=False).
+
+    Returns:
+        List of paths to generated WAV files.
+
+    Raises:
+        ValueError: If data_loader is None.
+    """
+    if data_loader is None:
+        raise ValueError("data_loader is required")
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if config is None:
+        config = AudioConfig(normalize=False)
+
+    paths: list[Path] = []
+    for file_idx in file_indices:
+        file_path = data_loader.data_root / condition / bearing_id / f"{file_idx}.csv"
+        signal = data_loader.load_file(file_path)
+
+        output_path = output_dir / f"{bearing_id}_{file_idx}.wav"
+        wav_path = convert_vibration_to_audio(signal, output_path, config=config)
+        paths.append(wav_path)
+
+    return paths
 
 
 def get_resampled_duration_ms(
