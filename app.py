@@ -158,6 +158,90 @@ def plot_feature_importance(top_n: int = 20) -> go.Figure:
     return fig
 
 
+def plot_rul_curve(bearing_id: str) -> go.Figure:
+    """Line chart: predicted vs actual RUL over file index for one bearing."""
+    preds = DATA.get("predictions", {}).get(bearing_id)
+    if preds is None:
+        fig = go.Figure()
+        fig.update_layout(title=f"No predictions available for {bearing_id}")
+        return fig
+
+    y_true = np.array(preds["y_true"])
+    y_pred = np.array(preds["y_pred"])
+    file_idx = np.arange(len(y_true))
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=file_idx,
+            y=y_true,
+            name="Ground Truth",
+            line=dict(color="#1f77b4", width=2),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=file_idx,
+            y=y_pred,
+            name="Predicted",
+            line=dict(color="#d62728", width=2),
+        )
+    )
+    fig.update_layout(
+        title=f"RUL Prediction — {bearing_id}",
+        xaxis_title="File Index (≈ minutes)",
+        yaxis_title="Remaining Useful Life",
+        hovermode="x unified",
+    )
+    return fig
+
+
+def plot_scatter_all_predictions() -> go.Figure:
+    """Scatter: all predicted vs actual RUL from all 15 CV folds, colored by bearing."""
+    predictions = DATA.get("predictions", {})
+    if not predictions:
+        fig = go.Figure()
+        fig.update_layout(title="No predictions available")
+        return fig
+
+    fig = go.Figure()
+
+    for bearing_id, preds in sorted(predictions.items()):
+        y_true = np.array(preds["y_true"])
+        y_pred = np.array(preds["y_pred"])
+        fig.add_trace(
+            go.Scatter(
+                x=y_true,
+                y=y_pred,
+                mode="markers",
+                name=bearing_id,
+                marker=dict(size=4, opacity=0.6),
+            )
+        )
+
+    # Diagonal reference line (perfect prediction)
+    all_true = np.concatenate([np.array(p["y_true"]) for p in predictions.values()])
+    max_val = float(np.max(all_true)) * 1.05
+    fig.add_trace(
+        go.Scatter(
+            x=[0, max_val],
+            y=[0, max_val],
+            mode="lines",
+            name="Perfect",
+            line=dict(color="black", dash="dash", width=1),
+            showlegend=True,
+        )
+    )
+
+    fig.update_layout(
+        title="Predicted vs Actual RUL (all bearings, LightGBM CV)",
+        xaxis_title="Actual RUL",
+        yaxis_title="Predicted RUL",
+        height=550,
+    )
+    return fig
+
+
 def plot_feature_distribution(feature_name: str) -> go.Figure:
     """Box plot of a selected feature across the 3 operating conditions."""
     df = DATA["features_df"]
@@ -306,7 +390,20 @@ def create_app() -> gr.Blocks:
                 else:
                     gr.Markdown("*SHAP image not found.*")
             with gr.Tab("Predictions"):
-                gr.Markdown("*Coming in READY-9*")
+                gr.Markdown("### RUL Predictions")
+                if not DATA.get("has_model", False):
+                    gr.Markdown(
+                        "⚠️ **LightGBM model not available.** "
+                        "Displaying pre-generated prediction plots instead."
+                    )
+                    pred_png = MODELS_DIR / "lgbm_predictions.png"
+                    scatter_png = MODELS_DIR / "lgbm_scatter.png"
+                    if pred_png.exists():
+                        gr.Image(value=str(pred_png), label="LightGBM Predictions")
+                    if scatter_png.exists():
+                        gr.Image(value=str(scatter_png), label="Predicted vs Actual")
+                else:
+                    gr.Markdown("*Interactive components coming next.*")
             with gr.Tab("Audio Analysis"):
                 gr.Markdown("*Coming in READY-10*")
     return app
