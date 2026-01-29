@@ -421,6 +421,33 @@ def create_app() -> gr.Blocks:
                         inputs=pred_bearing_dd,
                         outputs=rul_curve_plot,
                     )
+
+                    # --- Predicted vs Actual scatter (static, computed once) ---
+                    gr.Markdown("### Predicted vs Actual RUL (all bearings)")
+                    gr.Plot(
+                        value=plot_scatter_all_predictions(),
+                        label="Predicted vs Actual RUL",
+                    )
+
+                    # --- Uncertainty visualizations (pre-generated PNGs) ---
+                    gr.Markdown("### Uncertainty Quantification")
+                    uncertainty_intervals_path = MODELS_DIR / "uncertainty_prediction_intervals.png"
+                    uncertainty_vs_rul_path = MODELS_DIR / "uncertainty_vs_rul.png"
+                    with gr.Row():
+                        if uncertainty_intervals_path.exists():
+                            gr.Image(
+                                value=str(uncertainty_intervals_path),
+                                label="Prediction Intervals (68% & 95% CI)",
+                            )
+                        else:
+                            gr.Markdown("*Prediction intervals image not found.*")
+                        if uncertainty_vs_rul_path.exists():
+                            gr.Image(
+                                value=str(uncertainty_vs_rul_path),
+                                label="Uncertainty vs RUL",
+                            )
+                        else:
+                            gr.Markdown("*Uncertainty vs RUL image not found.*")
             with gr.Tab("Audio Analysis"):
                 gr.Markdown("*Coming in READY-10*")
     return app
