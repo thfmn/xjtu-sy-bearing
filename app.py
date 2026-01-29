@@ -12,6 +12,8 @@ from pathlib import Path
 import gradio as gr
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from src.data.loader import CONDITIONS, BEARINGS_PER_CONDITION
 from src.models.baselines.lgbm_baseline import train_with_cv, get_feature_columns
@@ -65,6 +67,49 @@ def load_data() -> dict:
         print(f"Warning: LightGBM retraining failed: {e}")
 
     return data
+
+
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
+
+def plot_degradation_trend(condition: str, bearing_id: str) -> go.Figure:
+    """Plot RMS and kurtosis over file index for a single bearing (dual Y-axis)."""
+    df = DATA["features_df"]
+    mask = (df["condition"] == condition) & (df["bearing_id"] == bearing_id)
+    bearing_df = df.loc[mask].sort_values("file_idx")
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    fig.add_trace(
+        go.Scatter(
+            x=bearing_df["file_idx"],
+            y=bearing_df["h_rms"],
+            name="RMS (horizontal)",
+            line=dict(color="#1f77b4"),
+        ),
+        secondary_y=False,
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=bearing_df["file_idx"],
+            y=bearing_df["h_kurtosis"],
+            name="Kurtosis (horizontal)",
+            line=dict(color="#d62728"),
+        ),
+        secondary_y=True,
+    )
+
+    fig.update_layout(
+        title=f"Degradation Trend — {bearing_id} ({condition})",
+        hovermode="x unified",
+    )
+    fig.update_xaxes(title_text="File Index (≈ minutes)")
+    fig.update_yaxes(title_text="RMS", secondary_y=False)
+    fig.update_yaxes(title_text="Kurtosis", secondary_y=True)
+
+    return fig
 
 
 # ---------------------------------------------------------------------------
