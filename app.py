@@ -254,6 +254,64 @@ def get_audio_path(condition: str, bearing_id: str, stage_key: str) -> str | Non
     return str(path) if path.exists() else None
 
 
+def plot_waveform(wav_path: str | None) -> go.Figure | None:
+    """Plot audio waveform from WAV file. Returns None if path is None."""
+    if wav_path is None:
+        return None
+
+    import scipy.io.wavfile as wavfile
+
+    sample_rate, data = wavfile.read(wav_path)
+
+    # Convert int16 to float for display
+    if data.dtype == np.int16:
+        data = data.astype(np.float32) / 32768.0
+    elif data.dtype == np.int32:
+        data = data.astype(np.float32) / 2147483648.0
+
+    # Use only first channel if stereo
+    if data.ndim == 2:
+        data = data[:, 0]
+
+    # Subsample to ~5000 points for rendering speed
+    n_samples = len(data)
+    if n_samples > 5000:
+        step = n_samples // 5000
+        data = data[::step]
+        n_samples = len(data)
+
+    time_ms = np.linspace(0, len(data) * 1000.0 / sample_rate, n_samples, endpoint=False)
+
+    fig = go.Figure(
+        go.Scatter(x=time_ms, y=data, mode="lines", line=dict(width=0.5))
+    )
+    fig.update_layout(
+        xaxis_title="Time (ms)",
+        yaxis_title="Amplitude",
+        height=250,
+        margin=dict(l=50, r=20, t=30, b=40),
+    )
+    return fig
+
+
+AUDIO_STAGES = {
+    "Healthy (0%)": "healthy_0pct",
+    "Degrading (50%)": "degrading_50pct",
+    "Failed (100%)": "failed_100pct",
+}
+
+
+def update_audio_comparison(condition: str, bearing_id: str):
+    """Return 6 outputs: (audio_path, waveform_plot) x 3 stages."""
+    results = []
+    for _label, stage_key in AUDIO_STAGES.items():
+        audio_path = get_audio_path(condition, bearing_id, stage_key)
+        waveform = plot_waveform(audio_path)
+        results.append(audio_path)
+        results.append(waveform)
+    return results
+
+
 def plot_feature_distribution(feature_name: str) -> go.Figure:
     """Box plot of a selected feature across the 3 operating conditions."""
     df = DATA["features_df"]
@@ -472,7 +530,78 @@ def create_app() -> gr.Blocks:
                         interactive=False,
                     )
             with gr.Tab("Audio Analysis"):
-                gr.Markdown("*Coming in READY-10*")
+                gr.Markdown("### Audio Analysis — Bearing Lifecycle Sonification")
+                gr.Markdown(
+                    "Listen to vibration signals converted to audio. "
+                    "Compare healthy, degrading, and failed states."
+                )
+
+                # --- Cascading dropdowns (separate from EDA tab) ---
+                audio_condition_choices = list(CONDITIONS.keys())
+                audio_default_cond = audio_condition_choices[0]
+                audio_default_bearings = BEARINGS_PER_CONDITION[audio_default_cond]
+
+                with gr.Row():
+                    audio_condition_dd = gr.Dropdown(
+                        choices=audio_condition_choices,
+                        value=audio_default_cond,
+                        label="Operating Condition",
+                    )
+                    audio_bearing_dd = gr.Dropdown(
+                        choices=audio_default_bearings,
+                        value=audio_default_bearings[0],
+                        label="Bearing",
+                    )
+
+                def _update_audio_bearing_choices(condition: str):
+                    bearings = BEARINGS_PER_CONDITION.get(condition, [])
+                    return gr.Dropdown(
+                        choices=bearings,
+                        value=bearings[0] if bearings else None,
+                    )
+
+                audio_condition_dd.change(
+                    fn=_update_audio_bearing_choices,
+                    inputs=audio_condition_dd,
+                    outputs=audio_bearing_dd,
+                )
+
+                # --- Three-column comparison layout ---
+                stage_labels = list(AUDIO_STAGES.keys())
+                audio_components = []  # collect (audio, plot) pairs
+
+                with gr.Row():
+                    for label in stage_labels:
+                        with gr.Column():
+                            gr.Markdown(f"**{label}**")
+                            audio_comp = gr.Audio(
+                                type="filepath",
+                                label=label,
+                                interactive=False,
+                            )
+                            waveform_comp = gr.Plot(label=f"Waveform — {label}")
+                            audio_components.append(audio_comp)
+                            audio_components.append(waveform_comp)
+
+                # Initial values
+                _init_results = update_audio_comparison(
+                    audio_default_cond, audio_default_bearings[0]
+                )
+                for i, comp in enumerate(audio_components):
+                    comp.value = _init_results[i]
+
+                # Wire callback: bearing change updates all 6 components
+                audio_bearing_dd.change(
+                    fn=update_audio_comparison,
+                    inputs=[audio_condition_dd, audio_bearing_dd],
+                    outputs=audio_components,
+                )
+                # Also update when condition changes (after bearing dropdown updates)
+                audio_condition_dd.change(
+                    fn=update_audio_comparison,
+                    inputs=[audio_condition_dd, audio_bearing_dd],
+                    outputs=audio_components,
+                )
     return app
 
 
