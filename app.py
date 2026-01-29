@@ -113,6 +113,51 @@ def plot_degradation_trend(condition: str, bearing_id: str) -> go.Figure:
     return fig
 
 
+def compute_dataset_overview() -> pd.DataFrame:
+    """Summary statistics table: files and bearing lifetimes per condition."""
+    df = DATA["features_df"]
+    rows = []
+    for condition in sorted(df["condition"].unique()):
+        cond_df = df[df["condition"] == condition]
+        lifetimes = cond_df.groupby("bearing_id")["total_files"].first()
+        rows.append(
+            {
+                "Condition": condition,
+                "Bearings": cond_df["bearing_id"].nunique(),
+                "Total Files": len(cond_df),
+                "Min Lifetime": int(lifetimes.min()),
+                "Max Lifetime": int(lifetimes.max()),
+                "Mean Lifetime": round(lifetimes.mean(), 1),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def plot_feature_importance(top_n: int = 20) -> go.Figure:
+    """Interactive horizontal bar chart of feature importance with error bars."""
+    df = DATA["feature_importance"].sort_values("importance_mean", ascending=False).head(int(top_n))
+    # Reverse so highest importance is at top of horizontal bar chart
+    df = df.iloc[::-1]
+
+    fig = go.Figure(
+        go.Bar(
+            x=df["importance_mean"],
+            y=df["feature"],
+            orientation="h",
+            error_x=dict(type="data", array=df["importance_std"].values),
+            marker_color="#1f77b4",
+        )
+    )
+    fig.update_layout(
+        title=f"Top {int(top_n)} Feature Importance (LightGBM, gain-based)",
+        xaxis_title="Mean Importance",
+        yaxis_title="Feature",
+        height=max(400, int(top_n) * 25),
+        margin=dict(l=200),
+    )
+    return fig
+
+
 def plot_feature_distribution(feature_name: str) -> go.Figure:
     """Box plot of a selected feature across the 3 operating conditions."""
     df = DATA["features_df"]
@@ -144,7 +189,70 @@ def create_app() -> gr.Blocks:
         )
         with gr.Tabs():
             with gr.Tab("EDA"):
-                gr.Markdown("*Coming in READY-7*")
+                gr.Markdown("### Exploratory Data Analysis")
+
+                # --- Dataset overview table ---
+                overview_table = gr.Dataframe(
+                    value=compute_dataset_overview(),
+                    label="Dataset Overview",
+                    interactive=False,
+                )
+
+                # --- Cascading dropdowns: condition → bearing ---
+                condition_choices = list(CONDITIONS.keys())
+                default_condition = condition_choices[0]
+                default_bearings = BEARINGS_PER_CONDITION[default_condition]
+
+                with gr.Row():
+                    eda_condition_dd = gr.Dropdown(
+                        choices=condition_choices,
+                        value=default_condition,
+                        label="Operating Condition",
+                    )
+                    eda_bearing_dd = gr.Dropdown(
+                        choices=default_bearings,
+                        value=default_bearings[0],
+                        label="Bearing",
+                    )
+
+                def _update_bearing_choices(condition: str):
+                    bearings = BEARINGS_PER_CONDITION.get(condition, [])
+                    return gr.Dropdown(choices=bearings, value=bearings[0] if bearings else None)
+
+                eda_condition_dd.change(
+                    fn=_update_bearing_choices,
+                    inputs=eda_condition_dd,
+                    outputs=eda_bearing_dd,
+                )
+
+                # --- Degradation trend plot ---
+                trend_plot = gr.Plot(
+                    value=plot_degradation_trend(default_condition, default_bearings[0]),
+                    label="Degradation Trend",
+                )
+
+                eda_bearing_dd.change(
+                    fn=plot_degradation_trend,
+                    inputs=[eda_condition_dd, eda_bearing_dd],
+                    outputs=trend_plot,
+                )
+
+                # --- Feature distribution ---
+                gr.Markdown("### Feature Distribution by Condition")
+                feature_dd = gr.Dropdown(
+                    choices=DATA.get("feature_cols", []),
+                    value="h_rms",
+                    label="Select Feature",
+                )
+                dist_plot = gr.Plot(
+                    value=plot_feature_distribution("h_rms"),
+                    label="Feature Distribution",
+                )
+                feature_dd.change(
+                    fn=plot_feature_distribution,
+                    inputs=feature_dd,
+                    outputs=dist_plot,
+                )
             with gr.Tab("Model Results"):
                 gr.Markdown("*Coming in READY-8*")
             with gr.Tab("Predictions"):
