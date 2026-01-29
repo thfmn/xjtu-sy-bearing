@@ -12,6 +12,7 @@ from pathlib import Path
 import gradio as gr
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -109,6 +110,24 @@ def plot_degradation_trend(condition: str, bearing_id: str) -> go.Figure:
     fig.update_yaxes(title_text="RMS", secondary_y=False)
     fig.update_yaxes(title_text="Kurtosis", secondary_y=True)
 
+    return fig
+
+
+def plot_feature_distribution(feature_name: str) -> go.Figure:
+    """Box plot of a selected feature across the 3 operating conditions."""
+    df = DATA["features_df"]
+    fig = px.box(
+        df,
+        x="condition",
+        y=feature_name,
+        color="condition",
+        title=f"Distribution of {feature_name} by Condition",
+    )
+    fig.update_layout(
+        xaxis_title="Operating Condition",
+        yaxis_title=feature_name,
+        showlegend=False,
+    )
     return fig
 
 
