@@ -284,6 +284,20 @@ def plot_scatter_all_predictions(model_name: str = "LightGBM") -> go.Figure:
     return fig
 
 
+def get_per_bearing_table(model_name: str = "LightGBM") -> pd.DataFrame:
+    """Return per-bearing metrics table for the selected model."""
+    if model_name == "LightGBM":
+        df = DATA.get("per_bearing")
+    else:
+        df = DATA.get("dl_per_bearing", {}).get(model_name)
+
+    if df is None or df.empty:
+        return pd.DataFrame({"Info": ["No per-bearing data available for this model"]})
+
+    cols = [c for c in ["bearing_id", "n_samples", "rmse", "mae"] if c in df.columns]
+    return df[cols].round(2)
+
+
 def get_audio_path(condition: str, bearing_id: str, stage_key: str) -> str | None:
     """Return path to WAV file, or None if not found.
 
@@ -611,15 +625,18 @@ def create_app() -> gr.Blocks:
                         else:
                             gr.Markdown("*Uncertainty vs RUL image not found.*")
 
-                    # --- Per-bearing error table ---
-                    gr.Markdown("### Per-Bearing Error Breakdown (LightGBM CV)")
-                    pred_per_bearing_df = DATA["per_bearing"][
-                        ["bearing_id", "n_samples", "rmse", "mae"]
-                    ].round(2)
-                    gr.Dataframe(
-                        value=pred_per_bearing_df,
+                    # --- Per-bearing error table (reactive to model selection) ---
+                    gr.Markdown("### Per-Bearing Error Breakdown")
+                    per_bearing_table = gr.Dataframe(
+                        value=get_per_bearing_table(default_model) if default_model else pd.DataFrame(),
                         label="Per-Bearing Metrics",
                         interactive=False,
+                    )
+
+                    pred_model_dd.change(
+                        fn=get_per_bearing_table,
+                        inputs=pred_model_dd,
+                        outputs=per_bearing_table,
                     )
             with gr.Tab("Audio Analysis"):
                 gr.Markdown("### Audio Analysis — Bearing Lifecycle Sonification")
