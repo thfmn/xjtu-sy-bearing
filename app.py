@@ -85,6 +85,14 @@ def load_data() -> dict:
                         "y_pred": group["y_pred"].values,
                     }
 
+    # 5. Load DL per-bearing metrics (if available)
+    data["dl_per_bearing"] = {}  # {model_name: DataFrame}
+    eval_dir = OUTPUTS / "evaluation"
+    for csv_path in sorted(eval_dir.glob("*_per_bearing.csv")):
+        model_name = csv_path.stem.replace("_per_bearing", "")
+        if model_name != "lgbm":  # Skip the existing LightGBM file
+            data["dl_per_bearing"][model_name] = pd.read_csv(csv_path)
+
     return data
 
 
