@@ -24,9 +24,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.data.datasets import build_dataset_for_model
 from src.models.registry import build_model, get_model_info, list_models
-from src.training.config import TrainingConfig, build_callbacks, compile_model
+from src.training.config import MLflowCallback, TrainingConfig, build_callbacks, compile_model
 from src.training.cv import CVFold, leave_one_bearing_out
 from src.training.metrics import evaluate_predictions
+from src.utils.tracking import ExperimentTracker
 
 CONFIGS_DIR = Path("configs")
 DEFAULT_CONFIG = CONFIGS_DIR / "training_default.yaml"
@@ -135,12 +136,14 @@ def train_single_fold(
     data_root: Path,
     spectrogram_dir: Path,
     output_dir: Path,
+    config_path: Path | None = None,
 ) -> dict:
     """Train a model on one CV fold. Returns dict with metrics and predictions.
 
     Builds a fresh model each fold to avoid weight leakage, compiles it,
     constructs train/val tf.data.Datasets, trains with callbacks, then
-    evaluates on the validation set.
+    evaluates on the validation set. Each fold is tracked as an MLflow run
+    via ExperimentTracker.
 
     Args:
         model_name: Registered model name (e.g. "cnn1d_baseline").
@@ -150,6 +153,7 @@ def train_single_fold(
         data_root: Root directory of raw bearing CSV data.
         spectrogram_dir: Directory containing .npy spectrogram files.
         output_dir: Directory for saving checkpoints and results.
+        config_path: Path to the YAML config file (for artifact logging).
 
     Returns:
         Dict with keys: fold_id, model_name, metrics, y_true, y_pred, history.
@@ -188,38 +192,80 @@ def train_single_fold(
     )
 
     # 4. Build callbacks — checkpoint path includes model name and fold ID
+    #    Remove MLflowCallback to avoid nested runs (we use ExperimentTracker instead)
     checkpoint_name = f"{model_name}_fold{fold_id}"
     callbacks = build_callbacks(training_config, model_name=checkpoint_name)
+    callbacks = [cb for cb in callbacks if not isinstance(cb, MLflowCallback)]
 
-    # 5. Train
-    history = model.fit(
-        train_ds,
-        validation_data=val_ds,
-        epochs=training_config.epochs,
-        callbacks=callbacks,
-        verbose=training_config.verbose,
+    # 5. Set up ExperimentTracker for MLflow run context
+    cb_config = training_config.callbacks
+    tracker = ExperimentTracker(
+        backend="mlflow",
+        experiment_name=cb_config.mlflow_experiment_name,
+        tracking_uri=cb_config.mlflow_tracking_uri,
     )
 
-    # 6. Collect predictions on val set (iterate all val batches)
-    y_true_list = []
-    y_pred_list = []
-    for x_batch, y_batch in val_ds:
-        preds = model.predict(x_batch, verbose=0)
-        y_true_list.append(y_batch.numpy())
-        y_pred_list.append(preds.squeeze())
+    run_name = f"{model_name}_fold{fold_id}"
+    with tracker.start_run(run_name=run_name) as run:
+        # Log training params
+        run.log_params({
+            "model_name": model_name,
+            "fold_id": fold_id,
+            "batch_size": training_config.batch_size,
+            "learning_rate": training_config.optimizer.learning_rate,
+            "epochs": training_config.epochs,
+            "optimizer": training_config.optimizer.name,
+            "loss": training_config.loss.name,
+            "val_bearings": ", ".join(fold.val_bearings),
+            "train_samples": len(fold.train_indices),
+            "val_samples": len(fold.val_indices),
+        })
 
-    y_true = np.concatenate(y_true_list)
-    y_pred = np.concatenate(y_pred_list)
+        # 6. Train
+        history = model.fit(
+            train_ds,
+            validation_data=val_ds,
+            epochs=training_config.epochs,
+            callbacks=callbacks,
+            verbose=training_config.verbose,
+        )
 
-    # 7. Compute metrics
-    metrics = evaluate_predictions(y_true, y_pred)
+        # 7. Collect predictions on val set (iterate all val batches)
+        y_true_list = []
+        y_pred_list = []
+        for x_batch, y_batch in val_ds:
+            preds = model.predict(x_batch, verbose=0)
+            y_true_list.append(y_batch.numpy())
+            y_pred_list.append(preds.squeeze())
+
+        y_true = np.concatenate(y_true_list)
+        y_pred = np.concatenate(y_pred_list)
+
+        # 8. Compute metrics
+        metrics = evaluate_predictions(y_true, y_pred)
+
+        # Log final eval metrics to MLflow
+        run.log_metrics({
+            "final_rmse": metrics["rmse"],
+            "final_mae": metrics["mae"],
+            "final_mape": metrics["mape"],
+            "final_phm08_score": metrics["phm08_score"],
+            "final_phm08_score_normalized": metrics["phm08_score_normalized"],
+        })
+
+        # Log per-epoch metrics to MLflow
+        for epoch_idx in range(len(history.history.get("loss", []))):
+            epoch_metrics = {}
+            for key in history.history:
+                epoch_metrics[key] = history.history[key][epoch_idx]
+            run.log_metrics(epoch_metrics, step=epoch_idx)
 
     print(f"\n  Fold {fold_id} results:")
     print(f"    RMSE:  {metrics['rmse']:.4f}")
     print(f"    MAE:   {metrics['mae']:.4f}")
     print(f"    PHM08: {metrics['phm08_score']:.4f}")
 
-    # 8. Save per-fold predictions to disk
+    # 9. Save per-fold predictions to disk
     predictions_dir = output_dir / "predictions"
     predictions_dir.mkdir(parents=True, exist_ok=True)
 
@@ -237,7 +283,7 @@ def train_single_fold(
     pred_df.to_csv(pred_csv, index=False)
     print(f"  Saved predictions → {pred_csv}")
 
-    # 9. Return result dict
+    # 10. Return result dict
     return {
         "fold_id": fold_id,
         "model_name": model_name,
@@ -355,6 +401,7 @@ def main() -> None:
                 data_root=data_root,
                 spectrogram_dir=spectrogram_dir,
                 output_dir=output_dir,
+                config_path=config_path,
             )
             model_results.append(result)
             all_results.append(result)
