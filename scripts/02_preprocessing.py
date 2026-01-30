@@ -24,6 +24,7 @@ Output:
 from __future__ import annotations
 
 import argparse
+import os
 from io import BytesIO, StringIO
 
 import matplotlib
@@ -36,7 +37,7 @@ import scipy.stats
 
 
 # CONFIG
-BUCKET_NAME = "xjtu-bearing-failure-dev-data"
+BUCKET_NAME = os.environ.get("BUCKET_NAME", "xjtu-bearing-failure-dev-data")
 INPUT_PREFIX = "xjtu_data"
 OUTPUT_IMG_PREFIX = "processed/spectrograms"
 OUTPUT_STATS_PREFIX = "processed/stats"

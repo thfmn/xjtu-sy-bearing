@@ -1,0 +1,61 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+.env
+cv/
+cv*.md
+
+# Large data files and datasets
+assets/
+*.tar.gz
+*.zip
+features.csv
+
+# Generated outputs (reproducible from pipeline)
+outputs/audio/
+outputs/spectrograms/
+outputs/models/
+outputs/gcs_preview/
+outputs/features/.checkpoint.json
+outputs/features/extraction.log
+outputs/features/features_v2_sample.csv
+outputs/features/features_v2.csv
+outputs/evaluation/
+mlruns/
+
+# Google Cloud SDK (local installation, not project code)
+google-cloud-sdk/
+google-cloud-cli-*
+
+# Jupyter artifacts
+.ipynb_checkpoints/
+
+# IDE and tooling
+.python-version
+
+# AI tooling (Claude Code)
+CLAUDE.md
+.claude/
+
+# Personal utility scripts
+ralph-*
+
+# Internal project documents (PRD, progress tracking)
+PRD.md
+*PRD*
+progress.txt
+
+# Model binaries
+*.keras
+*.h5
+
+# Downloaded web content
+notebooks/raw.githubusercontent.com/
