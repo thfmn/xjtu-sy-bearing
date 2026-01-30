@@ -335,6 +335,38 @@ def plot_model_comparison_bars() -> go.Figure:
     return fig
 
 
+def plot_training_curves(model_name: str) -> go.Figure:
+    """Plot training and validation loss over epochs for a DL model.
+
+    Shows all folds as semi-transparent lines.
+    """
+    histories = DATA.get("dl_history", {}).get(model_name, [])
+    if not histories:
+        fig = go.Figure()
+        fig.update_layout(title=f"No training history for {model_name}")
+        return fig
+
+    fig = go.Figure()
+    for i, hist_df in enumerate(histories):
+        fig.add_trace(go.Scatter(
+            x=hist_df["epoch"], y=hist_df["loss"],
+            name=f"Fold {i} train", opacity=0.3,
+            line=dict(color="#1f77b4"), showlegend=(i == 0),
+        ))
+        fig.add_trace(go.Scatter(
+            x=hist_df["epoch"], y=hist_df["val_loss"],
+            name=f"Fold {i} val", opacity=0.3,
+            line=dict(color="#d62728"), showlegend=(i == 0),
+        ))
+
+    fig.update_layout(
+        title=f"Training Curves — {model_name} (all folds)",
+        xaxis_title="Epoch", yaxis_title="Loss (Huber)",
+        height=450,
+    )
+    return fig
+
+
 def get_audio_path(condition: str, bearing_id: str, stage_key: str) -> str | None:
     """Return path to WAV file, or None if not found.
 
@@ -547,6 +579,27 @@ def create_app() -> gr.Blocks:
                     label="Per-Bearing Metrics",
                     interactive=False,
                 )
+
+                # --- Training convergence curves ---
+                gr.Markdown("### Training Convergence")
+                dl_history_models = sorted(DATA.get("dl_history", {}).keys())
+                if dl_history_models:
+                    convergence_model_dd = gr.Dropdown(
+                        choices=dl_history_models,
+                        value=dl_history_models[0],
+                        label="DL Model",
+                    )
+                    convergence_plot = gr.Plot(
+                        value=plot_training_curves(dl_history_models[0]),
+                        label="Training Curves",
+                    )
+                    convergence_model_dd.change(
+                        fn=plot_training_curves,
+                        inputs=convergence_model_dd,
+                        outputs=convergence_plot,
+                    )
+                else:
+                    gr.Markdown("*No training history available. Train DL models first.*")
 
                 # --- SHAP plot (pre-generated image) ---
                 gr.Markdown("### SHAP Feature Importance")
