@@ -276,6 +276,15 @@ def train_single_fold(
             "final_phm08_score_normalized": metrics["phm08_score_normalized"],
         })
 
+        # Log best model checkpoint as MLflow artifact
+        best_checkpoint = (
+            Path(training_config.callbacks.checkpoint_dir)
+            / f"{model_name}_fold{fold_id}.keras"
+        )
+        if best_checkpoint.exists():
+            run.log_artifact(str(best_checkpoint), artifact_path="model")
+            print(f"  Logged model artifact → {best_checkpoint}")
+
     # Save training history to CSV
     history_dir = output_dir / "history"
     history_dir.mkdir(parents=True, exist_ok=True)
