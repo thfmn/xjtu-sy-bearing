@@ -19,6 +19,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from tensorflow import keras
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -31,6 +32,27 @@ from src.utils.tracking import ExperimentTracker
 
 CONFIGS_DIR = Path("configs")
 DEFAULT_CONFIG = CONFIGS_DIR / "training_default.yaml"
+
+
+class _EpochMetricsCallback(keras.callbacks.Callback):
+    """Keras callback that logs per-epoch metrics to an active ExperimentTracker run.
+
+    Unlike KerasTrackingCallback in src/utils/tracking.py, this callback does NOT
+    manage run lifecycle — it assumes a run is already active on the tracker and
+    simply logs epoch-end metrics with the correct step number. This avoids
+    nested/duplicate runs when used inside an ExperimentTracker context manager.
+    """
+
+    def __init__(self, tracker: ExperimentTracker):
+        super().__init__()
+        self._tracker = tracker
+
+    def on_epoch_end(self, epoch: int, logs: dict | None = None) -> None:
+        if logs:
+            self._tracker.log_metrics(
+                {k: float(v) for k, v in logs.items()},
+                step=epoch,
+            )
 
 
 def resolve_model_names(model_arg: str) -> list[str]:
@@ -221,7 +243,8 @@ def train_single_fold(
             "val_samples": len(fold.val_indices),
         })
 
-        # 6. Train
+        # 6. Train — with real-time per-epoch metric logging via callback
+        callbacks.append(_EpochMetricsCallback(tracker))
         history = model.fit(
             train_ds,
             validation_data=val_ds,
@@ -252,13 +275,6 @@ def train_single_fold(
             "final_phm08_score": metrics["phm08_score"],
             "final_phm08_score_normalized": metrics["phm08_score_normalized"],
         })
-
-        # Log per-epoch metrics to MLflow
-        for epoch_idx in range(len(history.history.get("loss", []))):
-            epoch_metrics = {}
-            for key in history.history:
-                epoch_metrics[key] = history.history[key][epoch_idx]
-            run.log_metrics(epoch_metrics, step=epoch_idx)
 
     # Save training history to CSV
     history_dir = output_dir / "history"
