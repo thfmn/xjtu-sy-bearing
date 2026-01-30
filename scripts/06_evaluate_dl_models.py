@@ -116,6 +116,94 @@ def main() -> None:
 
     print_summary_table(summary_df)
 
+    # --- EVAL-3: Merge DL results with existing model_comparison.csv ---
+    merge_dl_into_model_comparison(summary_df, args.output_dir)
+
+
+# ---------------------------------------------------------------------------
+# Display name mapping: registry name → human-readable name for comparison CSV
+# ---------------------------------------------------------------------------
+_DISPLAY_NAMES: dict[str, str] = {
+    "cnn1d_baseline": "1D CNN (CV)",
+    "tcn_transformer_lstm": "TCN-LSTM (CV)",
+    "tcn_transformer_transformer": "TCN-Transformer (CV)",
+    "pattern2_lstm": "Pattern2 LSTM (CV)",
+    "pattern2_simple": "Pattern2 Simple (CV)",
+}
+
+# Registry name → Type column value
+_INPUT_TYPE_TO_DISPLAY: dict[str, str] = {
+    "raw_signal": "DL - Raw Signal",
+    "spectrogram": "DL - Spectrogram",
+}
+
+
+def _get_input_type(model_name: str) -> str:
+    """Look up the input type for a model from the registry.
+
+    Falls back to 'DL' if the registry is not importable.
+    """
+    try:
+        from src.models.registry import get_model_info
+
+        info = get_model_info(model_name)
+        return _INPUT_TYPE_TO_DISPLAY.get(info.input_type, "DL")
+    except (ImportError, KeyError):
+        return "DL"
+
+
+def merge_dl_into_model_comparison(
+    summary_df: pd.DataFrame,
+    output_dir: Path,
+) -> None:
+    """Append DL model rows to model_comparison.csv, skipping duplicates.
+
+    Parameters
+    ----------
+    summary_df : pd.DataFrame
+        Per-model summary from ``aggregate_per_model_summary()``.
+    output_dir : Path
+        Directory containing ``model_comparison.csv``.
+    """
+    comparison_csv = output_dir / "model_comparison.csv"
+    if not comparison_csv.exists():
+        print(f"\nWARNING: {comparison_csv} not found — skipping EVAL-3 merge.")
+        return
+
+    comp_df = pd.read_csv(comparison_csv)
+    existing_models = set(comp_df["Model"].values)
+
+    new_rows = []
+    for _, row in summary_df.iterrows():
+        model_name: str = row["model_name"]
+        display_name = _DISPLAY_NAMES.get(model_name, f"{model_name} (CV)")
+        if display_name in existing_models:
+            print(f"  Skipping {display_name} — already in model_comparison.csv")
+            continue
+
+        model_type = _get_input_type(model_name)
+        new_rows.append(
+            {
+                "Model": display_name,
+                "Type": model_type,
+                "RMSE": row["rmse_mean"],
+                "MAE": row["mae_mean"],
+                "MAPE (%)": row["mape_mean"],
+                "PHM08 Score": row["phm08_mean"],
+                "PHM08 (norm)": row["phm08_norm_mean"],
+            }
+        )
+
+    if new_rows:
+        new_df = pd.DataFrame(new_rows)
+        comp_df = pd.concat([comp_df, new_df], ignore_index=True)
+        comp_df.to_csv(comparison_csv, index=False)
+        print(f"\nAppended {len(new_rows)} DL model(s) to {comparison_csv}")
+        for r in new_rows:
+            print(f"  + {r['Model']} ({r['Type']}) — RMSE: {r['RMSE']:.2f}, MAE: {r['MAE']:.2f}")
+    else:
+        print("\nNo new DL models to add to model_comparison.csv")
+
 
 if __name__ == "__main__":
     main()
