@@ -192,12 +192,16 @@ def plot_feature_importance(top_n: int = 20) -> go.Figure:
     return fig
 
 
-def plot_rul_curve(bearing_id: str) -> go.Figure:
+def plot_rul_curve(bearing_id: str, model_name: str = "LightGBM") -> go.Figure:
     """Line chart: predicted vs actual RUL over file index for one bearing."""
-    preds = DATA.get("predictions", {}).get(bearing_id)
+    if model_name == "LightGBM":
+        preds = DATA.get("predictions", {}).get(bearing_id)
+    else:
+        preds = DATA.get("dl_predictions", {}).get(model_name, {}).get(bearing_id)
+
     if preds is None:
         fig = go.Figure()
-        fig.update_layout(title=f"No predictions available for {bearing_id}")
+        fig.update_layout(title=f"No predictions available for {bearing_id} ({model_name})")
         return fig
 
     y_true = np.array(preds["y_true"])
@@ -222,7 +226,7 @@ def plot_rul_curve(bearing_id: str) -> go.Figure:
         )
     )
     fig.update_layout(
-        title=f"RUL Prediction — {bearing_id}",
+        title=f"RUL Prediction — {bearing_id} ({model_name})",
         xaxis_title="File Index (≈ minutes)",
         yaxis_title="Remaining Useful Life",
         hovermode="x unified",
@@ -495,9 +499,9 @@ def create_app() -> gr.Blocks:
                     gr.Markdown("*SHAP image not found.*")
             with gr.Tab("Predictions"):
                 gr.Markdown("### RUL Predictions")
-                if not DATA.get("has_model", False):
+                if not DATA.get("has_model", False) and not DATA.get("dl_predictions"):
                     gr.Markdown(
-                        "⚠️ **LightGBM model not available.** "
+                        "⚠️ **No model predictions available.** "
                         "Displaying pre-generated prediction plots instead."
                     )
                     pred_png = MODELS_DIR / "lgbm_predictions.png"
@@ -507,22 +511,66 @@ def create_app() -> gr.Blocks:
                     if scatter_png.exists():
                         gr.Image(value=str(scatter_png), label="Predicted vs Actual")
                 else:
+                    # --- Build model choices list ---
+                    model_choices = []
+                    if DATA.get("has_model", False):
+                        model_choices.append("LightGBM")
+                    if DATA.get("dl_predictions"):
+                        model_choices += sorted(DATA["dl_predictions"].keys())
+                    default_model = model_choices[0] if model_choices else None
+
+                    def _get_bearings_for_model(model_name: str) -> list[str]:
+                        """Return sorted bearing list for a given model."""
+                        if model_name == "LightGBM":
+                            return sorted(DATA.get("predictions", {}).keys())
+                        return sorted(DATA.get("dl_predictions", {}).get(model_name, {}).keys())
+
+                    default_bearings_pred = _get_bearings_for_model(default_model) if default_model else []
+
+                    # --- Model selector dropdown ---
+                    pred_model_dd = gr.Dropdown(
+                        choices=model_choices,
+                        value=default_model,
+                        label="Model",
+                    )
+
                     # --- Bearing selector dropdown ---
-                    bearing_list = sorted(DATA.get("predictions", {}).keys())
                     pred_bearing_dd = gr.Dropdown(
-                        choices=bearing_list,
-                        value=bearing_list[0] if bearing_list else None,
+                        choices=default_bearings_pred,
+                        value=default_bearings_pred[0] if default_bearings_pred else None,
                         label="Select Bearing",
+                    )
+
+                    def _update_bearing_choices_for_model(model_name: str):
+                        """Update bearing dropdown when model changes."""
+                        bearings = _get_bearings_for_model(model_name)
+                        return gr.Dropdown(
+                            choices=bearings,
+                            value=bearings[0] if bearings else None,
+                        )
+
+                    pred_model_dd.change(
+                        fn=_update_bearing_choices_for_model,
+                        inputs=pred_model_dd,
+                        outputs=pred_bearing_dd,
                     )
 
                     # --- RUL prediction curve ---
                     rul_curve_plot = gr.Plot(
-                        value=plot_rul_curve(bearing_list[0]) if bearing_list else None,
+                        value=plot_rul_curve(
+                            default_bearings_pred[0], default_model
+                        ) if default_bearings_pred and default_model else None,
                         label="RUL Prediction Curve",
+                    )
+
+                    pred_model_dd.change(
+                        fn=plot_rul_curve,
+                        inputs=[pred_bearing_dd, pred_model_dd],
+                        outputs=rul_curve_plot,
                     )
                     pred_bearing_dd.change(
                         fn=plot_rul_curve,
-                        inputs=pred_bearing_dd,
+                        inputs=[pred_bearing_dd, pred_model_dd],
                         outputs=rul_curve_plot,
                     )
 
