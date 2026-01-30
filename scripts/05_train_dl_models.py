@@ -219,7 +219,25 @@ def train_single_fold(
     print(f"    MAE:   {metrics['mae']:.4f}")
     print(f"    PHM08: {metrics['phm08_score']:.4f}")
 
-    # 8. Return result dict
+    # 8. Save per-fold predictions to disk
+    predictions_dir = output_dir / "predictions"
+    predictions_dir.mkdir(parents=True, exist_ok=True)
+
+    val_meta = metadata_df.iloc[fold.val_indices].reset_index(drop=True)
+    pred_df = pd.DataFrame(
+        {
+            "bearing_id": val_meta["bearing_id"].values,
+            "condition": val_meta["condition"].values,
+            "file_idx": val_meta["file_idx"].values,
+            "y_true": y_true,
+            "y_pred": y_pred,
+        }
+    )
+    pred_csv = predictions_dir / f"{model_name}_fold{fold_id}_predictions.csv"
+    pred_df.to_csv(pred_csv, index=False)
+    print(f"  Saved predictions → {pred_csv}")
+
+    # 9. Return result dict
     return {
         "fold_id": fold_id,
         "model_name": model_name,
