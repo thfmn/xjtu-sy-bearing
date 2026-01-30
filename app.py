@@ -335,6 +335,33 @@ def plot_model_comparison_bars() -> go.Figure:
     return fig
 
 
+def plot_per_bearing_comparison() -> go.Figure:
+    """Grouped bar chart: per-bearing RMSE for each model."""
+    fig = go.Figure()
+
+    # LightGBM
+    lgbm_df = DATA.get("per_bearing")
+    if lgbm_df is not None:
+        lgbm_sorted = lgbm_df.sort_values("bearing_id")
+        fig.add_trace(go.Bar(
+            name="LightGBM", x=lgbm_sorted["bearing_id"], y=lgbm_sorted["rmse"],
+        ))
+
+    # DL models
+    for model_name, df in sorted(DATA.get("dl_per_bearing", {}).items()):
+        df_sorted = df.sort_values("bearing_id")
+        fig.add_trace(go.Bar(
+            name=model_name, x=df_sorted["bearing_id"], y=df_sorted["rmse"],
+        ))
+
+    fig.update_layout(
+        title="Per-Bearing RMSE Comparison Across Models",
+        barmode="group", xaxis_title="Bearing",
+        yaxis_title="RMSE", height=500,
+    )
+    return fig
+
+
 def plot_training_curves(model_name: str) -> go.Figure:
     """Plot training and validation loss over epochs for a DL model.
 
@@ -631,6 +658,14 @@ def create_app() -> gr.Blocks:
                     )
                 else:
                     gr.Markdown("*No training history available. Train DL models first.*")
+
+                # --- Per-bearing comparison across models ---
+                if DATA.get("dl_per_bearing"):
+                    gr.Markdown("### Per-Bearing Model Comparison")
+                    gr.Plot(
+                        value=plot_per_bearing_comparison(),
+                        label="Per-Bearing RMSE Comparison",
+                    )
 
                 # --- SHAP plot (pre-generated image) ---
                 gr.Markdown("### SHAP Feature Importance")
