@@ -417,6 +417,35 @@ def compute_model_architecture_table() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+_MODEL_DISPLAY_NAMES: dict[str, str] = {
+    "LightGBM": "LightGBM (CV)",
+    "cnn1d_baseline": "1D CNN (CV)",
+    "tcn_transformer_lstm": "TCN-LSTM (CV)",
+    "tcn_transformer_transformer": "TCN-Transformer (CV)",
+    "pattern2_lstm": "Pattern2 LSTM (CV)",
+    "pattern2_simple": "Pattern2 Simple (CV)",
+}
+
+
+def get_model_metrics_summary(model_name: str) -> str:
+    """Return markdown string with model's aggregate metrics."""
+    comp_df = DATA.get("model_comparison")
+    if comp_df is None or comp_df.empty:
+        return f"**{model_name}** — No aggregate metrics available"
+
+    display_name = _MODEL_DISPLAY_NAMES.get(model_name, model_name)
+    row = comp_df[comp_df["Model"] == display_name]
+    if row.empty:
+        return f"**{model_name}** — No aggregate metrics available"
+    row = row.iloc[0]
+    return (
+        f"**{row['Model']}** — "
+        f"RMSE: {row['RMSE']:.2f} | "
+        f"MAE: {row['MAE']:.2f} | "
+        f"Type: {row['Type']}"
+    )
+
+
 def get_audio_path(condition: str, bearing_id: str, stage_key: str) -> str | None:
     """Return path to WAV file, or None if not found.
 
@@ -707,6 +736,11 @@ def create_app() -> gr.Blocks:
 
                     default_bearings_pred = _get_bearings_for_model(default_model) if default_model else []
 
+                    # --- Model metrics summary (reactive) ---
+                    model_metrics_md = gr.Markdown(
+                        value=get_model_metrics_summary(default_model) if default_model else "",
+                    )
+
                     # --- Model selector dropdown ---
                     pred_model_dd = gr.Dropdown(
                         choices=model_choices,
@@ -733,6 +767,12 @@ def create_app() -> gr.Blocks:
                         fn=_update_bearing_choices_for_model,
                         inputs=pred_model_dd,
                         outputs=pred_bearing_dd,
+                    )
+
+                    pred_model_dd.change(
+                        fn=get_model_metrics_summary,
+                        inputs=pred_model_dd,
+                        outputs=model_metrics_md,
                     )
 
                     # --- RUL prediction curve ---
