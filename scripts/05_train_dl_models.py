@@ -227,21 +227,41 @@ def train_single_fold(
         tracking_uri=cb_config.mlflow_tracking_uri,
     )
 
+    # 5b. Set up optional Vertex AI dual-logging
+    vertex_config = training_config.get_extra("vertex", {})
+    vertex_tracker = None
+    if vertex_config.get("enabled", False):
+        try:
+            vertex_tracker = ExperimentTracker(
+                backend="vertex",
+                experiment_name=vertex_config["experiment_name"],
+                project_id=vertex_config.get("project_id"),
+                location=vertex_config.get("location", "asia-southeast3"),
+            )
+            print(f"  Vertex AI Experiments: logging to {vertex_config['experiment_name']}")
+        except Exception as e:
+            print(f"  Vertex AI Experiments: failed to initialize ({e}), continuing with MLflow only")
+            vertex_tracker = None
+    else:
+        print("  Vertex AI Experiments: disabled")
+
     run_name = f"{model_name}_fold{fold_id}"
+    training_params = {
+        "model_name": model_name,
+        "fold_id": fold_id,
+        "batch_size": training_config.batch_size,
+        "learning_rate": training_config.optimizer.learning_rate,
+        "epochs": training_config.epochs,
+        "optimizer": training_config.optimizer.name,
+        "loss": training_config.loss.name,
+        "val_bearings": ", ".join(fold.val_bearings),
+        "train_samples": len(fold.train_indices),
+        "val_samples": len(fold.val_indices),
+    }
+
     with tracker.start_run(run_name=run_name) as run:
         # Log training params
-        run.log_params({
-            "model_name": model_name,
-            "fold_id": fold_id,
-            "batch_size": training_config.batch_size,
-            "learning_rate": training_config.optimizer.learning_rate,
-            "epochs": training_config.epochs,
-            "optimizer": training_config.optimizer.name,
-            "loss": training_config.loss.name,
-            "val_bearings": ", ".join(fold.val_bearings),
-            "train_samples": len(fold.train_indices),
-            "val_samples": len(fold.val_indices),
-        })
+        run.log_params(training_params)
 
         # 6. Train — with real-time per-epoch metric logging via callback
         callbacks.append(_EpochMetricsCallback(tracker))
@@ -267,14 +287,16 @@ def train_single_fold(
         # 8. Compute metrics
         metrics = evaluate_predictions(y_true, y_pred)
 
-        # Log final eval metrics to MLflow
-        run.log_metrics({
+        final_metrics = {
             "final_rmse": metrics["rmse"],
             "final_mae": metrics["mae"],
             "final_mape": metrics["mape"],
             "final_phm08_score": metrics["phm08_score"],
             "final_phm08_score_normalized": metrics["phm08_score_normalized"],
-        })
+        }
+
+        # Log final eval metrics to MLflow
+        run.log_metrics(final_metrics)
 
         # Log best model checkpoint as MLflow artifact
         best_checkpoint = (
@@ -284,6 +306,16 @@ def train_single_fold(
         if best_checkpoint.exists():
             run.log_artifact(str(best_checkpoint), artifact_path="model")
             print(f"  Logged model artifact → {best_checkpoint}")
+
+    # 5c. Mirror logging to Vertex AI (outside MLflow context, wrapped in try/except)
+    if vertex_tracker is not None:
+        try:
+            with vertex_tracker.start_run(run_name=f"{model_name}-fold{fold_id}") as vtx_run:
+                vtx_run.log_params(training_params)
+                vtx_run.log_metrics(final_metrics)
+            print(f"  Vertex AI: logged run {model_name}-fold{fold_id}")
+        except Exception as e:
+            print(f"  Vertex AI: failed to log run ({e}), MLflow logging unaffected")
 
     # Save training history to CSV
     history_dir = output_dir / "history"
