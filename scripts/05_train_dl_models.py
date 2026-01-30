@@ -263,6 +263,10 @@ def train_single_fold(
         # Log training params
         run.log_params(training_params)
 
+        # Log config YAML as artifact for reproducibility
+        if config_path is not None and config_path.exists():
+            run.log_artifact(str(config_path), artifact_path="config")
+
         # 6. Train — with real-time per-epoch metric logging via callback
         callbacks.append(_EpochMetricsCallback(tracker))
         history = model.fit(
