@@ -4,7 +4,7 @@ This module provides configuration dataclasses and Keras callbacks
 for model training, including experiment tracking via MLflow.
 """
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, fields, asdict
 from pathlib import Path
 from typing import Any, Literal
 import json
@@ -142,12 +142,33 @@ class TrainingConfig:
         with open(path, "w") as f:
             json.dump(self.to_dict(), f, indent=2)
 
+    def get_extra(self, key: str, default: Any = None) -> Any:
+        """Get an extra key that was present in the YAML but not a TrainingConfig field.
+
+        Args:
+            key: The extra key name (e.g., "model", "vertex").
+            default: Default value if key not found.
+
+        Returns:
+            The value from the YAML, or default.
+        """
+        return getattr(self, "_extra", {}).get(key, default)
+
     @classmethod
     def from_yaml(cls, path: str | Path) -> "TrainingConfig":
-        """Load configuration from YAML file."""
+        """Load configuration from YAML file.
+
+        Extra top-level keys not matching TrainingConfig fields are stored
+        in ``_extra`` and accessible via :meth:`get_extra`.
+        """
         with open(path) as f:
             data = yaml.safe_load(f)
-        return cls(**data)
+        known_fields = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in data.items() if k in known_fields}
+        extra = {k: v for k, v in data.items() if k not in known_fields}
+        config = cls(**filtered)
+        config._extra = extra
+        return config
 
     @classmethod
     def from_json(cls, path: str | Path) -> "TrainingConfig":
