@@ -63,3 +63,22 @@ def build_model(name: str):
     """
     info = get_model_info(name)
     return info.build_fn()
+
+
+# ---------------------------------------------------------------------------
+# Model registrations
+# ---------------------------------------------------------------------------
+
+def _register_all() -> None:
+    """Register all known model architectures."""
+    from src.models.baselines.cnn1d_baseline import create_default_cnn1d
+
+    register_model(
+        name="cnn1d_baseline",
+        build_fn=create_default_cnn1d,
+        input_type="raw_signal",
+        default_input_shape=(32768, 2),
+    )
+
+
+_register_all()
