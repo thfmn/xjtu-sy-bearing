@@ -147,6 +147,13 @@ def parse_args() -> argparse.Namespace:
         default="outputs/evaluation",
         help="Directory for saving results, predictions, and history.",
     )
+    parser.add_argument(
+        "--tracking",
+        type=str,
+        choices=["mlflow", "vertex", "both", "none"],
+        default="mlflow",
+        help="Experiment tracking backend(s). 'mlflow' (default), 'vertex', 'both', or 'none' (no tracking).",
+    )
     return parser.parse_args()
 
 
@@ -159,6 +166,7 @@ def train_single_fold(
     spectrogram_dir: Path,
     output_dir: Path,
     config_path: Path | None = None,
+    tracking_mode: str = "mlflow",
 ) -> dict:
     """Train a model on one CV fold. Returns dict with metrics and predictions.
 
@@ -176,6 +184,7 @@ def train_single_fold(
         spectrogram_dir: Directory containing .npy spectrogram files.
         output_dir: Directory for saving checkpoints and results.
         config_path: Path to the YAML config file (for artifact logging).
+        tracking_mode: Experiment tracking backend(s): "mlflow", "vertex", "both", or "none".
 
     Returns:
         Dict with keys: fold_id, model_name, metrics, y_true, y_pred, history.
@@ -219,28 +228,36 @@ def train_single_fold(
     callbacks = build_callbacks(training_config, model_name=checkpoint_name)
     callbacks = [cb for cb in callbacks if not isinstance(cb, MLflowCallback)]
 
-    # 5. Set up ExperimentTracker for MLflow run context
+    # 5. Set up experiment tracking based on tracking_mode
+    use_mlflow = tracking_mode in ("mlflow", "both")
+    use_vertex = tracking_mode in ("vertex", "both")
+
     cb_config = training_config.callbacks
-    tracker = ExperimentTracker(
-        backend="mlflow",
-        experiment_name=cb_config.mlflow_experiment_name,
-        tracking_uri=cb_config.mlflow_tracking_uri,
-    )
+    tracker = None
+    if use_mlflow:
+        tracker = ExperimentTracker(
+            backend="mlflow",
+            experiment_name=cb_config.mlflow_experiment_name,
+            tracking_uri=cb_config.mlflow_tracking_uri,
+        )
+        print(f"  MLflow tracking: enabled (experiment={cb_config.mlflow_experiment_name})")
+    else:
+        print("  MLflow tracking: disabled")
 
     # 5b. Set up optional Vertex AI dual-logging
-    vertex_config = training_config.get_extra("vertex", {})
     vertex_tracker = None
-    if vertex_config.get("enabled", False):
+    if use_vertex:
+        vertex_config = training_config.get_extra("vertex", {})
         try:
             vertex_tracker = ExperimentTracker(
                 backend="vertex",
-                experiment_name=vertex_config["experiment_name"],
+                experiment_name=vertex_config.get("experiment_name", "bearing-rul-dl"),
                 project_id=vertex_config.get("project_id"),
                 location=vertex_config.get("location", "asia-southeast3"),
             )
-            print(f"  Vertex AI Experiments: logging to {vertex_config['experiment_name']}")
+            print(f"  Vertex AI Experiments: logging to {vertex_config.get('experiment_name', 'bearing-rul-dl')}")
         except Exception as e:
-            print(f"  Vertex AI Experiments: failed to initialize ({e}), continuing with MLflow only")
+            print(f"  Vertex AI Experiments: failed to initialize ({e}), continuing without Vertex")
             vertex_tracker = None
     else:
         print("  Vertex AI Experiments: disabled")
@@ -259,21 +276,27 @@ def train_single_fold(
         "val_samples": len(fold.val_indices),
     }
 
-    with tracker.start_run(run_name=run_name) as run:
-        # Log training params
-        run.log_params(training_params)
+    # --- Training and evaluation (with optional MLflow run context) ---
+    def _run_training(run=None):
+        """Execute training, prediction, and metric computation.
 
-        # Log config YAML as artifact for reproducibility
-        if config_path is not None and config_path.exists():
-            run.log_artifact(str(config_path), artifact_path="config")
+        If ``run`` is provided, logs params, metrics, and artifacts to it.
+        Returns (metrics, final_metrics, y_true, y_pred, history).
+        """
+        if run is not None:
+            run.log_params(training_params)
+            if config_path is not None and config_path.exists():
+                run.log_artifact(str(config_path), artifact_path="config")
 
         # 6. Train — with real-time per-epoch metric logging via callback
-        callbacks.append(_EpochMetricsCallback(tracker))
+        cbs = list(callbacks)
+        if tracker is not None:
+            cbs.append(_EpochMetricsCallback(tracker))
         history = model.fit(
             train_ds,
             validation_data=val_ds,
             epochs=training_config.epochs,
-            callbacks=callbacks,
+            callbacks=cbs,
             verbose=training_config.verbose,
         )
 
@@ -299,17 +322,23 @@ def train_single_fold(
             "final_phm08_score_normalized": metrics["phm08_score_normalized"],
         }
 
-        # Log final eval metrics to MLflow
-        run.log_metrics(final_metrics)
+        if run is not None:
+            run.log_metrics(final_metrics)
+            best_checkpoint = (
+                Path(training_config.callbacks.checkpoint_dir)
+                / f"{model_name}_fold{fold_id}.keras"
+            )
+            if best_checkpoint.exists():
+                run.log_artifact(str(best_checkpoint), artifact_path="model")
+                print(f"  Logged model artifact → {best_checkpoint}")
 
-        # Log best model checkpoint as MLflow artifact
-        best_checkpoint = (
-            Path(training_config.callbacks.checkpoint_dir)
-            / f"{model_name}_fold{fold_id}.keras"
-        )
-        if best_checkpoint.exists():
-            run.log_artifact(str(best_checkpoint), artifact_path="model")
-            print(f"  Logged model artifact → {best_checkpoint}")
+        return metrics, final_metrics, y_true, y_pred, history
+
+    if tracker is not None:
+        with tracker.start_run(run_name=run_name) as run:
+            metrics, final_metrics, y_true, y_pred, history = _run_training(run)
+    else:
+        metrics, final_metrics, y_true, y_pred, history = _run_training()
 
     # 5c. Mirror logging to Vertex AI (outside MLflow context, wrapped in try/except)
     if vertex_tracker is not None:
@@ -319,7 +348,7 @@ def train_single_fold(
                 vtx_run.log_metrics(final_metrics)
             print(f"  Vertex AI: logged run {model_name}-fold{fold_id}")
         except Exception as e:
-            print(f"  Vertex AI: failed to log run ({e}), MLflow logging unaffected")
+            print(f"  Vertex AI: failed to log run ({e}), continuing")
 
     # Save training history to CSV
     history_dir = output_dir / "history"
@@ -378,6 +407,7 @@ def main() -> None:
     print(f"  Data root:       {args.data_root}")
     print(f"  Spectrogram dir: {args.spectrogram_dir}")
     print(f"  Output dir:      {args.output_dir}")
+    print(f"  Tracking:        {args.tracking}")
     print("=" * 60)
 
     # --- TRAIN-2: Load metadata and generate CV folds ---
@@ -472,6 +502,7 @@ def main() -> None:
                 spectrogram_dir=spectrogram_dir,
                 output_dir=output_dir,
                 config_path=config_path,
+                tracking_mode=args.tracking,
             )
             model_results.append(result)
             all_results.append(result)
