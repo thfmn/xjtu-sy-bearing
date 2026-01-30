@@ -234,12 +234,16 @@ def plot_rul_curve(bearing_id: str, model_name: str = "LightGBM") -> go.Figure:
     return fig
 
 
-def plot_scatter_all_predictions() -> go.Figure:
+def plot_scatter_all_predictions(model_name: str = "LightGBM") -> go.Figure:
     """Scatter: all predicted vs actual RUL from all 15 CV folds, colored by bearing."""
-    predictions = DATA.get("predictions", {})
+    if model_name == "LightGBM":
+        predictions = DATA.get("predictions", {})
+    else:
+        predictions = DATA.get("dl_predictions", {}).get(model_name, {})
+
     if not predictions:
         fig = go.Figure()
-        fig.update_layout(title="No predictions available")
+        fig.update_layout(title=f"No predictions available for {model_name}")
         return fig
 
     fig = go.Figure()
@@ -272,7 +276,7 @@ def plot_scatter_all_predictions() -> go.Figure:
     )
 
     fig.update_layout(
-        title="Predicted vs Actual RUL (all bearings, LightGBM CV)",
+        title=f"Predicted vs Actual RUL — {model_name} (all bearings)",
         xaxis_title="Actual RUL",
         yaxis_title="Predicted RUL",
         height=550,
@@ -574,11 +578,17 @@ def create_app() -> gr.Blocks:
                         outputs=rul_curve_plot,
                     )
 
-                    # --- Predicted vs Actual scatter (static, computed once) ---
+                    # --- Predicted vs Actual scatter (reactive to model selection) ---
                     gr.Markdown("### Predicted vs Actual RUL (all bearings)")
-                    gr.Plot(
-                        value=plot_scatter_all_predictions(),
+                    scatter_plot = gr.Plot(
+                        value=plot_scatter_all_predictions(default_model),
                         label="Predicted vs Actual RUL",
+                    )
+
+                    pred_model_dd.change(
+                        fn=plot_scatter_all_predictions,
+                        inputs=pred_model_dd,
+                        outputs=scatter_plot,
                     )
 
                     # --- Uncertainty visualizations (pre-generated PNGs) ---
