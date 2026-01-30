@@ -21,7 +21,57 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.models.registry import get_model_info, list_models
 from src.training.cv import leave_one_bearing_out
+
+CONFIGS_DIR = Path("configs")
+DEFAULT_CONFIG = CONFIGS_DIR / "training_default.yaml"
+
+
+def resolve_model_names(model_arg: str) -> list[str]:
+    """Resolve --model argument to a list of validated model names.
+
+    Accepts a single name, comma-separated names, or 'all'.
+    Raises SystemExit if any name is not in the registry.
+    """
+    registered = list_models()
+    if model_arg == "all":
+        if not registered:
+            print("ERROR: No models registered in the registry.")
+            sys.exit(1)
+        return registered
+
+    names = [n.strip() for n in model_arg.split(",")]
+    for name in names:
+        if name not in registered:
+            available = ", ".join(registered) or "(none)"
+            print(f"ERROR: Model '{name}' is not registered. Available: {available}")
+            sys.exit(1)
+    return names
+
+
+def resolve_config_path(model_name: str, explicit_config: str | None) -> Path:
+    """Resolve which config YAML to use for a model.
+
+    Priority: explicit --config > configs/{model_name}.yaml > configs/training_default.yaml.
+    Raises SystemExit if the resolved path does not exist.
+    """
+    if explicit_config is not None:
+        path = Path(explicit_config)
+        if not path.exists():
+            print(f"ERROR: Config file not found: {path}")
+            sys.exit(1)
+        return path
+
+    model_config = CONFIGS_DIR / f"{model_name}.yaml"
+    if model_config.exists():
+        return model_config
+
+    if DEFAULT_CONFIG.exists():
+        return DEFAULT_CONFIG
+
+    print(f"ERROR: No config found for '{model_name}'. Tried: {model_config}, {DEFAULT_CONFIG}")
+    sys.exit(1)
 
 
 def parse_args() -> argparse.Namespace:
@@ -114,6 +164,20 @@ def main() -> None:
     for fold in folds:
         val_bearings_str = ", ".join(fold.val_bearings)
         print(f"  {fold.fold_id:>5d}  {len(fold.train_indices):>6d}  {len(fold.val_indices):>5d}  {val_bearings_str}")
+    print()
+
+    # --- TRAIN-3: Resolve models and configs ---
+    model_names = resolve_model_names(args.model)
+    model_configs: dict[str, Path] = {}
+    for name in model_names:
+        model_configs[name] = resolve_config_path(name, args.config)
+
+    print(f"Models to train: {len(model_names)}")
+    print(f"  {'Model':<35s}  {'Input Type':<15s}  Config")
+    print(f"  {'─'*35}  {'─'*15}  {'─'*40}")
+    for name in model_names:
+        info = get_model_info(name)
+        print(f"  {name:<35s}  {info.input_type:<15s}  {model_configs[name]}")
     print()
 
 
