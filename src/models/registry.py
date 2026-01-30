@@ -76,6 +76,7 @@ def _register_all() -> None:
         create_tcn_transformer_lstm,
         create_tcn_transformer_transformer,
     )
+    from src.models.pattern2.model import create_pattern2_lstm
 
     register_model(
         name="cnn1d_baseline",
@@ -96,6 +97,13 @@ def _register_all() -> None:
         build_fn=create_tcn_transformer_transformer,
         input_type="raw_signal",
         default_input_shape=(32768, 2),
+    )
+
+    register_model(
+        name="pattern2_lstm",
+        build_fn=create_pattern2_lstm,
+        input_type="spectrogram",
+        default_input_shape=(128, 128, 2),
     )
 
 
