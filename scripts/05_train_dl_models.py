@@ -17,12 +17,16 @@ import argparse
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.data.datasets import build_dataset_for_model
 from src.models.registry import build_model, get_model_info, list_models
-from src.training.cv import leave_one_bearing_out
+from src.training.config import TrainingConfig, build_callbacks, compile_model
+from src.training.cv import CVFold, leave_one_bearing_out
+from src.training.metrics import evaluate_predictions
 
 CONFIGS_DIR = Path("configs")
 DEFAULT_CONFIG = CONFIGS_DIR / "training_default.yaml"
@@ -121,6 +125,109 @@ def parse_args() -> argparse.Namespace:
         help="Directory for saving results, predictions, and history.",
     )
     return parser.parse_args()
+
+
+def train_single_fold(
+    model_name: str,
+    fold: CVFold,
+    metadata_df: pd.DataFrame,
+    training_config: TrainingConfig,
+    data_root: Path,
+    spectrogram_dir: Path,
+    output_dir: Path,
+) -> dict:
+    """Train a model on one CV fold. Returns dict with metrics and predictions.
+
+    Builds a fresh model each fold to avoid weight leakage, compiles it,
+    constructs train/val tf.data.Datasets, trains with callbacks, then
+    evaluates on the validation set.
+
+    Args:
+        model_name: Registered model name (e.g. "cnn1d_baseline").
+        fold: CVFold with train_indices, val_indices, fold_id.
+        metadata_df: Full metadata DataFrame (features_v2.csv).
+        training_config: TrainingConfig loaded from YAML.
+        data_root: Root directory of raw bearing CSV data.
+        spectrogram_dir: Directory containing .npy spectrogram files.
+        output_dir: Directory for saving checkpoints and results.
+
+    Returns:
+        Dict with keys: fold_id, model_name, metrics, y_true, y_pred, history.
+    """
+    fold_id = fold.fold_id
+    print(f"\n{'─' * 60}")
+    print(f"  Training {model_name} — fold {fold_id}")
+    print(f"  Val bearing(s): {', '.join(fold.val_bearings)}")
+    print(f"  Train: {len(fold.train_indices)} samples, Val: {len(fold.val_indices)} samples")
+    print(f"{'─' * 60}")
+
+    # 1. Build fresh model
+    model = build_model(model_name)
+
+    # 2. Compile
+    compile_model(model, training_config)
+
+    # 3. Build train/val datasets
+    train_ds = build_dataset_for_model(
+        model_name=model_name,
+        metadata_df=metadata_df,
+        indices=fold.train_indices,
+        batch_size=training_config.batch_size,
+        shuffle=True,
+        data_root=str(data_root),
+        spectrogram_dir=str(spectrogram_dir),
+    )
+    val_ds = build_dataset_for_model(
+        model_name=model_name,
+        metadata_df=metadata_df,
+        indices=fold.val_indices,
+        batch_size=training_config.batch_size,
+        shuffle=False,
+        data_root=str(data_root),
+        spectrogram_dir=str(spectrogram_dir),
+    )
+
+    # 4. Build callbacks — checkpoint path includes model name and fold ID
+    checkpoint_name = f"{model_name}_fold{fold_id}"
+    callbacks = build_callbacks(training_config, model_name=checkpoint_name)
+
+    # 5. Train
+    history = model.fit(
+        train_ds,
+        validation_data=val_ds,
+        epochs=training_config.epochs,
+        callbacks=callbacks,
+        verbose=training_config.verbose,
+    )
+
+    # 6. Collect predictions on val set (iterate all val batches)
+    y_true_list = []
+    y_pred_list = []
+    for x_batch, y_batch in val_ds:
+        preds = model.predict(x_batch, verbose=0)
+        y_true_list.append(y_batch.numpy())
+        y_pred_list.append(preds.squeeze())
+
+    y_true = np.concatenate(y_true_list)
+    y_pred = np.concatenate(y_pred_list)
+
+    # 7. Compute metrics
+    metrics = evaluate_predictions(y_true, y_pred)
+
+    print(f"\n  Fold {fold_id} results:")
+    print(f"    RMSE:  {metrics['rmse']:.4f}")
+    print(f"    MAE:   {metrics['mae']:.4f}")
+    print(f"    PHM08: {metrics['phm08_score']:.4f}")
+
+    # 8. Return result dict
+    return {
+        "fold_id": fold_id,
+        "model_name": model_name,
+        "metrics": metrics,
+        "y_true": y_true,
+        "y_pred": y_pred,
+        "history": history.history,
+    }
 
 
 def main() -> None:
