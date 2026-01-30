@@ -241,6 +241,7 @@ def train_single_fold(
     return {
         "fold_id": fold_id,
         "model_name": model_name,
+        "val_bearings": ", ".join(fold.val_bearings),
         "metrics": metrics,
         "y_true": y_true,
         "y_pred": y_pred,
@@ -364,6 +365,9 @@ def main() -> None:
         # Print aggregate metrics for this model
         _print_aggregate_metrics(model_results, model_name)
 
+        # Append this model's fold results to the combined dl_model_results.csv
+        _append_dl_model_results(model_results, output_dir)
+
     # Save final combined results CSV across all models
     if all_results:
         _save_fold_results_csv(all_results, "all_models_combined", output_dir)
@@ -373,16 +377,15 @@ def main() -> None:
     print(f"{'=' * 60}")
 
 
-def _save_fold_results_csv(
-    results: list[dict], name: str, output_dir: Path
-) -> None:
-    """Save a list of fold result dicts as a CSV file."""
+def _build_results_df(results: list[dict]) -> pd.DataFrame:
+    """Convert a list of fold result dicts to a DataFrame."""
     rows = []
     for r in results:
         rows.append(
             {
                 "model_name": r["model_name"],
                 "fold_id": r["fold_id"],
+                "val_bearings": r.get("val_bearings", ""),
                 "rmse": r["metrics"]["rmse"],
                 "mae": r["metrics"]["mae"],
                 "mape": r["metrics"]["mape"],
@@ -390,10 +393,30 @@ def _save_fold_results_csv(
                 "phm08_score_normalized": r["metrics"]["phm08_score_normalized"],
             }
         )
-    df = pd.DataFrame(rows)
+    return pd.DataFrame(rows)
+
+
+def _save_fold_results_csv(
+    results: list[dict], name: str, output_dir: Path
+) -> None:
+    """Save a list of fold result dicts as a CSV file (overwrite mode)."""
+    df = _build_results_df(results)
     csv_path = output_dir / f"{name}_fold_results.csv"
     df.to_csv(csv_path, index=False)
     print(f"  Saved intermediate results → {csv_path}")
+
+
+def _append_dl_model_results(results: list[dict], output_dir: Path) -> None:
+    """Append fold results to dl_model_results.csv.
+
+    Writes header only if the file does not already exist. This allows
+    running different models separately and accumulating results in one file.
+    """
+    df = _build_results_df(results)
+    csv_path = output_dir / "dl_model_results.csv"
+    write_header = not csv_path.exists()
+    df.to_csv(csv_path, mode="a", header=write_header, index=False)
+    print(f"  Appended {len(df)} fold results → {csv_path}")
 
 
 def _print_aggregate_metrics(results: list[dict], model_name: str) -> None:
