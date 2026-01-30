@@ -17,7 +17,11 @@ import argparse
 import sys
 from pathlib import Path
 
+import pandas as pd
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.training.cv import leave_one_bearing_out
 
 
 def parse_args() -> argparse.Namespace:
@@ -83,6 +87,34 @@ def main() -> None:
     print(f"  Spectrogram dir: {args.spectrogram_dir}")
     print(f"  Output dir:      {args.output_dir}")
     print("=" * 60)
+
+    # --- TRAIN-2: Load metadata and generate CV folds ---
+    features_csv = Path("outputs/features/features_v2.csv")
+    print(f"\nLoading metadata from {features_csv} ...")
+    metadata_df = pd.read_csv(features_csv)
+    print(f"  Loaded {len(metadata_df)} rows, {len(metadata_df.columns)} columns")
+
+    cv_split = leave_one_bearing_out(metadata_df)
+    print(f"  Generated {len(cv_split)} CV folds ({cv_split.strategy})")
+
+    # Filter folds if --folds specified
+    if args.folds is not None:
+        fold_ids = [int(f.strip()) for f in args.folds.split(",")]
+        folds = [fold for fold in cv_split if fold.fold_id in fold_ids]
+        if not folds:
+            print(f"ERROR: No folds matched IDs {fold_ids}. Available: 0-{len(cv_split) - 1}")
+            sys.exit(1)
+    else:
+        folds = list(cv_split)
+
+    # Print fold summary
+    print(f"\n  Folds to train: {len(folds)}")
+    print(f"  {'Fold':>5s}  {'Train':>6s}  {'Val':>5s}  {'Val Bearing(s)'}")
+    print(f"  {'─'*5}  {'─'*6}  {'─'*5}  {'─'*30}")
+    for fold in folds:
+        val_bearings_str = ", ".join(fold.val_bearings)
+        print(f"  {fold.fold_id:>5d}  {len(fold.train_indices):>6d}  {len(fold.val_indices):>5d}  {val_bearings_str}")
+    print()
 
 
 if __name__ == "__main__":
