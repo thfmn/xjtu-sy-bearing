@@ -313,6 +313,28 @@ def get_per_bearing_table(model_name: str = "LightGBM") -> pd.DataFrame:
     return df[cols].round(2)
 
 
+def plot_model_comparison_bars() -> go.Figure:
+    """Grouped bar chart comparing RMSE and MAE across all models."""
+    df = DATA["model_comparison"].copy()
+    df = df.sort_values("RMSE", ascending=True)
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        name="RMSE", x=df["Model"], y=df["RMSE"],
+        marker_color="#1f77b4",
+    ))
+    fig.add_trace(go.Bar(
+        name="MAE", x=df["Model"], y=df["MAE"],
+        marker_color="#ff7f0e",
+    ))
+    fig.update_layout(
+        title="Model Comparison — RMSE and MAE (lower is better)",
+        barmode="group", yaxis_title="Error",
+        height=450,
+    )
+    return fig
+
+
 def get_audio_path(condition: str, bearing_id: str, stage_key: str) -> str | None:
     """Return path to WAV file, or None if not found.
 
@@ -488,6 +510,12 @@ def create_app() -> gr.Blocks:
                     value=comparison_df,
                     label="Model Comparison (all models)",
                     interactive=False,
+                )
+
+                # --- Model comparison bar chart ---
+                gr.Plot(
+                    value=plot_model_comparison_bars(),
+                    label="Model Comparison Chart",
                 )
 
                 # --- Feature importance chart with slider ---
