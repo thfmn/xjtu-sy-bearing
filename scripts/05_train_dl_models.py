@@ -21,7 +21,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.models.registry import get_model_info, list_models
+from src.models.registry import build_model, get_model_info, list_models
 from src.training.cv import leave_one_bearing_out
 
 CONFIGS_DIR = Path("configs")
@@ -179,6 +179,25 @@ def main() -> None:
         info = get_model_info(name)
         print(f"  {name:<35s}  {info.input_type:<15s}  {model_configs[name]}")
     print()
+
+    # --- TRAIN-4: Dry-run mode ---
+    if args.dry_run:
+        print("=" * 60)
+        print("DRY RUN — Building models and printing summaries")
+        print("=" * 60)
+        for name in model_names:
+            print(f"\n{'─' * 60}")
+            print(f"Model: {name}")
+            print(f"{'─' * 60}")
+            model = build_model(name)
+            model.summary()
+            print(f"\n  Input shape:  {model.input_shape}")
+            print(f"  Output shape: {model.output_shape}")
+            print(f"  Total params: {model.count_params():,}")
+        print(f"\n{'=' * 60}")
+        print("Dry run complete. No training performed.")
+        print(f"{'=' * 60}")
+        return
 
 
 if __name__ == "__main__":
