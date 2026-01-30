@@ -367,6 +367,29 @@ def plot_training_curves(model_name: str) -> go.Figure:
     return fig
 
 
+def compute_model_architecture_table() -> pd.DataFrame:
+    """Summary of all model architectures: name, type, input, params."""
+    rows = [
+        {"Model": "LightGBM", "Family": "Gradient Boosting", "Input": "65 features", "Input Shape": "65"},
+        {"Model": "RMS Threshold", "Family": "Statistical", "Input": "RMS signal", "Input Shape": "N/A"},
+        {"Model": "Kurtosis Trending", "Family": "Statistical", "Input": "Kurtosis", "Input Shape": "N/A"},
+        {"Model": "Health Indicator Fusion", "Family": "Statistical", "Input": "RMS + Kurtosis", "Input Shape": "N/A"},
+    ]
+    try:
+        from src.models.registry import list_models, get_model_info
+        for name in list_models():
+            info = get_model_info(name)
+            rows.append({
+                "Model": name,
+                "Family": "Deep Learning",
+                "Input": info.input_type.replace("_", " ").title(),
+                "Input Shape": str(info.default_input_shape),
+            })
+    except ImportError:
+        pass
+    return pd.DataFrame(rows)
+
+
 def get_audio_path(condition: str, bearing_id: str, stage_key: str) -> str | None:
     """Return path to WAV file, or None if not found.
 
@@ -548,6 +571,14 @@ def create_app() -> gr.Blocks:
                 gr.Plot(
                     value=plot_model_comparison_bars(),
                     label="Model Comparison Chart",
+                )
+
+                # --- Model architecture summary table ---
+                gr.Markdown("### Model Architectures")
+                gr.Dataframe(
+                    value=compute_model_architecture_table(),
+                    label="Model Architecture Overview",
+                    interactive=False,
                 )
 
                 # --- Feature importance chart with slider ---
