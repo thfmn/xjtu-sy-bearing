@@ -1,0 +1,31 @@
+# Training config for 1D CNN baseline
+batch_size: 16
+epochs: 100
+seed: 42
+
+optimizer:
+  name: adamw
+  learning_rate: 0.001
+  weight_decay: 0.0001
+
+loss:
+  name: huber
+  delta: 10.0
+
+callbacks:
+  checkpoint_dir: outputs/models/checkpoints
+  save_best_only: true
+  monitor: val_loss
+  mode: min
+  lr_reduce_factor: 0.5
+  lr_reduce_patience: 10
+  lr_min: 0.000001
+  early_stop_patience: 20
+  restore_best_weights: true
+  mlflow_tracking: true
+  mlflow_tracking_uri: mlruns
+  mlflow_experiment_name: bearing_rul_dl
+
+model:
+  name: cnn1d_baseline
+  input_type: raw_signal
