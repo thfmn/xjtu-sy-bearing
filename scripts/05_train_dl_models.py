@@ -306,6 +306,88 @@ def main() -> None:
         print(f"{'=' * 60}")
         return
 
+    # --- TRAIN-7: Main training loop over models and folds ---
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    data_root = Path(args.data_root)
+    spectrogram_dir = Path(args.spectrogram_dir)
+
+    all_results: list[dict] = []
+
+    for model_name in model_names:
+        config_path = model_configs[model_name]
+        training_config = TrainingConfig.from_yaml(config_path)
+        print(f"\n{'=' * 60}")
+        print(f"  MODEL: {model_name}")
+        print(f"  Config: {config_path}")
+        print(f"  Folds: {len(folds)}")
+        print(f"{'=' * 60}")
+
+        model_results: list[dict] = []
+
+        for fold_idx, fold in enumerate(folds):
+            print(f"\n  [{fold_idx + 1}/{len(folds)}] Training {model_name} fold {fold.fold_id}")
+
+            result = train_single_fold(
+                model_name=model_name,
+                fold=fold,
+                metadata_df=metadata_df,
+                training_config=training_config,
+                data_root=data_root,
+                spectrogram_dir=spectrogram_dir,
+                output_dir=output_dir,
+            )
+            model_results.append(result)
+            all_results.append(result)
+
+            # Save intermediate per-fold results CSV (crash recovery)
+            _save_fold_results_csv(model_results, model_name, output_dir)
+
+        # Print aggregate metrics for this model
+        _print_aggregate_metrics(model_results, model_name)
+
+    # Save final combined results CSV across all models
+    if all_results:
+        _save_fold_results_csv(all_results, "all_models_combined", output_dir)
+
+    print(f"\n{'=' * 60}")
+    print("Training complete.")
+    print(f"{'=' * 60}")
+
+
+def _save_fold_results_csv(
+    results: list[dict], name: str, output_dir: Path
+) -> None:
+    """Save a list of fold result dicts as a CSV file."""
+    rows = []
+    for r in results:
+        rows.append(
+            {
+                "model_name": r["model_name"],
+                "fold_id": r["fold_id"],
+                "rmse": r["metrics"]["rmse"],
+                "mae": r["metrics"]["mae"],
+                "mape": r["metrics"]["mape"],
+                "phm08_score": r["metrics"]["phm08_score"],
+                "phm08_score_normalized": r["metrics"]["phm08_score_normalized"],
+            }
+        )
+    df = pd.DataFrame(rows)
+    csv_path = output_dir / f"{name}_fold_results.csv"
+    df.to_csv(csv_path, index=False)
+    print(f"  Saved intermediate results → {csv_path}")
+
+
+def _print_aggregate_metrics(results: list[dict], model_name: str) -> None:
+    """Print mean ± std of RMSE and MAE across folds for a model."""
+    rmses = [r["metrics"]["rmse"] for r in results]
+    maes = [r["metrics"]["mae"] for r in results]
+    print(f"\n{'─' * 60}")
+    print(f"  Aggregate for {model_name} ({len(results)} folds):")
+    print(f"    RMSE: {np.mean(rmses):.4f} ± {np.std(rmses):.4f}")
+    print(f"    MAE:  {np.mean(maes):.4f} ± {np.std(maes):.4f}")
+    print(f"{'─' * 60}")
+
 
 if __name__ == "__main__":
     main()
