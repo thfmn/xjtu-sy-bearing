@@ -31,6 +31,7 @@ PER_BEARING_CSV = OUTPUTS / "evaluation" / "lgbm_per_bearing.csv"
 MODELS_DIR = OUTPUTS / "models"
 AUDIO_DIR = OUTPUTS / "audio"
 PREDICTIONS_DIR = OUTPUTS / "evaluation" / "predictions"
+DL_SUMMARY_CSV = OUTPUTS / "evaluation" / "dl_model_summary.csv"
 
 # ---------------------------------------------------------------------------
 # Global data store (populated once at startup)
@@ -92,6 +93,13 @@ def load_data() -> dict:
         model_name = csv_path.stem.replace("_per_bearing", "")
         if model_name != "lgbm":  # Skip the existing LightGBM file
             data["dl_per_bearing"][model_name] = pd.read_csv(csv_path)
+
+    # 6. Load DL model summary (if available)
+    if DL_SUMMARY_CSV.exists():
+        data["dl_summary"] = pd.read_csv(DL_SUMMARY_CSV)
+        print(f"DL summary: {len(data['dl_summary'])} models loaded from {DL_SUMMARY_CSV.name}")
+    else:
+        data["dl_summary"] = None
 
     return data
 
