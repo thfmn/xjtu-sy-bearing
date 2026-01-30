@@ -16,9 +16,12 @@ import argparse
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.training.metrics import per_bearing_metrics
 
 
 def parse_args() -> argparse.Namespace:
@@ -91,6 +94,60 @@ def print_summary_table(summary_df: pd.DataFrame) -> None:
     print("\n" + "=" * 80)
 
 
+def generate_per_bearing_breakdowns(
+    results_df: pd.DataFrame,
+    predictions_dir: Path,
+    output_dir: Path,
+) -> None:
+    """Generate per-bearing metric breakdown CSVs for each DL model.
+
+    For each model, loads all per-fold prediction CSVs, concatenates them
+    (each fold has different bearings in the val set), and computes
+    per-bearing metrics using ``per_bearing_metrics()``.
+
+    Parameters
+    ----------
+    results_df : pd.DataFrame
+        Per-fold results (used to determine which models were trained).
+    predictions_dir : Path
+        Directory containing ``{model_name}_fold{N}_predictions.csv`` files.
+    output_dir : Path
+        Directory to write ``{model_name}_per_bearing.csv`` files.
+    """
+    if not predictions_dir.exists():
+        print(f"\nWARNING: {predictions_dir} not found — skipping EVAL-4 per-bearing breakdown.")
+        return
+
+    model_names = sorted(results_df["model_name"].unique())
+    print(f"\n--- EVAL-4: Per-bearing breakdown for {len(model_names)} model(s) ---")
+
+    for model_name in model_names:
+        # Glob for all fold prediction CSVs for this model
+        pred_csvs = sorted(predictions_dir.glob(f"{model_name}_fold*_predictions.csv"))
+        if not pred_csvs:
+            print(f"  {model_name}: no prediction CSVs found — skipping")
+            continue
+
+        # Concatenate all folds
+        dfs = [pd.read_csv(p) for p in pred_csvs]
+        combined = pd.concat(dfs, ignore_index=True)
+
+        y_true = combined["y_true"].values
+        y_pred = combined["y_pred"].values
+        bearing_ids = combined["bearing_id"].values
+
+        # Compute per-bearing metrics
+        pb_df = per_bearing_metrics(y_true, y_pred, bearing_ids)
+
+        # Save
+        out_csv = output_dir / f"{model_name}_per_bearing.csv"
+        pb_df.to_csv(out_csv, index=False)
+        print(f"  {model_name}: {len(pred_csvs)} fold(s), {len(combined)} samples, "
+              f"{len(pb_df)} bearings → {out_csv}")
+
+    print("--- EVAL-4 complete ---")
+
+
 def main() -> None:
     """Main entry point for DL model evaluation."""
     args = parse_args()
@@ -118,6 +175,10 @@ def main() -> None:
 
     # --- EVAL-3: Merge DL results with existing model_comparison.csv ---
     merge_dl_into_model_comparison(summary_df, args.output_dir)
+
+    # --- EVAL-4: Generate per-bearing breakdown CSVs for DL models ---
+    predictions_dir = args.results_dir / "predictions"
+    generate_per_bearing_breakdowns(results_df, predictions_dir, args.output_dir)
 
 
 # ---------------------------------------------------------------------------
