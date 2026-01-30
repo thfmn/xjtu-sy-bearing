@@ -101,6 +101,21 @@ def load_data() -> dict:
     else:
         data["dl_summary"] = None
 
+    # 7. Load DL training history (if available)
+    data["dl_history"] = {}  # {model_name: [fold0_df, fold1_df, ...]}
+    history_dir = OUTPUTS / "evaluation" / "history"
+    if history_dir.exists():
+        for csv_path in sorted(history_dir.glob("*_history.csv")):
+            parts = csv_path.stem.rsplit("_fold", 1)
+            if len(parts) == 2:
+                model_name = parts[0]
+                if model_name not in data["dl_history"]:
+                    data["dl_history"][model_name] = []
+                data["dl_history"][model_name].append(pd.read_csv(csv_path))
+    if data["dl_history"]:
+        total_folds = sum(len(v) for v in data["dl_history"].values())
+        print(f"DL history: {len(data['dl_history'])} models, {total_folds} fold histories loaded")
+
     return data
 
 

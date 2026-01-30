@@ -260,6 +260,15 @@ def train_single_fold(
                 epoch_metrics[key] = history.history[key][epoch_idx]
             run.log_metrics(epoch_metrics, step=epoch_idx)
 
+    # Save training history to CSV
+    history_dir = output_dir / "history"
+    history_dir.mkdir(parents=True, exist_ok=True)
+    history_df = pd.DataFrame(history.history)
+    history_df["epoch"] = range(len(history_df))
+    history_csv = history_dir / f"{model_name}_fold{fold_id}_history.csv"
+    history_df.to_csv(history_csv, index=False)
+    print(f"  Saved training history → {history_csv}")
+
     print(f"\n  Fold {fold_id} results:")
     print(f"    RMSE:  {metrics['rmse']:.4f}")
     print(f"    MAE:   {metrics['mae']:.4f}")
