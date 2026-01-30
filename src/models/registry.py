@@ -72,10 +72,18 @@ def build_model(name: str):
 def _register_all() -> None:
     """Register all known model architectures."""
     from src.models.baselines.cnn1d_baseline import create_default_cnn1d
+    from src.models.pattern1.model import create_tcn_transformer_lstm
 
     register_model(
         name="cnn1d_baseline",
         build_fn=create_default_cnn1d,
+        input_type="raw_signal",
+        default_input_shape=(32768, 2),
+    )
+
+    register_model(
+        name="tcn_transformer_lstm",
+        build_fn=create_tcn_transformer_lstm,
         input_type="raw_signal",
         default_input_shape=(32768, 2),
     )
