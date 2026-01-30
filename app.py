@@ -30,6 +30,7 @@ FEATURE_IMPORTANCE_CSV = OUTPUTS / "evaluation" / "lgbm_feature_importance.csv"
 PER_BEARING_CSV = OUTPUTS / "evaluation" / "lgbm_per_bearing.csv"
 MODELS_DIR = OUTPUTS / "models"
 AUDIO_DIR = OUTPUTS / "audio"
+PREDICTIONS_DIR = OUTPUTS / "evaluation" / "predictions"
 
 # ---------------------------------------------------------------------------
 # Global data store (populated once at startup)
@@ -66,6 +67,23 @@ def load_data() -> dict:
         data["has_model"] = True
     except Exception as e:
         print(f"Warning: LightGBM retraining failed: {e}")
+
+    # 4. Load DL model predictions (if available)
+    data["dl_predictions"] = {}  # {model_name: {bearing_id: {"y_true": [...], "y_pred": [...]}}}
+    if PREDICTIONS_DIR.exists():
+        for csv_path in sorted(PREDICTIONS_DIR.glob("*_predictions.csv")):
+            # filename pattern: {model_name}_fold{N}_predictions.csv
+            parts = csv_path.stem.rsplit("_fold", 1)
+            if len(parts) == 2:
+                model_name = parts[0]
+                pred_df = pd.read_csv(csv_path)
+                if model_name not in data["dl_predictions"]:
+                    data["dl_predictions"][model_name] = {}
+                for bearing_id, group in pred_df.groupby("bearing_id"):
+                    data["dl_predictions"][model_name][bearing_id] = {
+                        "y_true": group["y_true"].values,
+                        "y_pred": group["y_pred"].values,
+                    }
 
     return data
 
@@ -615,6 +633,10 @@ if __name__ == "__main__":
     print(f"  Model trained: {DATA['has_model']}")
     if DATA["has_model"]:
         print(f"  Predictions for {len(DATA['predictions'])} bearings")
+    dl_preds = DATA.get("dl_predictions", {})
+    if dl_preds:
+        total_bearings = sum(len(v) for v in dl_preds.values())
+        print(f"  DL predictions: {len(dl_preds)} models, {total_bearings} bearings total")
 
     app = create_app()
     app.launch(server_name="0.0.0.0", server_port=7860, theme=gr.themes.Soft())
