@@ -19,6 +19,8 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
+from src.models.registry import get_model_info
+
 
 SPECTROGRAM_DIR = "outputs/spectrograms/stft"
 
@@ -189,3 +191,58 @@ def build_spectrogram_dataset(
     ds = ds.prefetch(tf.data.AUTOTUNE)
 
     return ds
+
+
+def build_dataset_for_model(
+    model_name: str,
+    metadata_df: pd.DataFrame,
+    indices: np.ndarray,
+    batch_size: int = 32,
+    shuffle: bool = True,
+    data_root: str | Path = "assets/Data/XJTU-SY_Bearing_Datasets",
+    spectrogram_dir: str | Path = "outputs/spectrograms/stft",
+) -> tf.data.Dataset:
+    """Build the appropriate tf.data.Dataset for a model based on its registry input type.
+
+    Looks up the model in the registry and dispatches to the correct dataset
+    builder (raw signal or spectrogram).
+
+    Args:
+        model_name: Registered model name (e.g., "cnn1d_baseline", "pattern2_simple").
+        metadata_df: DataFrame with columns: condition, bearing_id, filename, rul.
+        indices: Array of row indices into metadata_df.
+        batch_size: Number of samples per batch.
+        shuffle: Whether to shuffle the dataset.
+        data_root: Root directory of the raw bearing CSV files.
+        spectrogram_dir: Root directory of the .npy spectrogram files.
+
+    Returns:
+        tf.data.Dataset yielding (input, rul) batches appropriate for the model.
+
+    Raises:
+        KeyError: If model_name is not found in the registry.
+        ValueError: If the model's input_type is not supported.
+    """
+    info = get_model_info(model_name)
+
+    if info.input_type == "raw_signal":
+        return build_raw_signal_dataset(
+            metadata_df=metadata_df,
+            data_root=data_root,
+            indices=indices,
+            batch_size=batch_size,
+            shuffle=shuffle,
+        )
+    elif info.input_type == "spectrogram":
+        return build_spectrogram_dataset(
+            metadata_df=metadata_df,
+            spectrogram_dir=spectrogram_dir,
+            indices=indices,
+            batch_size=batch_size,
+            shuffle=shuffle,
+        )
+    else:
+        raise ValueError(
+            f"Unsupported input_type '{info.input_type}' for model '{model_name}'. "
+            f"Expected 'raw_signal' or 'spectrogram'."
+        )
