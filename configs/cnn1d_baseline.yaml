@@ -34,4 +34,4 @@ vertex:
   enabled: false          # Set to true when running on GCP
   experiment_name: bearing-rul-dl
   project_id: xjtu-bearing-failure
-  location: asia-southeast3
+  location: asia-southeast1 # Singapore
