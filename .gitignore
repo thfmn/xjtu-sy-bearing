@@ -55,9 +55,8 @@ CLAUDE.md
 ralph-*
 
 # Internal project documents (PRD, progress tracking)
-PRD.md
 *PRD*
-progress.txt
+progress*.txt
 
 # Model binaries
 *.keras
@@ -68,7 +67,3 @@ guides/
 
 # Downloaded web content
 notebooks/raw.githubusercontent.com/
-
-# PRD
-PRD-TRAIN.md
-progress-train.txt
