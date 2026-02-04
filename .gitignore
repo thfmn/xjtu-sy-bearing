@@ -62,3 +62,7 @@ guides/
 
 # Downloaded web content
 notebooks/raw.githubusercontent.com/
+
+# PRD
+PRD-TRAIN.md
+progress-train.txt
