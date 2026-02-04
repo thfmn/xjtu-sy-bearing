@@ -1,7 +1,7 @@
 # Training config for TCN-Transformer models (Pattern 1)
 batch_size: 8
 epochs: 100
-seed: 42
+seed: 9
 
 optimizer:
   name: adamw
@@ -34,4 +34,4 @@ vertex:
   enabled: false          # Set to true when running on GCP
   experiment_name: bearing-rul-dl
   project_id: xjtu-bearing-failure
-  location: asia-southeast3
+  location: asia-southeast1
