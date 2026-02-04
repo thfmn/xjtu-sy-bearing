@@ -53,6 +53,8 @@ CLAUDE.md
 
 # Personal utility scripts
 ralph-*
+scripts/stream_filter.py
+scripts/get_timestamp.py
 
 # Internal project documents (PRD, progress tracking)
 *PRD*
