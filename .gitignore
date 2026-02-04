@@ -57,5 +57,8 @@ progress.txt
 *.keras
 *.h5
 
+# Personal learning guides
+guides/
+
 # Downloaded web content
 notebooks/raw.githubusercontent.com/
