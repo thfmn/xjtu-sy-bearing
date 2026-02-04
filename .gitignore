@@ -41,9 +41,15 @@ google-cloud-cli-*
 # IDE and tooling
 .python-version
 
-# AI tooling (Claude Code)
+# AI tooling (all common coding assistants)
 CLAUDE.md
 .claude/
+.cursor/
+.copilot/
+.continue/
+.codeium/
+.aider*
+.github/copilot/
 
 # Personal utility scripts
 ralph-*

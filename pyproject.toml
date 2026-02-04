@@ -1,7 +1,7 @@
 [project]
 name = "xjtu-sy-bearing"
 version = "0.1.0"
-description = "Add your description here"
+description = "MLOps pipeline for bearing Remaining Useful Life (RUL) prediction using the XJTU-SY vibration dataset"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -16,9 +16,10 @@ dependencies = [
     "jupyterlab>=4.5.1",
     "keras>=3.13.1",
     "lightgbm>=4.0.0",
-    "mlflow>=2.10.0",
+    "mlflow[mcp]>=3.5.1",
     "numpy>=1.26.0,<2.4",
     "pandas>=2.0.0,<3.0.0",
+    "pip>=25.3",
     "plotly>=6.5.2",
     "pydot>=4.0.1",
     "pywavelets>=1.4.0",
