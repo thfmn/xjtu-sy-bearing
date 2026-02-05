@@ -1021,9 +1021,9 @@ class EnsembleOnsetDetector(BaseOnsetDetector):
         onset_indices = [(i, r.onset_idx, r.confidence) for i, r in enumerate(results)]
         valid_onsets = [(i, idx, conf) for i, idx, conf in onset_indices if idx is not None]
 
-        # If less than half detected anything, no majority
+        # If half or fewer detected anything, no majority (>50% required)
         majority_threshold = len(results) / 2
-        if len(valid_onsets) < majority_threshold:
+        if len(valid_onsets) <= majority_threshold:
             return None, 0.0
 
         # Cluster valid onsets by tolerance
@@ -1046,8 +1046,8 @@ class EnsembleOnsetDetector(BaseOnsetDetector):
         # Find largest cluster
         largest_cluster = max(clusters, key=len)
 
-        # Check if largest cluster has majority
-        if len(largest_cluster) < majority_threshold:
+        # Check if largest cluster has majority (>50%, strictly greater)
+        if len(largest_cluster) <= majority_threshold:
             # No majority - return low confidence
             return None, np.mean([r.confidence for r in results]) * 0.3
 

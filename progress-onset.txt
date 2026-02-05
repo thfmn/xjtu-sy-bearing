@@ -253,3 +253,18 @@
   - test_ensemble_n_detectors_matches_individual_results: validates n_detectors field accuracy
   - All 101 tests passing (was 97 before, +4 ensemble tests)
 
+2026-02-05 16:18:02 START: ONSET-7 Acceptance - majority voting requires >50% of detectors to agree on onset region
+2026-02-05 16:21:57 DONE: ONSET-7 Acceptance - majority voting requires >50% of detectors to agree on onset region
+  - Fixed bug in _vote_majority: changed `<` to `<=` for proper >50% semantics
+    - Before: 2/4 detectors (50%) would pass (incorrect)
+    - After: 2/4 detectors (50%) fails, 3/4 (75%) passes (correct)
+  - Added TestEnsembleMajorityVoting class with 7 comprehensive tests:
+    - test_majority_3_detectors_2_agree_passes: 2/3 = 66.7% > 50% ✓
+    - test_majority_4_detectors_2_agree_fails: 2/4 = 50% NOT > 50% ✗
+    - test_majority_4_detectors_3_agree_passes: 3/4 = 75% > 50% ✓
+    - test_majority_requires_agreement_within_tolerance: dispersed indices don't cluster
+    - test_majority_tolerance_clusters_nearby_indices: nearby indices form cluster
+    - test_majority_mixed_detection_and_no_detection: 2/4 detecting = no majority
+    - test_majority_5_detectors_3_agree_passes: 3/5 = 60% > 50% ✓
+  - All 108 tests passing (was 101 before, +7 new tests)
+

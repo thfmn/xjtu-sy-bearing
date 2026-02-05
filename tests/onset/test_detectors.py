@@ -1868,3 +1868,272 @@ class TestEnsembleOnsetDetector:
         )
         result3 = ensemble3.fit_detect(hi_series, healthy_fraction=0.3)
         assert result3.healthy_baseline["n_detectors"] == 3
+
+
+class TestEnsembleMajorityVoting:
+    """Test majority voting requires >50% of detectors to agree.
+
+    ONSET-7 Acceptance: 'majority' voting requires >50% of detectors to agree
+    on onset region (within tolerance).
+    """
+
+    def test_majority_3_detectors_2_agree_passes(self):
+        """With 3 detectors, 2 agreeing (66%) exceeds 50% threshold.
+
+        2/3 = 66.7% > 50% → majority achieved.
+        """
+        from src.onset.detectors import EnsembleOnsetDetector
+
+        np.random.seed(42)
+
+        # Create series where only 2 of 3 detectors will agree
+        # Threshold and CUSUM are tuned to detect at ~50, EWMA tuned to NOT detect
+        n_samples = 100
+        onset_idx = 50
+
+        hi_series = np.zeros(n_samples)
+        hi_series[:onset_idx] = 0.1 + np.random.randn(onset_idx) * 0.02
+        # Strong shift that threshold and CUSUM will detect
+        hi_series[onset_idx:] = 0.5 + np.random.randn(n_samples - onset_idx) * 0.02
+
+        # Detector 1 & 2: tuned to detect this clear shift
+        detector1 = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        detector2 = CUSUMOnsetDetector(drift=0.5, threshold=5.0)
+        # Detector 3: tuned to be very insensitive (won't detect mild shifts)
+        detector3 = ThresholdOnsetDetector(threshold_sigma=20.0, min_consecutive=10)
+
+        ensemble = EnsembleOnsetDetector(
+            detectors=[detector1, detector2, detector3],
+            voting="majority",
+            tolerance=5,
+        )
+        result = ensemble.fit_detect(hi_series, healthy_fraction=0.3)
+
+        # Verify: 2/3 detectors detected onset, which is >50% → should return onset
+        individual_results = result.healthy_baseline["individual_results"]
+        n_detected = sum(1 for ir in individual_results if ir["onset_idx"] is not None)
+
+        assert n_detected >= 2, f"Expected at least 2 detectors to detect, got {n_detected}"
+        assert result.onset_idx is not None, (
+            "Majority voting with 2/3 agreement should return onset"
+        )
+        # Should be near the true onset
+        assert abs(result.onset_idx - onset_idx) <= 10, (
+            f"Onset {result.onset_idx} should be near true onset {onset_idx}"
+        )
+
+    def test_majority_4_detectors_2_agree_fails(self):
+        """With 4 detectors, 2 agreeing (50%) does NOT exceed threshold.
+
+        2/4 = 50% = majority threshold → NOT > 50%, so no majority.
+
+        Uses _vote_majority directly to test the voting logic without
+        worrying about detector tuning variability.
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(4)]
+
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="majority",
+            tolerance=5,
+        )
+
+        # 2 detect at ~50, 2 don't detect → 2/4 = 50%, not > 50%
+        mock_results = [
+            OnsetResult(onset_idx=50, onset_time=50.0, confidence=0.9, healthy_baseline={}),
+            OnsetResult(onset_idx=51, onset_time=51.0, confidence=0.85, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+        ]
+
+        onset_idx, _ = ensemble._vote_majority(mock_results)
+
+        # 2/4 = 50% which is NOT > 50%, so no majority → should return None
+        assert onset_idx is None, (
+            "2/4 detectors (50%) should NOT achieve majority (requires >50%)"
+        )
+
+    def test_majority_4_detectors_3_agree_passes(self):
+        """With 4 detectors, 3 agreeing (75%) exceeds 50% threshold.
+
+        3/4 = 75% > 50% → majority achieved.
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, EWMAOnsetDetector
+
+        np.random.seed(42)
+
+        n_samples = 100
+        onset_idx = 50
+
+        hi_series = np.zeros(n_samples)
+        hi_series[:onset_idx] = 0.1 + np.random.randn(onset_idx) * 0.02
+        # Strong shift that 3 detectors will catch
+        hi_series[onset_idx:] = 0.5 + np.random.randn(n_samples - onset_idx) * 0.02
+
+        # 3 sensitive detectors (will detect)
+        detector1 = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        detector2 = CUSUMOnsetDetector(drift=0.5, threshold=5.0)
+        detector3 = EWMAOnsetDetector(lambda_=0.2, L=3.0)
+        # 1 insensitive detector (won't detect)
+        detector4 = ThresholdOnsetDetector(threshold_sigma=50.0, min_consecutive=20)
+
+        ensemble = EnsembleOnsetDetector(
+            detectors=[detector1, detector2, detector3, detector4],
+            voting="majority",
+            tolerance=5,
+        )
+        result = ensemble.fit_detect(hi_series, healthy_fraction=0.3)
+
+        # Verify: at least 3 detected
+        individual_results = result.healthy_baseline["individual_results"]
+        n_detected = sum(1 for ir in individual_results if ir["onset_idx"] is not None)
+
+        assert n_detected >= 3, f"Expected at least 3 detectors to detect, got {n_detected}"
+        # 3/4 = 75% > 50% → majority achieved
+        assert result.onset_idx is not None, (
+            "3/4 detectors (75%) should achieve majority"
+        )
+        assert abs(result.onset_idx - onset_idx) <= 10, (
+            f"Onset {result.onset_idx} should be near true onset {onset_idx}"
+        )
+
+    def test_majority_requires_agreement_within_tolerance(self):
+        """Majority voting clusters by tolerance - detectors must agree on region.
+
+        If 3 detectors detect onset but at indices far apart (> tolerance),
+        they won't form a majority cluster.
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        # Manually mock the detection results to test clustering logic
+        # We'll use a low-level approach by checking the _vote_majority method directly
+
+        # Create detectors (we'll fit them but override detection behavior)
+        detector1 = ThresholdOnsetDetector(threshold_sigma=3.0)
+        detector2 = ThresholdOnsetDetector(threshold_sigma=3.0)
+        detector3 = ThresholdOnsetDetector(threshold_sigma=3.0)
+
+        ensemble = EnsembleOnsetDetector(
+            detectors=[detector1, detector2, detector3],
+            voting="majority",
+            tolerance=5,  # Detectors must be within 5 samples to agree
+        )
+
+        # Test case: 3 detectors with indices spread too far apart
+        # Index 10, 30, 50 → no two pairs within tolerance=5
+        # Each forms its own cluster of size 1 → no majority
+        mock_results = [
+            OnsetResult(onset_idx=10, onset_time=10.0, confidence=0.9, healthy_baseline={}),
+            OnsetResult(onset_idx=30, onset_time=30.0, confidence=0.9, healthy_baseline={}),
+            OnsetResult(onset_idx=50, onset_time=50.0, confidence=0.9, healthy_baseline={}),
+        ]
+
+        onset_idx, _ = ensemble._vote_majority(mock_results)
+
+        # Each detector is in its own cluster of size 1
+        # Largest cluster = 1, threshold = 3/2 = 1.5 → 1 < 1.5, no majority
+        assert onset_idx is None, (
+            "3 detectors with indices far apart (10, 30, 50) should not form majority"
+        )
+
+    def test_majority_tolerance_clusters_nearby_indices(self):
+        """Detectors within tolerance should cluster together for majority.
+
+        If 3 detectors report indices 48, 50, 52 with tolerance=5,
+        they all fall within one cluster → majority.
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detector1 = ThresholdOnsetDetector()
+        detector2 = ThresholdOnsetDetector()
+        detector3 = ThresholdOnsetDetector()
+
+        ensemble = EnsembleOnsetDetector(
+            detectors=[detector1, detector2, detector3],
+            voting="majority",
+            tolerance=5,
+        )
+
+        # 3 detectors with nearby indices (all within tolerance of each other)
+        mock_results = [
+            OnsetResult(onset_idx=48, onset_time=48.0, confidence=0.8, healthy_baseline={}),
+            OnsetResult(onset_idx=50, onset_time=50.0, confidence=0.9, healthy_baseline={}),
+            OnsetResult(onset_idx=52, onset_time=52.0, confidence=0.85, healthy_baseline={}),
+        ]
+
+        onset_idx, _ = ensemble._vote_majority(mock_results)
+
+        # All 3 within tolerance → cluster of size 3 → 3/3 = 100% > 50%
+        assert onset_idx is not None, (
+            "3 detectors with indices (48, 50, 52) within tolerance=5 should form majority"
+        )
+        # Should return median of cluster
+        assert onset_idx == 50, f"Median of (48, 50, 52) should be 50, got {onset_idx}"
+
+    def test_majority_mixed_detection_and_no_detection(self):
+        """Test majority when some detectors find onset, others don't.
+
+        With 4 detectors where 2 detect similar indices and 2 detect nothing:
+        2/4 = 50%, not > 50%, so no majority.
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detector1 = ThresholdOnsetDetector()
+        detector2 = ThresholdOnsetDetector()
+        detector3 = ThresholdOnsetDetector()
+        detector4 = ThresholdOnsetDetector()
+
+        ensemble = EnsembleOnsetDetector(
+            detectors=[detector1, detector2, detector3, detector4],
+            voting="majority",
+            tolerance=5,
+        )
+
+        # 2 detect at ~50, 2 detect nothing
+        mock_results = [
+            OnsetResult(onset_idx=50, onset_time=50.0, confidence=0.9, healthy_baseline={}),
+            OnsetResult(onset_idx=51, onset_time=51.0, confidence=0.85, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+        ]
+
+        onset_idx, _ = ensemble._vote_majority(mock_results)
+
+        # Only 2 detected → 2/4 = 50%, not > 50%
+        assert onset_idx is None, (
+            "2/4 detectors (50%) detecting should NOT achieve majority"
+        )
+
+    def test_majority_5_detectors_3_agree_passes(self):
+        """With 5 detectors, 3 agreeing (60%) exceeds 50% threshold.
+
+        3/5 = 60% > 50% → majority achieved.
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(5)]
+
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="majority",
+            tolerance=5,
+        )
+
+        # 3 detect at ~50, 2 detect nothing
+        mock_results = [
+            OnsetResult(onset_idx=49, onset_time=49.0, confidence=0.9, healthy_baseline={}),
+            OnsetResult(onset_idx=50, onset_time=50.0, confidence=0.85, healthy_baseline={}),
+            OnsetResult(onset_idx=51, onset_time=51.0, confidence=0.8, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+        ]
+
+        onset_idx, _ = ensemble._vote_majority(mock_results)
+
+        # 3 detected and agree → 3/5 = 60% > 50%
+        assert onset_idx is not None, (
+            "3/5 detectors (60%) should achieve majority"
+        )
+        assert onset_idx == 50, f"Median of (49, 50, 51) should be 50, got {onset_idx}"
