@@ -391,7 +391,7 @@ Implement a neural network classifier for onset detection to improve upon rule-b
 **Priority**: P1 | **Effort**: 2h | **Phase**: 3. Model Development
 
 **Tasks**:
-- [ ] Create `src/onset/models.py`
+- [x] Create `src/onset/models.py`
 - [ ] Implement `create_onset_classifier(input_dim=4, window_size=10)`:
   - Input: (window_size, 4) - 4 health indicators over time window
   - Architecture: LSTM(32) -> Dense(16) -> Dense(1, sigmoid)

@@ -34,6 +34,11 @@ from src.onset.dataset import (
     create_onset_dataset,
     split_by_bearing,
 )
+from src.onset.models import (
+    OnsetClassifierConfig,
+    build_onset_classifier,
+    create_onset_classifier,
+)
 from src.onset.labels import (
     OnsetLabelEntry,
     add_onset_column,
@@ -67,6 +72,10 @@ __all__: list[str] = [
     "compute_class_weights",
     "create_onset_dataset",
     "split_by_bearing",
+    # Models
+    "OnsetClassifierConfig",
+    "build_onset_classifier",
+    "create_onset_classifier",
     # Labels
     "OnsetLabelEntry",
     "add_onset_column",

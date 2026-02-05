@@ -680,3 +680,16 @@
   - test_window_size_exceeds_bearing_length_skips_bearing: B2 (15 samples) skipped with window=16
   - All 27 tests passing (was 20 before, +7 new window size tests)
   - ONSET-14 ALL ACCEPTANCE CRITERIA NOW COMPLETE
+
+2026-02-06 02:09:17 START: Create src/onset/models.py (ONSET-15 first checkbox)
+2026-02-06 02:11:17 DONE: Create src/onset/models.py (ONSET-15 first checkbox)
+  - Created src/onset/models.py with Keras Functional API (following codebase conventions):
+    - OnsetClassifierConfig dataclass: window_size, n_features, lstm_units, dense_units, dropout_rate, l2_factor
+    - build_onset_classifier(config, name): Functional API builder returning uncompiled keras.Model
+    - create_onset_classifier(input_dim=4, window_size=10): PRD-matching factory function
+  - Architecture: Input(10,4) -> LSTM(32) -> Dropout(0.3) -> Dense(16, relu, L2=1e-3) -> Dropout(0.3) -> Dense(1, sigmoid)
+  - Total parameters: 5,281 (well under 10K requirement)
+  - Input shape: (None, 10, 4), Output shape: (None, 1) with sigmoid activation
+  - Forward pass verified with dummy data: predictions in [0,1] range
+  - Updated src/onset/__init__.py to export OnsetClassifierConfig, build_onset_classifier, create_onset_classifier
+  - All 213 existing onset tests still passing
