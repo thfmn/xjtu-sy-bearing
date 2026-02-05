@@ -1,0 +1,221 @@
+=== ONSET Detection Implementation Progress ===
+
+2026-02-05 15:02:10 START: Create src/onset/__init__.py (ONSET-1 first checkbox)
+2026-02-05 15:02:37 DONE: Create src/onset/__init__.py (ONSET-1 first checkbox)
+
+2026-02-05 15:03:15 START: Create src/onset/health_indicators.py (ONSET-1 second checkbox)
+2026-02-05 15:04:40 DONE: Create src/onset/health_indicators.py (ONSET-1 second checkbox)
+
+2026-02-05 15:05:57 VERIFIED: ONSET-1 remaining task checkboxes (load_bearing_health_series, compute_composite_hi, min-max normalization, Savitzky-Golay smoothing) - all already implemented and tested
+2026-02-05 15:05:57 DONE: ONSET-1 Health Indicator Aggregation Module - ALL checkboxes complete
+
+2026-02-05 15:06:33 START: Create tests/onset/__init__.py (ONSET-2 first checkbox)
+2026-02-05 15:06:54 DONE: Create tests/onset/__init__.py (ONSET-2 first checkbox)
+
+2026-02-05 15:07:30 START: Create tests/onset/test_health_indicators.py (ONSET-2 second checkbox)
+2026-02-05 15:09:52 DONE: Create tests/onset/test_health_indicators.py (ONSET-2 second checkbox) - 26 tests, 96% coverage
+
+2026-02-05 15:10:39 START: Verify remaining ONSET-2 task checkboxes (tests already exist in test_health_indicators.py)
+2026-02-05 15:11:52 VERIFIED: ONSET-2 remaining task checkboxes - ALL tests already implemented and passing:
+  - test_returns_correct_shape() -> TestLoadBearingHealthSeries.test_returns_correct_shape
+  - test_output_in_zero_one_range() -> TestComputeCompositeHI.test_output_in_zero_one_range
+  - test_preserves_array_length() -> TestSmoothHealthIndicator.test_preserves_array_length
+  - test_nan_handling -> TestNaNHandling class (4 tests)
+  - synthetic_features_df fixture -> @pytest.fixture synthetic_features_df()
+2026-02-05 15:11:52 DONE: ONSET-2 Health Indicator Unit Tests - ALL task checkboxes complete (26 tests pass)
+
+2026-02-05 15:12:18 START: Create src/onset/detectors.py (ONSET-3 first checkbox)
+2026-02-05 15:13:11 DONE: Create src/onset/detectors.py (ONSET-3 first checkbox) - BaseOnsetDetector ABC + OnsetResult dataclass
+
+2026-02-05 15:14:07 START: Implement ThresholdOnsetDetector class (ONSET-3 second checkbox)
+2026-02-05 15:15:01 DONE: Implement ThresholdOnsetDetector class (ONSET-3 second checkbox) - includes __init__, fit(), detect() methods
+
+2026-02-05 15:15:54 VERIFIED: Add min_consecutive parameter (ONSET-3 third checkbox) - already implemented in ThresholdOnsetDetector.__init__ and detect() method
+2026-02-05 15:16:24 DONE: Add min_consecutive parameter (ONSET-3 third checkbox) - tested and confirmed working: filters transient spikes, returns onset at START of consecutive run
+
+2026-02-05 15:17:34 START: Return OnsetResult dataclass (ONSET-3 fourth checkbox)
+2026-02-05 15:17:34 VERIFIED: OnsetResult dataclass already implemented and working:
+  - OnsetResult dataclass defined at lines 30-51 with fields: onset_idx, onset_time, confidence, healthy_baseline
+  - ThresholdOnsetDetector.detect() returns OnsetResult at lines 231-250
+  - healthy_baseline includes: mean, std, n_samples, threshold
+  - Tested with onset case: correctly returns onset_idx=50, onset_time=50.0, confidence=1.0
+  - Tested no-onset case: correctly returns onset_idx=None, onset_time=None, confidence=0.0
+2026-02-05 15:17:34 DONE: Return OnsetResult dataclass (ONSET-3 fourth checkbox) - ALL ONSET-3 task checkboxes now complete
+
+2026-02-05 15:19:17 START: ONSET-3 Acceptance - Detector finds onset within 10 samples of manually-labeled onset for test bearings
+2026-02-05 15:22:10 DONE: ONSET-3 Acceptance - Detector finds onset within 10 samples (tests/onset/test_detectors.py created)
+  - Created tests/onset/test_detectors.py with 29 tests (96% coverage)
+  - TestOnsetWithin10Samples class validates acceptance criterion:
+    - test_sudden_onset_within_tolerance: verifies ≤10 sample error on sudden onset
+    - test_sudden_onset_with_composite_hi: uses Bearing2_1 with known onset at sample 30
+    - test_gradual_onset_within_tolerance: handles gradual transition cases
+  - All 29 tests passing
+
+2026-02-05 15:23:40 START: ONSET-3 Acceptance - min_consecutive filter reduces false positives from transient spikes
+2026-02-05 15:23:40 VERIFIED: min_consecutive filter already tested and passing (TestMinConsecutiveFilter class):
+  - test_single_spike_filtered: proves single spikes don't trigger false onset with min_consecutive=3
+  - test_min_consecutive_1_triggers_on_spike: proves min_consecutive=1 DOES trigger (baseline comparison)
+  - test_min_consecutive_2_vs_3: proves 2 consecutive spikes trigger with min_consecutive=2 but not 3
+  - All 3 tests passing - acceptance criterion met
+2026-02-05 15:23:40 DONE: ONSET-3 Acceptance - min_consecutive filter reduces false positives (checkbox already verified)
+
+2026-02-05 15:25:27 START: ONSET-3 Acceptance - Confidence score reflects how far HI exceeds threshold
+2026-02-05 15:25:27 VERIFIED: Confidence score implementation already exists and tested:
+  - detectors.py lines 238-243: exceedance = (onset_value - threshold) / std, confidence = min(1.0, exceedance / threshold_sigma)
+  - TestConfidenceScore class (3 tests all passing):
+    - test_higher_exceedance_higher_confidence: verifies larger exceedance → higher confidence
+    - test_confidence_in_valid_range: verifies confidence ∈ [0, 1]
+    - test_no_onset_zero_confidence: verifies no onset → 0.0 confidence
+2026-02-05 15:25:27 DONE: ONSET-3 Acceptance - Confidence score reflects how far HI exceeds threshold (checkbox verified)
+
+2026-02-05 15:26:53 START: ONSET-3 Acceptance - Returns None for onset_idx if no onset detected (healthy bearing throughout)
+2026-02-05 15:27:33 VERIFIED: Implementation and tests already exist and passing:
+  - detectors.py lines 229-236: returns OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, ...) when no onset found
+  - TestNoOnsetReturnsNone class (2 tests):
+    - test_healthy_bearing_returns_none: verifies onset_idx and onset_time are None for healthy-only series
+    - test_onset_result_fields_when_none: verifies all OnsetResult fields correct when no onset
+  - Both tests passing
+2026-02-05 15:27:33 DONE: ONSET-3 Acceptance - Returns None for onset_idx if no onset detected (ONSET-3 ALL CHECKBOXES NOW COMPLETE)
+
+2026-02-05 15:28:27 START: ONSET-6 - Add parametrized tests for different threshold values (first unchecked non-blocked checkbox)
+2026-02-05 15:29:47 DONE: ONSET-6 - Add parametrized tests for different threshold values
+  - Added TestParametrizedThresholdValues class with 4 parametrized test methods (25 test cases total)
+  - test_threshold_sensitivity_on_detection: tests σ ∈ {1, 2, 3, 5, 10} affect detection outcome
+  - test_higher_threshold_later_or_same_detection: verifies higher σ → later/same onset detection
+  - test_parameter_combinations_produce_valid_results: tests 9 combinations of σ × min_consecutive
+  - test_threshold_affects_confidence: tests confidence scaling with threshold
+  - All 54 tests passing, 96% coverage on detectors.py
+  - Also marked done: Create test_detectors.py, ThresholdOnsetDetector tests, healthy-only returns None, min_consecutive tests
+  - Also verified all ONSET-6 acceptance criteria met
+
+2026-02-05 15:31:31 START: Add CUSUMOnsetDetector class to src/onset/detectors.py (ONSET-4 first checkbox)
+2026-02-05 15:33:10 DONE: Add CUSUMOnsetDetector class to src/onset/detectors.py (ONSET-4 first checkbox)
+  - Implemented CUSUMOnsetDetector (lines 254-421) with:
+    - __init__(drift=0.5, threshold=5.0): configurable drift (k) and decision threshold (h)
+    - fit(healthy_samples): estimates target mean and std from healthy baseline
+    - detect(hi_series): returns OnsetResult when S_high > h (upward shift detection)
+  - Both upper CUSUM (s_high) and lower CUSUM (s_low) tracked
+  - Returns same OnsetResult dataclass as ThresholdOnsetDetector
+  - Confidence: normalized CUSUM value at onset
+  - Tested: basic instantiation, fit, detect on gradual shift, no-onset case
+  - All 54 existing tests still passing
+
+2026-02-05 15:34:11 START: Implement Cumulative Sum (CUSUM) algorithm (ONSET-4 second checkbox)
+2026-02-05 15:35:58 VERIFIED: CUSUM algorithm already fully implemented in CUSUMOnsetDetector:
+  - __init__(drift=0.5, threshold=5.0): lines 281-308, configures drift (k) and threshold (h)
+  - fit(healthy_hi_samples): lines 310-340, estimates target mean and std from healthy samples
+  - detect(hi_series): lines 342-426, implements tabular CUSUM:
+    - S_high(t) = max(0, S_high(t-1) + (x_t - μ - k)) for upward shift
+    - S_low(t) = max(0, S_low(t-1) + (μ - k - x_t)) for downward shift
+    - Returns onset_idx when S_high > h
+  - Verified algorithm works correctly:
+    - Detects 2-sigma shift at index 50 with error=4 samples
+    - Detects strong 4-sigma shift with error=0 samples
+    - 0/10 false alarms with threshold=5.0 on healthy series
+2026-02-05 15:35:58 DONE: Implement Cumulative Sum (CUSUM) algorithm (ONSET-4 second checkbox)
+
+2026-02-05 15:37:32 START: Implement both upper CUSUM (increasing trend) and lower CUSUM (decreasing trend) (ONSET-4 third checkbox)
+2026-02-05 15:39:14 DONE: Implement both upper CUSUM (increasing trend) and lower CUSUM (decreasing trend) (ONSET-4 third checkbox)
+  - Added `direction` parameter to CUSUMOnsetDetector.__init__() with values: "increase", "decrease", "both"
+  - direction="increase" (default): only S_high triggers onset (upward mean shift)
+  - direction="decrease": only S_low triggers onset (downward mean shift)
+  - direction="both": whichever CUSUM exceeds threshold first triggers onset
+  - healthy_baseline now includes "direction" and "triggered_direction" fields
+  - Validation: ValueError raised for invalid direction values
+  - All 54 existing tests still passing
+  - Verified with manual tests: upward/downward shifts detected correctly based on direction setting
+
+2026-02-05 15:40:37 START: Test CUSUMOnsetDetector on synthetic data with gradual shift (ONSET-6)
+2026-02-05 15:43:08 DONE: Test CUSUMOnsetDetector on synthetic data with gradual shift (ONSET-6)
+  - Added TestCUSUMOnsetDetector class: 11 unit tests for initialization, fitting, detection
+  - Added TestCUSUMGradualShift class: 4 tests specifically for gradual shift detection
+    - test_cusum_detects_gradual_shift: verifies detection in shift region
+    - test_cusum_detects_earlier_than_threshold_for_gradual_shift: proves CUSUM ≤ threshold timing
+    - test_cusum_sensitivity_to_drift_parameter: verifies lower drift → earlier detection
+    - test_cusum_no_false_alarm_on_healthy_series: no false positives
+  - Added TestCUSUMDirection class: 7 tests for direction parameter (increase/decrease/both)
+  - All 75 tests passing (was 54 before), 96% coverage on detectors.py
+
+2026-02-05 15:43:53 START: Add optional EWMA variant (ONSET-4 fourth checkbox)
+2026-02-05 15:45:47 DONE: Add optional EWMA variant (ONSET-4 fourth checkbox)
+  - Added EWMAOnsetDetector class (~160 lines) implementing EWMA control chart:
+    - __init__(lambda_=0.2, L=3.0, direction="increase"): smoothing factor and control limit width
+    - fit(healthy_samples): learns target mean and std from healthy period
+    - detect(hi_series): computes Z_t = λ*X_t + (1-λ)*Z_{t-1}, checks against time-varying limits
+  - Time-varying control limits: UCL/LCL = μ ± L × σ × √(λ/(2-λ) × [1-(1-λ)^{2t}])
+  - Direction parameter supports "increase", "decrease", "both"
+  - Returns same OnsetResult dataclass with healthy_baseline including EWMA params
+  - Tested: instantiation, fit, no-onset, onset detection at ~51 for 4-sigma shift
+  - Verified: smaller λ = more smoothing = later detection (expected behavior)
+  - All 75 existing tests still pass
+  - ONSET-4 all task checkboxes now complete
+
+2026-02-05 15:46:56 START: ONSET-4 Acceptance - CUSUM detects gradual shifts earlier than threshold-based detector
+2026-02-05 15:48:26 VERIFIED: ONSET-4 Acceptance - CUSUM detects gradual shifts earlier than threshold-based detector
+  - Test already exists: TestCUSUMGradualShift::test_cusum_detects_earlier_than_threshold_for_gradual_shift
+  - Test validates that CUSUM onset_idx ≤ threshold onset_idx on gradual shift data
+  - Test uses gradual_shift_series fixture: 150 samples, shift starts at index 60, ramp over 40 samples
+  - Both CUSUM(drift=0.5, threshold=5.0) and Threshold(sigma=3.0, min_consecutive=3) tested
+  - Assertion: cusum_result.onset_idx <= threshold_result.onset_idx
+  - Test PASSED: CUSUM detects gradual mean shifts by accumulating evidence before threshold is exceeded
+2026-02-05 15:48:26 DONE: ONSET-4 Acceptance - CUSUM detects gradual shifts earlier than threshold-based detector
+
+2026-02-05 15:50:34 START: ONSET-4 Acceptance - Tunable drift parameter controls sensitivity vs. false positive trade-off
+2026-02-05 15:53:17 DONE: ONSET-4 Acceptance - Tunable drift parameter controls sensitivity vs. false positive trade-off
+  - Added TestCUSUMDriftSensitivityTradeoff class with 10 tests (6 parametrized test methods)
+  - test_lower_drift_detects_borderline_shift: low drift (0.1) is highly sensitive, detects signal
+  - test_higher_drift_may_miss_borderline_shift: high drift (1.5) may miss borderline signals
+  - test_drift_affects_false_positive_rate: 20 trials showing high_drift_fps <= low_drift_fps
+  - test_drift_monotonically_affects_detection_timing: 6 drift values tested, higher drift = same/later detection
+  - test_drift_tradeoff_summary: comprehensive test with 2 scenarios (real shift, no shift) at 3 drift levels
+  - All 85 tests passing (was 75 before, +10 new drift trade-off tests)
+
+2026-02-05 15:54:06 START: ONSET-4 Acceptance - Works for both sudden and gradual degradation patterns
+2026-02-05 15:56:49 DONE: ONSET-4 Acceptance - Works for both sudden and gradual degradation patterns
+  - Added TestCUSUMSuddenAndGradualPatterns class (6 tests):
+    - test_cusum_detects_sudden_degradation: CUSUM detects sudden step-change at index 60
+    - test_cusum_detects_gradual_degradation: CUSUM detects gradual ramp starting at index 50
+    - test_cusum_works_on_both_patterns_same_params: same params work for both patterns
+    - test_cusum_parameter_robustness_both_patterns: 3 param combinations all work
+  - Added TestEWMASuddenAndGradualPatterns class (3 tests):
+    - test_ewma_detects_sudden_degradation: EWMA detects sudden onset
+    - test_ewma_detects_gradual_degradation: EWMA detects gradual onset
+    - test_ewma_returns_onset_result_dataclass: EWMA returns consistent OnsetResult
+  - Added TestOnsetResultConsistency class (3 tests):
+    - test_all_detectors_return_onset_result: all 3 detectors return OnsetResult
+    - test_onset_result_fields_consistent_across_detectors: fields consistent
+    - test_no_onset_result_consistent_across_detectors: no-onset case consistent
+  - All 97 tests passing (was 85 before, +12 new tests)
+  - ALSO VERIFIED: Returns same OnsetResult dataclass as threshold detector (ONSET-4 final acceptance)
+  - ONSET-4 ALL ACCEPTANCE CRITERIA NOW COMPLETE
+
+2026-02-05 15:58:54 START: Add EnsembleOnsetDetector class to src/onset/detectors.py (ONSET-7 first checkbox)
+2026-02-05 16:02:52 DONE: Add EnsembleOnsetDetector class to src/onset/detectors.py (ONSET-7 first checkbox)
+  - Implemented EnsembleOnsetDetector (~285 lines) combining multiple detectors with voting:
+    - __init__(detectors, voting='majority', tolerance=5): requires ≥2 detectors
+    - fit(healthy_samples): fits all child detectors
+    - detect(hi_series): runs all detectors and combines via voting
+  - Voting strategies implemented:
+    - 'majority': >50% agreement within tolerance (clustering-based)
+    - 'unanimous': ALL detectors must agree within tolerance
+    - 'earliest': first detected onset across all detectors
+    - 'weighted': confidence-weighted average of onset indices
+  - add_detector(detector): add new detector to ensemble
+  - remove_detector(index): remove detector by index (min 2 must remain)
+  - Returns OnsetResult with individual_results in healthy_baseline
+  - Input validation: TypeError for non-BaseOnsetDetector, ValueError for <2 detectors
+  - Updated src/onset/__init__.py to export all detector classes
+  - All 97 existing tests still pass
+
+2026-02-05 16:04:58 START: Implement voting mechanism across multiple detectors (ONSET-7 second checkbox)
+2026-02-05 16:07:04 VERIFIED: Voting mechanism already implemented in EnsembleOnsetDetector (done with first checkbox)
+  - __init__(detectors: list[BaseOnsetDetector], voting='majority') matches PRD spec exactly
+  - All 4 voting strategies working (verified with test):
+    - 'majority': onset_idx=53, confidence=0.820 (median of cluster >50%)
+    - 'unanimous': onset_idx=53, confidence=0.459 (all agree within tolerance=5)
+    - 'earliest': onset_idx=51, confidence=1.000 (first detected by any detector)
+    - 'weighted': onset_idx=52, confidence=1.000 (confidence-weighted average)
+  - Test with 3 detectors (Threshold, CUSUM, EWMA) on 3-sigma shift data passed
+  - Individual results: [53, 51, 53] shows detectors detected onset at slightly different indices
+2026-02-05 16:07:04 DONE: Implement voting mechanism across multiple detectors (ONSET-7 second checkbox)
+
