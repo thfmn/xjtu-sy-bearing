@@ -581,3 +581,16 @@
   - TYPE_CHECKING imports for pd, tf, OnsetLabelEntry (lazy to avoid heavy TF import at module level)
   - Module imports cleanly: verified with `import src.onset.dataset`
   - Functions to be implemented in subsequent checkboxes: create_onset_dataset, build_onset_tf_dataset, compute_class_weights, split_by_bearing
+
+2026-02-06 01:54:51 START: Implement create_onset_dataset(features_df, onset_labels, window_size=10) (ONSET-14 second checkbox)
+2026-02-06 01:56:21 DONE: Implement create_onset_dataset(features_df, onset_labels, window_size=10) (ONSET-14 second checkbox)
+  - Implemented create_onset_dataset() in src/onset/dataset.py (~65 lines)
+  - Added OnsetDatasetResult dataclass with fields: windows, labels, bearing_ids
+  - Creates sliding windows per bearing (no cross-bearing windows)
+  - Labels based on last sample in window: 0 if file_idx < onset_idx, else 1
+  - Skips bearings not in onset_labels, skips bearings with fewer samples than window_size
+  - Input validation: window_size >= 1, required columns check
+  - Empty result handling: returns zero-length arrays with correct shape
+  - Tested with synthetic data: correct shapes, correct label counts, correct boundary behavior
+  - Tested with real features_v2.csv: 9,081 windows from 15 bearings (3,595 healthy, 5,486 degraded)
+  - All 186 existing onset tests still passing
