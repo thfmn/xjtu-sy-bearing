@@ -1,0 +1,604 @@
+"""Tests for onset detection algorithms.
+
+Tests the onset detector implementations including:
+- ThresholdOnsetDetector: threshold-based detection
+- Validation against synthetic data with known onset points
+- Edge cases: no onset, transient spikes, constant signals
+
+ONSET-3 Acceptance Criteria Tests:
+- Detector finds onset within 10 samples of known onset for test data
+- min_consecutive filter reduces false positives from transient spikes
+- Confidence reflects how far HI exceeds threshold
+- Returns None for onset_idx if no onset detected
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from src.onset.detectors import (
+    BaseOnsetDetector,
+    OnsetResult,
+    ThresholdOnsetDetector,
+)
+from src.onset.health_indicators import (
+    compute_composite_hi,
+    load_bearing_health_series,
+)
+
+
+# ============================================================================
+# Fixtures for synthetic data with known onset points
+# ============================================================================
+
+
+@pytest.fixture
+def synthetic_features_df() -> pd.DataFrame:
+    """Create synthetic features DataFrame with known onset points.
+
+    Creates data for 2 bearings:
+    - Bearing1_1: gradual degradation (no clear onset, starts from sample 0)
+    - Bearing2_1: sudden degradation at sample 30 (known onset point)
+    """
+    np.random.seed(42)
+
+    data = []
+
+    # Bearing1_1: gradual degradation pattern (no clear onset)
+    for i in range(50):
+        # Kurtosis starts ~3 (healthy) and increases gradually
+        base_kurtosis = 3.0 + (i / 50) * 10  # 3 -> 13
+        data.append(
+            {
+                "bearing_id": "Bearing1_1",
+                "condition": "35Hz12kN",
+                "file_idx": i,
+                "h_kurtosis": base_kurtosis + np.random.randn() * 0.5,
+                "v_kurtosis": base_kurtosis * 0.9 + np.random.randn() * 0.5,
+                "h_rms": 0.1 + (i / 50) * 0.3 + np.random.randn() * 0.01,
+                "v_rms": 0.08 + (i / 50) * 0.25 + np.random.randn() * 0.01,
+            }
+        )
+
+    # Bearing2_1: sudden degradation at sample 30 (KNOWN ONSET = 30)
+    for i in range(50):
+        if i < 30:
+            # Healthy phase: low kurtosis with small variance
+            base_kurtosis = 3.0 + np.random.randn() * 0.3
+            base_rms = 0.1 + np.random.randn() * 0.01
+        else:
+            # Degraded phase: high kurtosis (clearly above threshold)
+            base_kurtosis = 15.0 + np.random.randn() * 2.0
+            base_rms = 0.5 + np.random.randn() * 0.05
+        data.append(
+            {
+                "bearing_id": "Bearing2_1",
+                "condition": "37.5Hz11kN",
+                "file_idx": i,
+                "h_kurtosis": base_kurtosis,
+                "v_kurtosis": base_kurtosis * 0.95,
+                "h_rms": base_rms,
+                "v_rms": base_rms * 0.9,
+            }
+        )
+
+    return pd.DataFrame(data)
+
+
+@pytest.fixture
+def sudden_onset_series() -> tuple[np.ndarray, int]:
+    """Create synthetic HI series with known sudden onset.
+
+    Returns:
+        Tuple of (hi_series, known_onset_idx)
+    """
+    np.random.seed(42)
+    n_samples = 100
+    known_onset = 50
+
+    hi_series = np.zeros(n_samples)
+    # Healthy phase: low values around 0.1 with small noise
+    hi_series[:known_onset] = 0.1 + np.random.randn(known_onset) * 0.02
+    # Degraded phase: high values around 0.8 with noise
+    hi_series[known_onset:] = 0.8 + np.random.randn(n_samples - known_onset) * 0.05
+
+    return hi_series, known_onset
+
+
+@pytest.fixture
+def gradual_onset_series() -> tuple[np.ndarray, int]:
+    """Create synthetic HI series with gradual onset.
+
+    Returns:
+        Tuple of (hi_series, approximate_onset_idx)
+    """
+    np.random.seed(42)
+    n_samples = 100
+    onset_start = 40  # Where degradation starts ramping
+
+    hi_series = np.zeros(n_samples)
+    # Healthy phase
+    hi_series[:onset_start] = 0.1 + np.random.randn(onset_start) * 0.02
+
+    # Gradual ramp from onset_start to onset_start + 20
+    ramp_length = 20
+    for i in range(ramp_length):
+        idx = onset_start + i
+        progress = i / ramp_length
+        hi_series[idx] = 0.1 + progress * 0.7 + np.random.randn() * 0.02
+
+    # Fully degraded
+    hi_series[onset_start + ramp_length :] = (
+        0.8 + np.random.randn(n_samples - onset_start - ramp_length) * 0.05
+    )
+
+    return hi_series, onset_start
+
+
+@pytest.fixture
+def transient_spike_series() -> np.ndarray:
+    """Create synthetic HI series with transient spikes (not real onset)."""
+    np.random.seed(42)
+    n_samples = 100
+
+    hi_series = 0.1 + np.random.randn(n_samples) * 0.02
+    # Add transient spikes that should NOT trigger onset
+    hi_series[20] = 0.9  # Single spike
+    hi_series[40] = 0.85  # Single spike
+    hi_series[60:62] = 0.8  # Two consecutive (below min_consecutive=3)
+
+    return hi_series
+
+
+@pytest.fixture
+def healthy_only_series() -> np.ndarray:
+    """Create synthetic HI series with no onset (healthy throughout)."""
+    np.random.seed(42)
+    n_samples = 100
+    return 0.1 + np.random.randn(n_samples) * 0.02
+
+
+# ============================================================================
+# ONSET-3 Acceptance Criteria Tests
+# ============================================================================
+
+
+class TestOnsetWithin10Samples:
+    """Test: Detector finds onset within 10 samples of known onset.
+
+    This tests the first acceptance criterion for ONSET-3.
+    """
+
+    def test_sudden_onset_within_tolerance(
+        self, sudden_onset_series: tuple[np.ndarray, int]
+    ):
+        """Test detector finds sudden onset within 10 samples of true onset."""
+        hi_series, known_onset = sudden_onset_series
+        TOLERANCE = 10
+
+        detector = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        assert result.onset_idx is not None, "Detector should find onset"
+        error = abs(result.onset_idx - known_onset)
+        assert error <= TOLERANCE, (
+            f"Onset detection error {error} exceeds tolerance {TOLERANCE}. "
+            f"Detected: {result.onset_idx}, True: {known_onset}"
+        )
+
+    def test_sudden_onset_with_composite_hi(
+        self, synthetic_features_df: pd.DataFrame
+    ):
+        """Test detector finds onset within 10 samples using composite HI.
+
+        Uses Bearing2_1 which has known onset at sample 30.
+        """
+        KNOWN_ONSET = 30
+        TOLERANCE = 10
+
+        # Load health series for bearing with known onset
+        health_series = load_bearing_health_series(
+            "Bearing2_1", synthetic_features_df
+        )
+
+        detector = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        # Use first 20% as healthy baseline (samples 0-9, well before onset at 30)
+        result = detector.fit_detect(health_series.composite, healthy_fraction=0.2)
+
+        assert result.onset_idx is not None, "Detector should find onset in Bearing2_1"
+        error = abs(result.onset_idx - KNOWN_ONSET)
+        assert error <= TOLERANCE, (
+            f"Onset detection error {error} exceeds tolerance {TOLERANCE}. "
+            f"Detected: {result.onset_idx}, True: {KNOWN_ONSET}"
+        )
+
+    def test_gradual_onset_within_tolerance(
+        self, gradual_onset_series: tuple[np.ndarray, int]
+    ):
+        """Test detector finds gradual onset within reasonable tolerance.
+
+        Note: Gradual onsets are inherently ambiguous. The detector should
+        find onset somewhere in the transition region.
+        """
+        hi_series, onset_start = gradual_onset_series
+        # For gradual onset, allow wider tolerance since "true" onset is ambiguous
+        TOLERANCE = 15
+
+        detector = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        assert result.onset_idx is not None, "Detector should find onset"
+        # For gradual onset, we expect detection somewhere in [onset_start, onset_start + 20]
+        assert result.onset_idx >= onset_start - 5, (
+            f"Onset detected too early: {result.onset_idx} < {onset_start - 5}"
+        )
+        assert result.onset_idx <= onset_start + TOLERANCE, (
+            f"Onset detected too late: {result.onset_idx} > {onset_start + TOLERANCE}"
+        )
+
+
+class TestMinConsecutiveFilter:
+    """Test: min_consecutive filter reduces false positives from transient spikes.
+
+    This tests the second acceptance criterion for ONSET-3.
+    """
+
+    def test_single_spike_filtered(self, transient_spike_series: np.ndarray):
+        """Test that single transient spikes don't trigger false onset."""
+        detector = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        detector.fit(transient_spike_series[:15])  # Fit on healthy start
+
+        result = detector.detect(transient_spike_series)
+
+        # Should NOT detect onset because spikes are transient (< min_consecutive)
+        assert result.onset_idx is None, (
+            f"False positive: detector triggered on transient spike at {result.onset_idx}"
+        )
+
+    def test_min_consecutive_1_triggers_on_spike(
+        self, transient_spike_series: np.ndarray
+    ):
+        """Test that min_consecutive=1 DOES trigger on single spikes."""
+        detector = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=1)
+        detector.fit(transient_spike_series[:15])
+
+        result = detector.detect(transient_spike_series)
+
+        # Should detect onset at first spike (index 20)
+        assert result.onset_idx is not None, "Should trigger with min_consecutive=1"
+        assert result.onset_idx == 20, f"Expected onset at 20, got {result.onset_idx}"
+
+    def test_min_consecutive_2_vs_3(self, transient_spike_series: np.ndarray):
+        """Test behavior difference between min_consecutive=2 and min_consecutive=3."""
+        # Series has two consecutive spikes at indices 60-61
+
+        detector_2 = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=2)
+        detector_2.fit(transient_spike_series[:15])
+        result_2 = detector_2.detect(transient_spike_series)
+
+        detector_3 = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        detector_3.fit(transient_spike_series[:15])
+        result_3 = detector_3.detect(transient_spike_series)
+
+        # min_consecutive=2 should trigger at 60-61 (two consecutive)
+        assert result_2.onset_idx == 60, f"Expected onset at 60, got {result_2.onset_idx}"
+        # min_consecutive=3 should NOT trigger (only 2 consecutive)
+        assert result_3.onset_idx is None, "Should not trigger with only 2 consecutive"
+
+
+class TestConfidenceScore:
+    """Test: Confidence score reflects how far HI exceeds threshold.
+
+    This tests the third acceptance criterion for ONSET-3.
+    """
+
+    def test_higher_exceedance_higher_confidence(self):
+        """Test that larger exceedance produces higher confidence.
+
+        Uses carefully calibrated values so neither saturates at 1.0.
+        """
+        np.random.seed(42)
+        n_samples = 100
+        onset_idx = 50
+
+        # Create baseline: mean ~0.1, std ~0.02
+        baseline = 0.1 + np.random.randn(onset_idx) * 0.02
+
+        # threshold = mean + 3*std ≈ 0.1 + 0.06 = 0.16
+        # For confidence not to saturate: exceedance / std / threshold_sigma < 1
+        # exceedance < std * threshold_sigma = 0.02 * 3 = 0.06 above threshold
+        # So values around 0.17-0.20 won't saturate
+
+        # Moderate: just above threshold (~0.18)
+        hi_moderate = np.zeros(n_samples)
+        hi_moderate[:onset_idx] = baseline
+        hi_moderate[onset_idx:] = 0.18
+
+        # Large: further above threshold (~0.22)
+        hi_large = np.zeros(n_samples)
+        hi_large[:onset_idx] = baseline
+        hi_large[onset_idx:] = 0.22
+
+        detector = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+
+        detector.fit(hi_moderate[:30])
+        result_moderate = detector.detect(hi_moderate)
+
+        detector.fit(hi_large[:30])
+        result_large = detector.detect(hi_large)
+
+        # Both should detect onset
+        assert result_moderate.onset_idx is not None
+        assert result_large.onset_idx is not None
+
+        # Larger exceedance should have higher confidence
+        assert result_large.confidence > result_moderate.confidence, (
+            f"Large exceedance confidence ({result_large.confidence:.3f}) should be "
+            f"greater than moderate ({result_moderate.confidence:.3f})"
+        )
+
+    def test_confidence_in_valid_range(self, sudden_onset_series: tuple[np.ndarray, int]):
+        """Test that confidence is in [0, 1] range."""
+        hi_series, _ = sudden_onset_series
+
+        detector = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        assert 0.0 <= result.confidence <= 1.0, (
+            f"Confidence {result.confidence} outside [0, 1] range"
+        )
+
+    def test_no_onset_zero_confidence(self, healthy_only_series: np.ndarray):
+        """Test that no onset detected gives zero confidence."""
+        detector = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        result = detector.fit_detect(healthy_only_series, healthy_fraction=0.3)
+
+        assert result.onset_idx is None
+        assert result.confidence == 0.0, (
+            f"Expected 0.0 confidence for no onset, got {result.confidence}"
+        )
+
+
+class TestNoOnsetReturnsNone:
+    """Test: Returns None for onset_idx if no onset detected.
+
+    This tests the fourth acceptance criterion for ONSET-3.
+    """
+
+    def test_healthy_bearing_returns_none(self, healthy_only_series: np.ndarray):
+        """Test that healthy-only series returns None for onset_idx."""
+        detector = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        result = detector.fit_detect(healthy_only_series, healthy_fraction=0.3)
+
+        assert result.onset_idx is None, (
+            f"Expected None onset_idx for healthy bearing, got {result.onset_idx}"
+        )
+        assert result.onset_time is None, "onset_time should also be None"
+
+    def test_onset_result_fields_when_none(self, healthy_only_series: np.ndarray):
+        """Test OnsetResult has correct field values when no onset."""
+        detector = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        result = detector.fit_detect(healthy_only_series, healthy_fraction=0.3)
+
+        # Check all fields
+        assert result.onset_idx is None
+        assert result.onset_time is None
+        assert result.confidence == 0.0
+        assert "mean" in result.healthy_baseline
+        assert "std" in result.healthy_baseline
+        assert "threshold" in result.healthy_baseline
+
+
+# ============================================================================
+# ThresholdOnsetDetector Unit Tests
+# ============================================================================
+
+
+class TestThresholdOnsetDetector:
+    """Unit tests for ThresholdOnsetDetector class."""
+
+    def test_init_default_params(self):
+        """Test default initialization parameters."""
+        detector = ThresholdOnsetDetector()
+
+        assert detector.threshold_sigma == 3.0
+        assert detector.min_consecutive == 3
+
+    def test_init_custom_params(self):
+        """Test custom initialization parameters."""
+        detector = ThresholdOnsetDetector(threshold_sigma=2.5, min_consecutive=5)
+
+        assert detector.threshold_sigma == 2.5
+        assert detector.min_consecutive == 5
+
+    def test_init_invalid_threshold_sigma(self):
+        """Test that non-positive threshold_sigma raises error."""
+        with pytest.raises(ValueError, match="threshold_sigma must be positive"):
+            ThresholdOnsetDetector(threshold_sigma=0)
+
+        with pytest.raises(ValueError, match="threshold_sigma must be positive"):
+            ThresholdOnsetDetector(threshold_sigma=-1)
+
+    def test_init_invalid_min_consecutive(self):
+        """Test that min_consecutive < 1 raises error."""
+        with pytest.raises(ValueError, match="min_consecutive must be at least 1"):
+            ThresholdOnsetDetector(min_consecutive=0)
+
+    def test_fit_stores_baseline_stats(self):
+        """Test that fit() stores baseline statistics."""
+        np.random.seed(42)
+        healthy = np.random.randn(20) * 0.5 + 3.0
+
+        detector = ThresholdOnsetDetector()
+        detector.fit(healthy)
+
+        assert detector._mean is not None
+        assert detector._std is not None
+        assert detector._n_samples == 20
+
+    def test_fit_too_few_samples(self):
+        """Test that fit() raises error with < 2 samples."""
+        detector = ThresholdOnsetDetector()
+
+        with pytest.raises(ValueError, match="at least 2 samples"):
+            detector.fit(np.array([1.0]))
+
+    def test_detect_without_fit_raises(self):
+        """Test that detect() without fit() raises error."""
+        detector = ThresholdOnsetDetector()
+
+        with pytest.raises(RuntimeError, match="not fitted"):
+            detector.detect(np.array([1.0, 2.0, 3.0]))
+
+    def test_detect_returns_onset_result(
+        self, sudden_onset_series: tuple[np.ndarray, int]
+    ):
+        """Test that detect() returns OnsetResult."""
+        hi_series, _ = sudden_onset_series
+
+        detector = ThresholdOnsetDetector()
+        detector.fit(hi_series[:30])
+        result = detector.detect(hi_series)
+
+        assert isinstance(result, OnsetResult)
+        assert hasattr(result, "onset_idx")
+        assert hasattr(result, "onset_time")
+        assert hasattr(result, "confidence")
+        assert hasattr(result, "healthy_baseline")
+
+    def test_onset_idx_is_start_of_run(self):
+        """Test that onset_idx is at START of consecutive run, not end."""
+        np.random.seed(42)
+        hi_series = np.zeros(20)
+        hi_series[:10] = 0.1  # Healthy
+        hi_series[10:] = 0.9  # Degraded (onset at 10)
+
+        detector = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        detector.fit(hi_series[:5])
+        result = detector.detect(hi_series)
+
+        # Onset should be at 10 (start), not 12 (end of 3 consecutive)
+        assert result.onset_idx == 10, (
+            f"Onset should be at start of run (10), got {result.onset_idx}"
+        )
+
+    def test_fit_detect_convenience_method(
+        self, sudden_onset_series: tuple[np.ndarray, int]
+    ):
+        """Test fit_detect() convenience method."""
+        hi_series, known_onset = sudden_onset_series
+
+        detector = ThresholdOnsetDetector()
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        assert isinstance(result, OnsetResult)
+        assert result.onset_idx is not None
+        # Should find onset close to known value
+        assert abs(result.onset_idx - known_onset) <= 10
+
+    def test_handles_nan_in_baseline(self):
+        """Test that NaN values in baseline are filtered."""
+        healthy = np.array([1.0, 2.0, np.nan, 3.0, 4.0, np.nan, 5.0])
+
+        detector = ThresholdOnsetDetector()
+        detector.fit(healthy)
+
+        # Should have computed stats from non-NaN values
+        assert detector._n_samples == 5  # 7 - 2 NaN
+        assert not np.isnan(detector._mean)
+        assert not np.isnan(detector._std)
+
+    def test_constant_baseline_handled(self):
+        """Test handling of constant healthy baseline (zero std)."""
+        healthy = np.ones(10) * 5.0  # Constant
+
+        detector = ThresholdOnsetDetector()
+        detector.fit(healthy)
+
+        # Should set small epsilon for std to avoid division by zero
+        assert detector._std >= 1e-10
+
+    def test_healthy_baseline_contains_threshold(
+        self, sudden_onset_series: tuple[np.ndarray, int]
+    ):
+        """Test that healthy_baseline dict contains computed threshold."""
+        hi_series, _ = sudden_onset_series
+
+        detector = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        detector.fit(hi_series[:30])
+        result = detector.detect(hi_series)
+
+        assert "threshold" in result.healthy_baseline
+        expected_threshold = detector._mean + 3.0 * detector._std
+        assert result.healthy_baseline["threshold"] == pytest.approx(expected_threshold)
+
+
+# ============================================================================
+# BaseOnsetDetector Tests
+# ============================================================================
+
+
+class TestBaseOnsetDetector:
+    """Tests for BaseOnsetDetector abstract base class."""
+
+    def test_cannot_instantiate_directly(self):
+        """Test that BaseOnsetDetector cannot be instantiated."""
+        with pytest.raises(TypeError, match="abstract"):
+            BaseOnsetDetector()
+
+    def test_subclass_must_implement_fit(self):
+        """Test that subclass must implement fit()."""
+
+        class IncompleteDetector(BaseOnsetDetector):
+            def detect(self, hi_series):
+                pass
+
+        with pytest.raises(TypeError, match="abstract"):
+            IncompleteDetector()
+
+    def test_subclass_must_implement_detect(self):
+        """Test that subclass must implement detect()."""
+
+        class IncompleteDetector(BaseOnsetDetector):
+            def fit(self, healthy_samples):
+                pass
+
+        with pytest.raises(TypeError, match="abstract"):
+            IncompleteDetector()
+
+
+# ============================================================================
+# OnsetResult Tests
+# ============================================================================
+
+
+class TestOnsetResult:
+    """Tests for OnsetResult dataclass."""
+
+    def test_dataclass_fields(self):
+        """Test OnsetResult has expected fields."""
+        result = OnsetResult(
+            onset_idx=50,
+            onset_time=50.0,
+            confidence=0.85,
+            healthy_baseline={"mean": 0.1, "std": 0.02},
+        )
+
+        assert result.onset_idx == 50
+        assert result.onset_time == 50.0
+        assert result.confidence == 0.85
+        assert result.healthy_baseline["mean"] == 0.1
+
+    def test_none_values_allowed(self):
+        """Test OnsetResult allows None for onset_idx and onset_time."""
+        result = OnsetResult(
+            onset_idx=None,
+            onset_time=None,
+            confidence=0.0,
+            healthy_baseline={"mean": 0.1, "std": 0.02},
+        )
+
+        assert result.onset_idx is None
+        assert result.onset_time is None
