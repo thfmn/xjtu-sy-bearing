@@ -135,3 +135,59 @@ class TestDatasetYieldsTuples:
         tf_ds = build_onset_tf_dataset(result, batch_size=8, shuffle=False)
         total = sum(labels.shape[0] for _, labels in tf_ds)
         assert total == len(result.labels)
+
+
+# ---------------------------------------------------------------------------
+# ONSET-14 Acceptance: Class weights computed for imbalanced binary classification
+# ---------------------------------------------------------------------------
+
+
+class TestClassWeightsComputed:
+    """Verify that compute_class_weights produces correct balanced weights."""
+
+    def test_balanced_formula_matches_expected(self) -> None:
+        """weight_c = n_samples / (n_classes * count_c)."""
+        labels = np.array([0, 0, 0, 1, 1, 1, 1, 1, 1, 1], dtype=np.int32)
+        weights = compute_class_weights(labels)
+        # 10 samples, 2 classes: w0 = 10/(2*3) ≈ 1.667, w1 = 10/(2*7) ≈ 0.714
+        assert weights[0] == pytest.approx(10.0 / 6.0, rel=1e-6)
+        assert weights[1] == pytest.approx(10.0 / 14.0, rel=1e-6)
+
+    def test_balanced_classes_give_equal_weights(self) -> None:
+        """When classes are balanced, both weights should be 1.0."""
+        labels = np.array([0, 0, 0, 1, 1, 1], dtype=np.int32)
+        weights = compute_class_weights(labels)
+        assert weights[0] == pytest.approx(1.0, rel=1e-6)
+        assert weights[1] == pytest.approx(1.0, rel=1e-6)
+
+    def test_minority_class_gets_higher_weight(self) -> None:
+        """The minority class should always receive a higher weight."""
+        # 90% class-1 (majority), 10% class-0 (minority)
+        labels = np.array([0] * 10 + [1] * 90, dtype=np.int32)
+        weights = compute_class_weights(labels)
+        assert weights[0] > weights[1], (
+            f"Minority weight {weights[0]} should be > majority weight {weights[1]}"
+        )
+
+    def test_weights_usable_with_dataset_result(
+        self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """Class weights can be computed from a real dataset result's labels."""
+        result = create_onset_dataset(synthetic_df, onset_labels, window_size=5)
+        weights = compute_class_weights(result.labels)
+        assert 0 in weights and 1 in weights
+        assert all(w > 0 for w in weights.values())
+
+    def test_returns_dict_with_both_classes(self) -> None:
+        """Even if only one class present, returns weights for both 0 and 1."""
+        labels = np.array([0, 0, 0], dtype=np.int32)
+        weights = compute_class_weights(labels)
+        assert set(weights.keys()) == {0, 1}
+
+    def test_empty_labels_raises_value_error(self) -> None:
+        with pytest.raises(ValueError, match="empty"):
+            compute_class_weights(np.array([], dtype=np.int32))
+
+    def test_non_binary_labels_raises_value_error(self) -> None:
+        with pytest.raises(ValueError, match="only 0 and 1"):
+            compute_class_weights(np.array([0, 1, 2], dtype=np.int32))

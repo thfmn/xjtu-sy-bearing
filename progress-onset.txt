@@ -643,3 +643,15 @@
   - test_numpy_result_yields_correct_types: verifies numpy arrays have correct dtypes/ndim
   - test_total_samples_preserved_in_tf_dataset: verifies all samples present in tf.data
   - All 6 tests passing
+
+2026-02-06 02:05:05 START: ONSET-14 Acceptance - Class weights computed for imbalanced binary classification
+2026-02-06 02:05:54 DONE: ONSET-14 Acceptance - Class weights computed for imbalanced binary classification
+  - Added TestClassWeightsComputed class to tests/onset/test_dataset.py (7 tests)
+  - test_balanced_formula_matches_expected: verifies weight_c = n_samples/(n_classes * count_c) formula
+  - test_balanced_classes_give_equal_weights: 50/50 split → both weights = 1.0
+  - test_minority_class_gets_higher_weight: 10% minority → weight > majority weight
+  - test_weights_usable_with_dataset_result: end-to-end with real OnsetDatasetResult
+  - test_returns_dict_with_both_classes: single-class input still returns dict with keys {0, 1}
+  - test_empty_labels_raises_value_error: empty array → ValueError
+  - test_non_binary_labels_raises_value_error: non-binary labels → ValueError
+  - All 13 tests passing (was 6 before, +7 new class weight tests)
