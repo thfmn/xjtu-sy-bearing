@@ -511,3 +511,13 @@
   - Smoke test passed: 15 visible axes, all titled, 327.6 KB PNG saved
   - All 15 bearings correctly displayed in grid layout
 2026-02-06 01:29:52 DONE: Verify and check off plot_all_bearings_onset implementation (ONSET-12 fourth checkbox)
+
+2026-02-06 01:30:38 START: ONSET-12 Acceptance - Plots clearly show onset point with vertical line annotation
+2026-02-06 01:30:38 VERIFIED: Onset point is clearly shown with vertical line annotation:
+  - plot_bearing_onset: red dashed vertical line (ax.axvline, linewidth=1.5) at onset_idx
+  - Legend entry: "Onset (idx=N)" with red dashed line style
+  - plot_onset_comparison: two vertical lines (manual=blue dashed, auto=red dash-dot)
+  - plot_all_bearings_onset: red dashed vertical line per subplot (linewidth=1.0)
+  - Verified with real data (Bearing1_1, onset_idx=69): line is visually prominent and annotated
+  - No-onset case correctly shows no vertical line, only green "Healthy" shading
+2026-02-06 01:30:38 DONE: ONSET-12 Acceptance - Plots clearly show onset point with vertical line annotation
