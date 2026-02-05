@@ -234,7 +234,7 @@ Generate onset labels for all bearings to enable supervised training and evaluat
 **Priority**: P0 | **Effort**: 1h | **Phase**: 2. Label Generation
 
 **Tasks**:
-- [ ] Create `src/onset/labels.py`
+- [x] Create `src/onset/labels.py`
 - [ ] Implement `load_onset_labels(yaml_path)` function
   - Parse `configs/onset_labels.yaml`
   - Return dictionary mapping `bearing_id -> onset_file_idx`

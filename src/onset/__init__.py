@@ -27,6 +27,12 @@ from src.onset.health_indicators import (
     load_bearing_health_series,
     smooth_health_indicator,
 )
+from src.onset.labels import (
+    OnsetLabelEntry,
+    add_onset_column,
+    get_onset_label,
+    load_onset_labels,
+)
 
 __all__: list[str] = [
     # Health indicators
@@ -43,4 +49,9 @@ __all__: list[str] = [
     "EWMAOnsetDetector",
     "OnsetResult",
     "ThresholdOnsetDetector",
+    # Labels
+    "OnsetLabelEntry",
+    "add_onset_column",
+    "get_onset_label",
+    "load_onset_labels",
 ]

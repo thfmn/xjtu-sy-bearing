@@ -317,3 +317,13 @@
   - Summary: 11 high, 2 medium, 2 low confidence labels
   - Documented labeling methodology in YAML header
 
+2026-02-05 16:40:01 START: Create src/onset/labels.py (ONSET-9 first checkbox)
+2026-02-05 16:41:15 DONE: Create src/onset/labels.py (ONSET-9 first checkbox)
+  - Created src/onset/labels.py with 3 main functions:
+    - load_onset_labels(yaml_path): parses YAML, returns dict[str, OnsetLabelEntry]
+    - get_onset_label(bearing_id, file_idx, labels): returns 0 (healthy) or 1 (degraded)
+    - add_onset_column(features_df, labels): adds 'is_degraded' column to DataFrame
+  - Added OnsetLabelEntry dataclass for typed access to label fields
+  - Updated src/onset/__init__.py to export all new symbols
+  - Tested all 3 functions manually - all work correctly
+  - All 154 existing onset tests still passing
