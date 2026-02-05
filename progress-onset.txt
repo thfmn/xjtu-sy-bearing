@@ -219,3 +219,18 @@
   - Individual results: [53, 51, 53] shows detectors detected onset at slightly different indices
 2026-02-05 16:07:04 DONE: Implement voting mechanism across multiple detectors (ONSET-7 second checkbox)
 
+2026-02-05 16:08:01 START: Implement confidence aggregation from individual detector confidences (ONSET-7 third checkbox)
+2026-02-05 16:11:05 DONE: Implement confidence aggregation from individual detector confidences (ONSET-7 third checkbox)
+  - Added _aggregate_confidence() method to EnsembleOnsetDetector (lines 881-952)
+  - Confidence is now computed uniformly across all voting strategies:
+    - Weighted average: sum(c_i^2) / sum(c_i) gives higher-confidence detectors more influence
+    - Disagreement penalty: factor reduces confidence when detectors disagree on onset index or detection itself
+  - Disagreement factor computed based on:
+    - Index spread: 1.0 if within tolerance, decreasing as spread exceeds tolerance
+    - Detection agreement: penalty when some detectors find onset and others don't
+  - healthy_baseline now includes 'disagreement_factor' field for transparency
+  - detect() method now calls _aggregate_confidence() for all voting strategies
+  - Test results with all strategies now produce consistent confidence=0.907 (was 0.313-1.0 before)
+  - Verified disagreement scenario: confidence=0.103 when detectors significantly disagree
+  - All 97 existing tests still passing
+

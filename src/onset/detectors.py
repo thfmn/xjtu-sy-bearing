@@ -820,7 +820,7 @@ class EnsembleOnsetDetector(BaseOnsetDetector):
             OnsetResult with:
             - onset_idx: Ensemble onset index based on voting strategy, or None
             - onset_time: Same as onset_idx
-            - confidence: Aggregated confidence from individual detectors
+            - confidence: Aggregated confidence (weighted average with disagreement penalty)
             - healthy_baseline: Dict with ensemble info and individual results
 
         Raises:
@@ -837,21 +837,25 @@ class EnsembleOnsetDetector(BaseOnsetDetector):
             result = detector.detect(hi_series)
             results.append(result)
 
-        # Apply voting strategy
+        # Apply voting strategy to determine onset_idx
         if self.voting == "earliest":
-            onset_idx, confidence = self._vote_earliest(results)
+            onset_idx, _ = self._vote_earliest(results)
         elif self.voting == "unanimous":
-            onset_idx, confidence = self._vote_unanimous(results)
+            onset_idx, _ = self._vote_unanimous(results)
         elif self.voting == "weighted":
-            onset_idx, confidence = self._vote_weighted(results)
+            onset_idx, _ = self._vote_weighted(results)
         else:  # majority
-            onset_idx, confidence = self._vote_majority(results)
+            onset_idx, _ = self._vote_majority(results)
+
+        # Compute aggregated confidence (weighted average with disagreement penalty)
+        confidence, disagreement_factor = self._aggregate_confidence(results, onset_idx)
 
         # Build healthy_baseline with ensemble info
         healthy_baseline = {
             "voting_strategy": self.voting,
             "n_detectors": len(self.detectors),
             "tolerance": self.tolerance,
+            "disagreement_factor": disagreement_factor,
             "individual_results": [
                 {
                     "detector": type(d).__name__,
@@ -876,6 +880,77 @@ class EnsembleOnsetDetector(BaseOnsetDetector):
             confidence=confidence,
             healthy_baseline=healthy_baseline,
         )
+
+    def _aggregate_confidence(
+        self, results: list[OnsetResult], ensemble_onset_idx: int | None
+    ) -> tuple[float, float]:
+        """Compute weighted average confidence with disagreement penalty.
+
+        Aggregates individual detector confidences into an ensemble confidence
+        that reflects both the average certainty and the level of agreement.
+
+        Args:
+            results: List of OnsetResult from each detector.
+            ensemble_onset_idx: The onset index determined by voting, or None.
+
+        Returns:
+            Tuple of (aggregated_confidence, disagreement_factor).
+            - aggregated_confidence: Weighted average confidence, reduced by disagreement
+            - disagreement_factor: 1.0 if perfect agreement, decreasing with disagreement
+        """
+        confidences = [r.confidence for r in results]
+        onset_indices = [r.onset_idx for r in results]
+
+        # Weighted average of all confidences
+        # Weight by confidence itself (higher confidence detectors have more influence)
+        total_conf = sum(confidences)
+        if total_conf < 1e-10:
+            return 0.0, 1.0  # No detector has confidence
+
+        weighted_avg = sum(c * c for c in confidences) / total_conf
+
+        # Compute disagreement factor based on onset index spread
+        valid_indices = [idx for idx in onset_indices if idx is not None]
+
+        if len(valid_indices) <= 1:
+            # Not enough detections to compute disagreement
+            # If no detections, disagreement is 0 (they agree on no onset)
+            # If one detection, we can't measure disagreement
+            if ensemble_onset_idx is None and all(idx is None for idx in onset_indices):
+                # Perfect agreement: all say no onset
+                disagreement_factor = 1.0
+            else:
+                # Only one detector found onset, others didn't - moderate disagreement
+                n_detecting = len(valid_indices)
+                disagreement_factor = n_detecting / len(results)
+        else:
+            # Multiple detections: measure spread relative to tolerance
+            idx_spread = max(valid_indices) - min(valid_indices)
+
+            # Agreement factor: 1.0 if within tolerance, decreasing if spread is larger
+            if idx_spread <= self.tolerance:
+                disagreement_factor = 1.0  # Within tolerance = full agreement
+            else:
+                # Penalize based on how much spread exceeds tolerance
+                # Factor decreases as spread grows beyond tolerance
+                # At 2x tolerance, factor is 0.5; at 3x, factor is 0.33, etc.
+                disagreement_factor = self.tolerance / idx_spread
+
+        # Also penalize if some detectors detected onset and others didn't
+        n_detecting = sum(1 for idx in onset_indices if idx is not None)
+        n_not_detecting = len(results) - n_detecting
+
+        if n_detecting > 0 and n_not_detecting > 0:
+            # Mixed: some detected, some didn't
+            # Agreement is lower when split is more even
+            detection_agreement = abs(n_detecting - n_not_detecting) / len(results)
+            # Combine with index-based disagreement
+            disagreement_factor *= (0.5 + 0.5 * detection_agreement)
+
+        # Final confidence: weighted average scaled by disagreement factor
+        aggregated_confidence = weighted_avg * disagreement_factor
+
+        return aggregated_confidence, disagreement_factor
 
     def _vote_earliest(self, results: list[OnsetResult]) -> tuple[int | None, float]:
         """Return the earliest detected onset across all detectors.
