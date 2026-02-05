@@ -741,3 +741,12 @@
   - test_forward_pass_shapes: verifies predict output shape (5, 1) for batch of 5
   - test_custom_features_input_shape: verifies n_features=6, window_size=15 → (None, 15, 6)
   - All 10 tests passing (was 4 before, +6 new shape tests)
+
+2026-02-06 02:26:03 START: ONSET-15 Acceptance - Total parameters under 10K (lightweight)
+2026-02-06 02:26:56 DONE: ONSET-15 Acceptance - Total parameters under 10K (lightweight)
+  - Added TestTotalParametersUnder10K class to tests/onset/test_models.py (4 tests)
+  - test_default_config_under_10k: verifies model.count_params() < 10,000
+  - test_exact_param_count_default: regression test verifying exactly 5,281 params
+  - test_factory_function_under_10k: verifies factory function also produces <10K params
+  - test_no_trainable_vs_total_discrepancy: verifies all params are trainable (no frozen layers)
+  - All 14 tests passing (was 10 before, +4 new param count tests)

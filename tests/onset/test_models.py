@@ -100,3 +100,48 @@ class TestInputOutputShape:
         model = build_onset_classifier(config)
         assert model.input_shape == (None, 15, 6)
         assert model.output_shape == (None, 1)
+
+
+class TestTotalParametersUnder10K:
+    """ONSET-15 Acceptance: Total parameters under 10K (lightweight)."""
+
+    def test_default_config_under_10k(self):
+        from src.onset.models import build_onset_classifier
+
+        model = build_onset_classifier()
+        total_params = model.count_params()
+        assert total_params < 10_000, (
+            f"Model has {total_params} params, expected <10,000"
+        )
+
+    def test_exact_param_count_default(self):
+        """Verify known param count for regression detection."""
+        from src.onset.models import build_onset_classifier
+
+        model = build_onset_classifier()
+        total_params = model.count_params()
+        # LSTM(4->32): 4*32 + 32*32 + 32*4 = 128+1024+128 = 4,736 (with bias)
+        # Dense(32->16): 32*16+16 = 528
+        # Dense(16->1): 16*1+1 = 17
+        # Total = 5,281
+        assert total_params == 5_281, (
+            f"Expected 5,281 params but got {total_params}; "
+            "architecture may have changed unintentionally"
+        )
+
+    def test_factory_function_under_10k(self):
+        from src.onset.models import create_onset_classifier
+
+        model = create_onset_classifier()
+        assert model.count_params() < 10_000
+
+    def test_no_trainable_vs_total_discrepancy(self):
+        from src.onset.models import build_onset_classifier
+
+        model = build_onset_classifier()
+        trainable = sum(
+            int(np.prod(w.shape)) for w in model.trainable_weights
+        )
+        total = model.count_params()
+        # All params should be trainable (no frozen layers)
+        assert trainable == total
