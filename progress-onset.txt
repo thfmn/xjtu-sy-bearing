@@ -620,3 +620,15 @@
   - All 186 existing onset tests still passing
   - Note: PRD says "onset samples are rare" but actual data shows ~40% healthy / 60% degraded;
     class weights handle any imbalance direction correctly without memory-wasteful oversampling
+
+2026-02-06 02:00:47 START: Support train/val split respecting bearing boundaries (no leakage) (ONSET-14 fifth checkbox)
+2026-02-06 02:01:56 DONE: Support train/val split respecting bearing boundaries (no leakage) (ONSET-14 fifth checkbox)
+  - Added split_by_bearing(dataset_result, val_bearing_ids) function to src/onset/dataset.py (~65 lines)
+  - Added OnsetSplitResult dataclass with train/val OnsetDatasetResult + bearing ID lists
+  - Splits by bearing ID: all windows from a bearing go entirely to train OR val, never both
+  - Input validation: ValueError for empty val_bearing_ids or unknown bearing IDs
+  - Returns sorted train_bearing_ids and val_bearing_ids for reproducibility
+  - Updated src/onset/__init__.py to export OnsetDatasetResult, OnsetSplitResult, create_onset_dataset, split_by_bearing
+  - Verified: 30-window synthetic test with 3 bearings, B3 as val → 20 train + 10 val, no leakage
+  - All 186 existing onset tests still passing
+  - ONSET-14 ALL TASK CHECKBOXES NOW COMPLETE

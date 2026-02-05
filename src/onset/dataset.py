@@ -226,3 +226,75 @@ def compute_class_weights(
             weights[cls] = n_samples / (n_classes * count)
 
     return weights
+
+
+@dataclass
+class OnsetSplitResult:
+    """Result from split_by_bearing.
+
+    Attributes:
+        train: OnsetDatasetResult for training bearings.
+        val: OnsetDatasetResult for validation bearings.
+        train_bearing_ids: Unique bearing IDs in the training set.
+        val_bearing_ids: Unique bearing IDs in the validation set.
+    """
+
+    train: OnsetDatasetResult
+    val: OnsetDatasetResult
+    train_bearing_ids: list[str]
+    val_bearing_ids: list[str]
+
+
+def split_by_bearing(
+    dataset_result: OnsetDatasetResult,
+    val_bearing_ids: list[str],
+) -> OnsetSplitResult:
+    """Split an OnsetDatasetResult into train/val sets respecting bearing boundaries.
+
+    Ensures no data leakage: all windows from a given bearing go entirely
+    into either the training set or the validation set, never both.
+
+    Args:
+        dataset_result: Output from create_onset_dataset().
+        val_bearing_ids: List of bearing IDs to use for validation.
+            All other bearings go to training.
+
+    Returns:
+        OnsetSplitResult with train and val OnsetDatasetResult instances.
+
+    Raises:
+        ValueError: If val_bearing_ids is empty or contains IDs not present
+            in the dataset.
+    """
+    if not val_bearing_ids:
+        raise ValueError("val_bearing_ids must not be empty")
+
+    val_set = set(val_bearing_ids)
+    all_ids = set(dataset_result.bearing_ids)
+    unknown = val_set - all_ids
+    if unknown:
+        raise ValueError(
+            f"val_bearing_ids contains IDs not in dataset: {sorted(unknown)}"
+        )
+
+    bearing_arr = np.array(dataset_result.bearing_ids)
+    val_mask = np.isin(bearing_arr, list(val_set))
+    train_mask = ~val_mask
+
+    train_ds = OnsetDatasetResult(
+        windows=dataset_result.windows[train_mask],
+        labels=dataset_result.labels[train_mask],
+        bearing_ids=[b for b, m in zip(dataset_result.bearing_ids, train_mask) if m],
+    )
+    val_ds = OnsetDatasetResult(
+        windows=dataset_result.windows[val_mask],
+        labels=dataset_result.labels[val_mask],
+        bearing_ids=[b for b, m in zip(dataset_result.bearing_ids, val_mask) if m],
+    )
+
+    return OnsetSplitResult(
+        train=train_ds,
+        val=val_ds,
+        train_bearing_ids=sorted(all_ids - val_set),
+        val_bearing_ids=sorted(val_set & all_ids),
+    )
