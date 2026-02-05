@@ -246,7 +246,7 @@ Generate onset labels for all bearings to enable supervised training and evaluat
 **Acceptance**:
 - [x] Loader correctly parses YAML with all 15 bearings
 - [x] Binary labels are consistent with file ordering
-- [ ] `add_onset_column()` produces correct label distribution per bearing
+- [x] `add_onset_column()` produces correct label distribution per bearing
 - [ ] Handles missing bearings gracefully (warning + skip)
 
 **Files**:

@@ -165,6 +165,91 @@ bearings:
         assert DEFAULT_ONSET_LABELS_PATH.exists(), f"Default path missing: {DEFAULT_ONSET_LABELS_PATH}"
 
 
+class TestBinaryLabelConsistencyWithFileOrdering:
+    """ONSET-9 Acceptance: Binary labels are consistent with file ordering.
+
+    Verifies that when files are processed in index order (0, 1, 2, ...),
+    the binary labels form a monotonic non-decreasing sequence: all 0s
+    followed by all 1s, with the transition occurring exactly at onset_file_idx.
+    """
+
+    @pytest.fixture
+    def labels(self) -> dict[str, OnsetLabelEntry]:
+        """Load labels once for tests."""
+        return load_onset_labels()
+
+    def test_labels_monotonic_nondecreasing_for_all_bearings(
+        self, labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """Binary labels must be monotonic (0 -> 1, never 1 -> 0) for all bearings."""
+        for bearing_id, entry in labels.items():
+            onset_idx = entry.onset_file_idx
+            # Test sequence: a range that spans before and after onset
+            test_range = list(range(max(0, onset_idx - 10), onset_idx + 20))
+
+            previous_label = None
+            for file_idx in test_range:
+                label = get_onset_label(bearing_id, file_idx, labels)
+                assert label in (0, 1), f"{bearing_id} idx {file_idx}: invalid label {label}"
+
+                if previous_label is not None:
+                    # Labels must be monotonic: can stay same or increase, never decrease
+                    assert label >= previous_label, (
+                        f"{bearing_id}: label decreased from {previous_label} to {label} "
+                        f"at file_idx {file_idx} (onset={onset_idx})"
+                    )
+                previous_label = label
+
+    def test_transition_occurs_exactly_at_onset_idx(
+        self, labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """The 0->1 transition must occur exactly at onset_file_idx, not before or after."""
+        for bearing_id, entry in labels.items():
+            onset_idx = entry.onset_file_idx
+
+            # One index before onset must be 0 (if onset > 0)
+            if onset_idx > 0:
+                label_before = get_onset_label(bearing_id, onset_idx - 1, labels)
+                assert label_before == 0, (
+                    f"{bearing_id}: expected label 0 at idx {onset_idx - 1} "
+                    f"(one before onset {onset_idx}), got {label_before}"
+                )
+
+            # Exactly at onset must be 1
+            label_at = get_onset_label(bearing_id, onset_idx, labels)
+            assert label_at == 1, (
+                f"{bearing_id}: expected label 1 at onset idx {onset_idx}, got {label_at}"
+            )
+
+    def test_all_indices_before_onset_are_healthy(
+        self, labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """Every file_idx < onset_file_idx must return label 0."""
+        for bearing_id, entry in labels.items():
+            onset_idx = entry.onset_file_idx
+            # Test all indices from 0 to onset-1
+            for file_idx in range(onset_idx):
+                label = get_onset_label(bearing_id, file_idx, labels)
+                assert label == 0, (
+                    f"{bearing_id}: expected healthy (0) at idx {file_idx} "
+                    f"(before onset {onset_idx}), got {label}"
+                )
+
+    def test_all_indices_at_and_after_onset_are_degraded(
+        self, labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """Every file_idx >= onset_file_idx must return label 1."""
+        for bearing_id, entry in labels.items():
+            onset_idx = entry.onset_file_idx
+            # Test indices from onset to onset+50 (reasonable range)
+            for file_idx in range(onset_idx, onset_idx + 50):
+                label = get_onset_label(bearing_id, file_idx, labels)
+                assert label == 1, (
+                    f"{bearing_id}: expected degraded (1) at idx {file_idx} "
+                    f"(at/after onset {onset_idx}), got {label}"
+                )
+
+
 class TestGetOnsetLabel:
     """Tests for get_onset_label function."""
 
@@ -346,6 +431,63 @@ class TestAddOnsetColumn:
         # onset at 27 means 0-26 healthy (27 samples), 27-51 degraded (25 samples)
         assert healthy_count == 27
         assert degraded_count == 25
+
+    def test_label_distribution_per_bearing_all_15(
+        self, labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """ONSET-9 Acceptance: add_onset_column produces correct label distribution per bearing.
+
+        Verifies that for every bearing, the count of healthy (0) and degraded (1)
+        labels matches the known onset index and total file count from the dataset.
+        """
+        # Ground truth: total files per bearing from XJTU-SY dataset
+        total_files = {
+            "Bearing1_1": 123,
+            "Bearing1_2": 161,
+            "Bearing1_3": 158,
+            "Bearing1_4": 122,
+            "Bearing1_5": 52,
+            "Bearing2_1": 491,
+            "Bearing2_2": 161,
+            "Bearing2_3": 533,
+            "Bearing2_4": 42,
+            "Bearing2_5": 339,
+            "Bearing3_1": 2538,
+            "Bearing3_2": 2496,
+            "Bearing3_3": 371,
+            "Bearing3_4": 1515,
+            "Bearing3_5": 114,
+        }
+
+        # Build a DataFrame with all file indices for all 15 bearings
+        rows = []
+        for bearing_id, n_files in total_files.items():
+            for file_idx in range(n_files):
+                rows.append({"bearing_id": bearing_id, "file_idx": file_idx})
+        df = pd.DataFrame(rows)
+
+        result = add_onset_column(df, labels)
+
+        # Verify distribution per bearing
+        for bearing_id, n_files in total_files.items():
+            onset_idx = labels[bearing_id].onset_file_idx
+            bearing_mask = result["bearing_id"] == bearing_id
+            bearing_labels = result.loc[bearing_mask, "is_degraded"]
+
+            healthy_count = (bearing_labels == 0).sum()
+            degraded_count = (bearing_labels == 1).sum()
+
+            assert healthy_count == onset_idx, (
+                f"{bearing_id}: expected {onset_idx} healthy samples, got {healthy_count}"
+            )
+            assert degraded_count == n_files - onset_idx, (
+                f"{bearing_id}: expected {n_files - onset_idx} degraded samples, "
+                f"got {degraded_count}"
+            )
+            # No NaN values for known bearings
+            assert bearing_labels.isna().sum() == 0, (
+                f"{bearing_id}: unexpected NaN values in is_degraded column"
+            )
 
     def test_preserves_other_columns(self, labels: dict[str, OnsetLabelEntry]) -> None:
         """Should preserve all existing columns in DataFrame."""

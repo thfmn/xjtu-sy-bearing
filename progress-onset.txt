@@ -384,3 +384,27 @@
     - test_all_indices_at_and_after_onset_are_degraded: verifies all idx >= onset are 1
   - All 31 tests passing (was 27 when first acceptance was checked, 4 more added for this criterion)
 2026-02-05 22:23:37 DONE: ONSET-9 Acceptance - Binary labels are consistent with file ordering
+
+2026-02-06 01:03:16 START: ONSET-9 Acceptance - add_onset_column() produces correct label distribution per bearing
+2026-02-06 01:05:27 DONE: ONSET-9 Acceptance - add_onset_column() produces correct label distribution per bearing
+  - Added test_label_distribution_per_bearing_all_15 to TestAddOnsetColumn class
+  - Test creates DataFrame with all file indices for all 15 bearings (total 9,216 rows)
+  - Verifies healthy_count == onset_file_idx and degraded_count == total_files - onset_file_idx for each bearing
+  - Verifies no NaN values for known bearings
+  - Cross-references ground truth file counts from XJTU-SY dataset:
+    Bearing1_1: 123 files (onset=69, 69 healthy + 54 degraded)
+    Bearing1_2: 161 files (onset=43, 43 healthy + 118 degraded)
+    Bearing1_3: 158 files (onset=59, 59 healthy + 99 degraded)
+    Bearing1_4: 122 files (onset=79, 79 healthy + 43 degraded)
+    Bearing1_5: 52 files (onset=27, 27 healthy + 25 degraded)
+    Bearing2_1: 491 files (onset=452, 452 healthy + 39 degraded)
+    Bearing2_2: 161 files (onset=47, 47 healthy + 114 degraded)
+    Bearing2_3: 533 files (onset=122, 122 healthy + 411 degraded)
+    Bearing2_4: 42 files (onset=9, 9 healthy + 33 degraded)
+    Bearing2_5: 339 files (onset=121, 121 healthy + 218 degraded)
+    Bearing3_1: 2538 files (onset=748, 748 healthy + 1790 degraded)
+    Bearing3_2: 2496 files (onset=169, 169 healthy + 2327 degraded)
+    Bearing3_3: 371 files (onset=339, 339 healthy + 32 degraded)
+    Bearing3_4: 1515 files (onset=1417, 1417 healthy + 98 degraded)
+    Bearing3_5: 114 files (onset=29, 29 healthy + 85 degraded)
+  - All 32 tests passing (was 31 before, +1 new test)
