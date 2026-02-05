@@ -594,3 +594,15 @@
   - Tested with synthetic data: correct shapes, correct label counts, correct boundary behavior
   - Tested with real features_v2.csv: 9,081 windows from 15 bearings (3,595 healthy, 5,486 degraded)
   - All 186 existing onset tests still passing
+
+2026-02-06 01:57:00 START: Implement TensorFlow Dataset generator for onset classification (ONSET-14 third checkbox)
+2026-02-06 01:58:21 DONE: Implement TensorFlow Dataset generator for onset classification (ONSET-14 third checkbox)
+  - Added build_onset_tf_dataset() function to src/onset/dataset.py (~50 lines)
+  - Signature: build_onset_tf_dataset(dataset_result, batch_size=32, shuffle=True, shuffle_buffer=1024)
+  - Creates tf.data.Dataset from OnsetDatasetResult using from_tensor_slices()
+  - Pipeline: cache() → shuffle() → batch() → prefetch(AUTOTUNE)
+  - Follows same pattern as existing src/data/dataset.py RUL dataset builders
+  - shuffle=True for training, shuffle=False for evaluation
+  - Raises ValueError for empty dataset
+  - Verified: correct shapes (batch, window_size, 4), dtypes (float32/int32), total sample count preserved
+  - All 186 existing onset tests still passing

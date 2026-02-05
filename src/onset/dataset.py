@@ -28,6 +28,10 @@ if TYPE_CHECKING:
 
     from src.onset.labels import OnsetLabelEntry
 
+# Default tf.data pipeline parameters
+DEFAULT_BATCH_SIZE = 32
+DEFAULT_SHUFFLE_BUFFER = 1024
+
 # Health indicator columns used as input features for onset classification
 FEATURE_COLUMNS = ["h_kurtosis", "v_kurtosis", "h_rms", "v_rms"]
 N_FEATURES = len(FEATURE_COLUMNS)
@@ -131,3 +135,53 @@ def create_onset_dataset(
         labels=np.array(all_labels, dtype=np.int32),
         bearing_ids=all_bearing_ids,
     )
+
+
+def build_onset_tf_dataset(
+    dataset_result: OnsetDatasetResult,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    shuffle: bool = True,
+    shuffle_buffer: int = DEFAULT_SHUFFLE_BUFFER,
+) -> tf.data.Dataset:
+    """Build a tf.data.Dataset from an OnsetDatasetResult for training/evaluation.
+
+    Creates a tf.data.Dataset pipeline with optional shuffling, batching,
+    and prefetching. Follows the same pattern as the existing RUL dataset
+    builders in src/data/dataset.py.
+
+    Args:
+        dataset_result: Output from create_onset_dataset().
+        batch_size: Number of samples per batch. Default 32.
+        shuffle: Whether to shuffle the dataset. Set True for training,
+            False for evaluation. Default True.
+        shuffle_buffer: Buffer size for tf.data.Dataset.shuffle().
+            Default 1024.
+
+    Returns:
+        tf.data.Dataset yielding (windows, labels) batches.
+            windows shape: (batch_size, window_size, 4) float32
+            labels shape: (batch_size,) int32
+
+    Raises:
+        ValueError: If dataset_result contains no samples.
+    """
+    import tensorflow as tf
+
+    n_samples = len(dataset_result.labels)
+    if n_samples == 0:
+        raise ValueError("Cannot build tf.data.Dataset from empty OnsetDatasetResult")
+
+    dataset = tf.data.Dataset.from_tensor_slices(
+        (dataset_result.windows, dataset_result.labels)
+    )
+
+    dataset = dataset.cache()
+
+    if shuffle:
+        buffer = min(shuffle_buffer, n_samples)
+        dataset = dataset.shuffle(buffer_size=buffer)
+
+    dataset = dataset.batch(batch_size)
+    dataset = dataset.prefetch(tf.data.AUTOTUNE)
+
+    return dataset
