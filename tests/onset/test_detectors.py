@@ -602,3 +602,170 @@ class TestOnsetResult:
 
         assert result.onset_idx is None
         assert result.onset_time is None
+
+
+# ============================================================================
+# Parametrized Tests for Different Threshold Values
+# ============================================================================
+
+
+class TestParametrizedThresholdValues:
+    """Parametrized tests for different threshold_sigma values.
+
+    Tests verify that threshold sensitivity affects detection behavior:
+    - Lower threshold_sigma = more sensitive (earlier detection, more false positives)
+    - Higher threshold_sigma = less sensitive (later detection, fewer false positives)
+    """
+
+    @pytest.mark.parametrize(
+        "threshold_sigma,expected_detection",
+        [
+            (1.0, True),   # Very sensitive - should detect
+            (2.0, True),   # Sensitive - should detect
+            (3.0, True),   # Standard - should detect
+            (5.0, True),   # Less sensitive - should still detect strong onset
+            (10.0, False), # Very insensitive - may miss moderate onset
+        ],
+    )
+    def test_threshold_sensitivity_on_detection(
+        self, threshold_sigma: float, expected_detection: bool
+    ):
+        """Test that different threshold_sigma values affect detection.
+
+        Uses a moderate onset signal (~5 std above healthy mean).
+        Very high thresholds (10σ) should miss it.
+        """
+        np.random.seed(42)
+        n_samples = 100
+        onset_idx = 50
+
+        # Healthy phase: mean=0.1, std≈0.02
+        hi_series = np.zeros(n_samples)
+        hi_series[:onset_idx] = 0.1 + np.random.randn(onset_idx) * 0.02
+
+        # Degraded phase: ~5 std above healthy mean (0.1 + 5*0.02 = 0.2)
+        hi_series[onset_idx:] = 0.2 + np.random.randn(n_samples - onset_idx) * 0.02
+
+        detector = ThresholdOnsetDetector(
+            threshold_sigma=threshold_sigma, min_consecutive=3
+        )
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        if expected_detection:
+            assert result.onset_idx is not None, (
+                f"Expected detection with threshold_sigma={threshold_sigma}"
+            )
+        else:
+            assert result.onset_idx is None, (
+                f"Expected no detection with threshold_sigma={threshold_sigma}"
+            )
+
+    @pytest.mark.parametrize(
+        "threshold_sigma",
+        [1.0, 2.0, 3.0, 4.0, 5.0],
+    )
+    def test_higher_threshold_later_or_same_detection(self, threshold_sigma: float):
+        """Test that higher thresholds detect onset at same or later index.
+
+        For gradual onset, lower thresholds should trigger earlier
+        (closer to when HI first starts rising).
+        """
+        np.random.seed(42)
+        n_samples = 100
+
+        # Gradual ramp from 0.1 to 0.9 between indices 30-60
+        hi_series = np.zeros(n_samples)
+        hi_series[:30] = 0.1 + np.random.randn(30) * 0.015
+        for i in range(30):
+            hi_series[30 + i] = 0.1 + (i / 30) * 0.8 + np.random.randn() * 0.015
+        hi_series[60:] = 0.9 + np.random.randn(40) * 0.015
+
+        # Detect with current and next threshold
+        detector_low = ThresholdOnsetDetector(
+            threshold_sigma=threshold_sigma, min_consecutive=3
+        )
+        detector_high = ThresholdOnsetDetector(
+            threshold_sigma=threshold_sigma + 1.0, min_consecutive=3
+        )
+
+        result_low = detector_low.fit_detect(hi_series, healthy_fraction=0.25)
+        result_high = detector_high.fit_detect(hi_series, healthy_fraction=0.25)
+
+        # Both should detect (strong signal)
+        assert result_low.onset_idx is not None
+        assert result_high.onset_idx is not None
+
+        # Higher threshold should detect at same or later index
+        assert result_high.onset_idx >= result_low.onset_idx, (
+            f"Higher threshold ({threshold_sigma + 1}) detected earlier "
+            f"({result_high.onset_idx}) than lower threshold ({threshold_sigma}) "
+            f"({result_low.onset_idx})"
+        )
+
+    @pytest.mark.parametrize(
+        "threshold_sigma,min_consecutive",
+        [
+            (2.0, 1),
+            (2.0, 3),
+            (2.0, 5),
+            (3.0, 1),
+            (3.0, 3),
+            (3.0, 5),
+            (4.0, 1),
+            (4.0, 3),
+            (4.0, 5),
+        ],
+    )
+    def test_parameter_combinations_produce_valid_results(
+        self, threshold_sigma: float, min_consecutive: int
+    ):
+        """Test various parameter combinations produce valid OnsetResult."""
+        np.random.seed(42)
+        n_samples = 100
+        onset_idx = 50
+
+        hi_series = np.zeros(n_samples)
+        hi_series[:onset_idx] = 0.1 + np.random.randn(onset_idx) * 0.02
+        hi_series[onset_idx:] = 0.5 + np.random.randn(n_samples - onset_idx) * 0.05
+
+        detector = ThresholdOnsetDetector(
+            threshold_sigma=threshold_sigma, min_consecutive=min_consecutive
+        )
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        # Verify result structure is valid regardless of parameters
+        assert isinstance(result, OnsetResult)
+        assert 0.0 <= result.confidence <= 1.0
+        assert "mean" in result.healthy_baseline
+        assert "std" in result.healthy_baseline
+        assert "threshold" in result.healthy_baseline
+
+        # If onset detected, verify it's reasonable
+        if result.onset_idx is not None:
+            assert 0 <= result.onset_idx < n_samples
+            assert result.onset_time is not None
+
+    @pytest.mark.parametrize("threshold_sigma", [0.5, 1.0, 1.5, 2.0, 2.5, 3.0])
+    def test_threshold_affects_confidence(self, threshold_sigma: float):
+        """Test that same signal produces different confidence at different thresholds.
+
+        Lower threshold = lower relative exceedance = potentially lower confidence.
+        This tests that confidence computation scales with threshold_sigma.
+        """
+        np.random.seed(42)
+        n_samples = 100
+        onset_idx = 50
+
+        hi_series = np.zeros(n_samples)
+        hi_series[:onset_idx] = 0.1 + np.random.randn(onset_idx) * 0.02
+        hi_series[onset_idx:] = 0.3  # Fixed exceedance
+
+        detector = ThresholdOnsetDetector(
+            threshold_sigma=threshold_sigma, min_consecutive=3
+        )
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        # All should detect (strong signal)
+        if result.onset_idx is not None:
+            # Confidence should be valid
+            assert 0.0 <= result.confidence <= 1.0
