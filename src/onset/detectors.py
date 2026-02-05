@@ -261,14 +261,17 @@ class CUSUMOnsetDetector(BaseOnsetDetector):
     - S_high(t) = max(0, S_high(t-1) + (x_t - μ - k))  # Detects increase
     - S_low(t)  = max(0, S_low(t-1) + (μ - k - x_t))   # Detects decrease
 
-    Onset is detected when S_high exceeds threshold h (for degradation, we focus
-    on increasing trends in health indicators like kurtosis).
+    The `direction` parameter controls which shift triggers onset:
+    - "increase": Only S_high triggers onset (default, for kurtosis/RMS)
+    - "decrease": Only S_low triggers onset (for features that drop with degradation)
+    - "both": Either S_high or S_low can trigger onset (whichever exceeds threshold first)
 
     Attributes:
         drift: Allowable drift (k) in units of standard deviation. Controls
             sensitivity: smaller k detects smaller shifts but increases false alarms.
         threshold: Decision threshold (h) in units of standard deviation.
             Onset triggered when cumulative sum exceeds h * std.
+        direction: Which shift direction triggers onset ("increase", "decrease", "both").
         _target_mean: Fitted target mean from healthy samples.
         _std: Fitted standard deviation from healthy samples.
         _n_samples: Number of samples used for baseline fitting.
@@ -278,10 +281,13 @@ class CUSUMOnsetDetector(BaseOnsetDetector):
         Montgomery, D.C. (2009). "Statistical Quality Control", 6th ed.
     """
 
+    VALID_DIRECTIONS = ("increase", "decrease", "both")
+
     def __init__(
         self,
         drift: float = 0.5,
         threshold: float = 5.0,
+        direction: str = "increase",
     ) -> None:
         """Initialize the CUSUM onset detector.
 
@@ -292,17 +298,26 @@ class CUSUMOnsetDetector(BaseOnsetDetector):
             threshold: Decision threshold (h) in std units. Onset detected when
                 cumulative sum exceeds threshold * std. Typical range: 4-6.
                 Default 5.0 provides reasonable ARL (Average Run Length) properties.
+            direction: Which shift direction triggers onset detection:
+                - "increase": Detect upward shifts (S_high > h). Default.
+                - "decrease": Detect downward shifts (S_low > h).
+                - "both": Detect either direction (first to exceed threshold).
 
         Raises:
-            ValueError: If drift or threshold is not positive.
+            ValueError: If drift or threshold is not positive, or direction is invalid.
         """
         if drift <= 0:
             raise ValueError("drift must be positive")
         if threshold <= 0:
             raise ValueError("threshold must be positive")
+        if direction not in self.VALID_DIRECTIONS:
+            raise ValueError(
+                f"direction must be one of {self.VALID_DIRECTIONS}, got '{direction}'"
+            )
 
         self.drift = drift
         self.threshold = threshold
+        self.direction = direction
         self._target_mean: float | None = None
         self._std: float | None = None
         self._n_samples: int = 0
@@ -343,8 +358,7 @@ class CUSUMOnsetDetector(BaseOnsetDetector):
         """Detect onset point using CUSUM algorithm.
 
         Computes upper and lower CUSUM statistics and returns the first index
-        where either exceeds the threshold. For bearing degradation (increasing
-        health indicators), we primarily look for upward shifts via S_high.
+        where the specified direction's statistic exceeds the threshold.
 
         Args:
             hi_series: Full health indicator time series for a bearing.
@@ -354,7 +368,7 @@ class CUSUMOnsetDetector(BaseOnsetDetector):
             - onset_idx: First index where CUSUM exceeds threshold, or None
             - onset_time: Same as onset_idx (assuming unit time steps)
             - confidence: Normalized CUSUM value at onset (how far it exceeded)
-            - healthy_baseline: Dict with target_mean, std, n_samples, drift, threshold
+            - healthy_baseline: Dict with target_mean, std, n_samples, drift, threshold, direction
 
         Raises:
             RuntimeError: If detector has not been fitted.
@@ -374,6 +388,7 @@ class CUSUMOnsetDetector(BaseOnsetDetector):
         s_low = 0.0   # Lower CUSUM (detects decrease)
 
         onset_idx = None
+        onset_direction = None  # Track which direction triggered onset
         max_cusum = 0.0
 
         for i in range(n):
@@ -392,9 +407,21 @@ class CUSUMOnsetDetector(BaseOnsetDetector):
             if current_max > max_cusum:
                 max_cusum = current_max
 
-            # Check for onset (upward shift is primary for degradation)
-            if onset_idx is None and s_high > h:
-                onset_idx = i
+            # Check for onset based on direction setting
+            if onset_idx is None:
+                if self.direction == "increase" and s_high > h:
+                    onset_idx = i
+                    onset_direction = "increase"
+                elif self.direction == "decrease" and s_low > h:
+                    onset_idx = i
+                    onset_direction = "decrease"
+                elif self.direction == "both":
+                    if s_high > h:
+                        onset_idx = i
+                        onset_direction = "increase"
+                    elif s_low > h:
+                        onset_idx = i
+                        onset_direction = "decrease"
 
         # Build result
         healthy_baseline = {
@@ -403,6 +430,7 @@ class CUSUMOnsetDetector(BaseOnsetDetector):
             "n_samples": self._n_samples,
             "drift": self.drift,
             "threshold": self.threshold,
+            "direction": self.direction,
             "decision_threshold_h": h,
         }
 
@@ -413,6 +441,9 @@ class CUSUMOnsetDetector(BaseOnsetDetector):
                 confidence=0.0,
                 healthy_baseline=healthy_baseline,
             )
+
+        # Add which direction actually triggered onset
+        healthy_baseline["triggered_direction"] = onset_direction
 
         # Confidence: how far CUSUM exceeded threshold, normalized to [0, 1]
         # Use the max CUSUM value reached, normalized by threshold
