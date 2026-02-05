@@ -20,6 +20,7 @@ import pytest
 
 from src.onset.detectors import (
     BaseOnsetDetector,
+    CUSUMOnsetDetector,
     OnsetResult,
     ThresholdOnsetDetector,
 )
@@ -769,3 +770,371 @@ class TestParametrizedThresholdValues:
         if result.onset_idx is not None:
             # Confidence should be valid
             assert 0.0 <= result.confidence <= 1.0
+
+
+# ============================================================================
+# CUSUMOnsetDetector Tests
+# ============================================================================
+
+
+class TestCUSUMOnsetDetector:
+    """Unit tests for CUSUMOnsetDetector class."""
+
+    def test_init_default_params(self):
+        """Test default initialization parameters."""
+        detector = CUSUMOnsetDetector()
+
+        assert detector.drift == 0.5
+        assert detector.threshold == 5.0
+        assert detector.direction == "increase"
+
+    def test_init_custom_params(self):
+        """Test custom initialization parameters."""
+        detector = CUSUMOnsetDetector(drift=0.25, threshold=4.0, direction="decrease")
+
+        assert detector.drift == 0.25
+        assert detector.threshold == 4.0
+        assert detector.direction == "decrease"
+
+    def test_init_invalid_drift(self):
+        """Test that non-positive drift raises error."""
+        with pytest.raises(ValueError, match="drift must be positive"):
+            CUSUMOnsetDetector(drift=0)
+
+        with pytest.raises(ValueError, match="drift must be positive"):
+            CUSUMOnsetDetector(drift=-0.5)
+
+    def test_init_invalid_threshold(self):
+        """Test that non-positive threshold raises error."""
+        with pytest.raises(ValueError, match="threshold must be positive"):
+            CUSUMOnsetDetector(threshold=0)
+
+    def test_init_invalid_direction(self):
+        """Test that invalid direction raises error."""
+        with pytest.raises(ValueError, match="direction must be one of"):
+            CUSUMOnsetDetector(direction="invalid")
+
+    def test_fit_stores_baseline_stats(self):
+        """Test that fit() stores baseline statistics."""
+        np.random.seed(42)
+        healthy = np.random.randn(20) * 0.5 + 3.0
+
+        detector = CUSUMOnsetDetector()
+        detector.fit(healthy)
+
+        assert detector._target_mean is not None
+        assert detector._std is not None
+        assert detector._n_samples == 20
+
+    def test_fit_too_few_samples(self):
+        """Test that fit() raises error with < 2 samples."""
+        detector = CUSUMOnsetDetector()
+
+        with pytest.raises(ValueError, match="at least 2 samples"):
+            detector.fit(np.array([1.0]))
+
+    def test_detect_without_fit_raises(self):
+        """Test that detect() without fit() raises error."""
+        detector = CUSUMOnsetDetector()
+
+        with pytest.raises(RuntimeError, match="not fitted"):
+            detector.detect(np.array([1.0, 2.0, 3.0]))
+
+    def test_detect_returns_onset_result(self):
+        """Test that detect() returns OnsetResult."""
+        np.random.seed(42)
+        n_samples = 100
+        onset_idx = 50
+
+        hi_series = np.zeros(n_samples)
+        hi_series[:onset_idx] = 0.1 + np.random.randn(onset_idx) * 0.02
+        hi_series[onset_idx:] = 0.5 + np.random.randn(n_samples - onset_idx) * 0.02
+
+        detector = CUSUMOnsetDetector()
+        detector.fit(hi_series[:30])
+        result = detector.detect(hi_series)
+
+        assert isinstance(result, OnsetResult)
+        assert hasattr(result, "onset_idx")
+        assert hasattr(result, "onset_time")
+        assert hasattr(result, "confidence")
+        assert hasattr(result, "healthy_baseline")
+
+    def test_handles_nan_in_baseline(self):
+        """Test that NaN values in baseline are filtered."""
+        healthy = np.array([1.0, 2.0, np.nan, 3.0, 4.0, np.nan, 5.0])
+
+        detector = CUSUMOnsetDetector()
+        detector.fit(healthy)
+
+        assert detector._n_samples == 5  # 7 - 2 NaN
+        assert not np.isnan(detector._target_mean)
+        assert not np.isnan(detector._std)
+
+    def test_healthy_baseline_contains_cusum_params(self):
+        """Test that healthy_baseline dict contains CUSUM-specific parameters."""
+        np.random.seed(42)
+        n_samples = 100
+        onset_idx = 50
+
+        hi_series = np.zeros(n_samples)
+        hi_series[:onset_idx] = 0.1 + np.random.randn(onset_idx) * 0.02
+        hi_series[onset_idx:] = 0.5 + np.random.randn(n_samples - onset_idx) * 0.02
+
+        detector = CUSUMOnsetDetector(drift=0.5, threshold=5.0)
+        detector.fit(hi_series[:30])
+        result = detector.detect(hi_series)
+
+        assert "drift" in result.healthy_baseline
+        assert "threshold" in result.healthy_baseline
+        assert "direction" in result.healthy_baseline
+        assert result.healthy_baseline["drift"] == 0.5
+        assert result.healthy_baseline["threshold"] == 5.0
+
+
+class TestCUSUMGradualShift:
+    """Test CUSUMOnsetDetector on synthetic data with gradual shift.
+
+    This tests the ONSET-6 acceptance criterion that CUSUM should detect
+    gradual shifts that threshold-based detectors might miss or detect late.
+    """
+
+    @pytest.fixture
+    def gradual_shift_series(self) -> tuple[np.ndarray, int]:
+        """Create synthetic HI series with gradual mean shift.
+
+        The shift is designed to be subtle enough that threshold detection
+        is delayed, but CUSUM should detect it earlier by accumulating evidence.
+
+        Returns:
+            Tuple of (hi_series, shift_start_idx)
+        """
+        np.random.seed(42)
+        n_samples = 150
+        shift_start = 60
+
+        hi_series = np.zeros(n_samples)
+        std = 0.02
+
+        # Healthy phase: stationary around 0.1
+        hi_series[:shift_start] = 0.1 + np.random.randn(shift_start) * std
+
+        # Gradual shift: ramp from 0.1 to 0.2 over 40 samples
+        ramp_length = 40
+        for i in range(ramp_length):
+            idx = shift_start + i
+            progress = i / ramp_length
+            # Mean shifts from 0.1 to 0.2 (5 sigma total shift)
+            hi_series[idx] = 0.1 + progress * 0.1 + np.random.randn() * std
+
+        # Post-shift: stationary at elevated level
+        hi_series[shift_start + ramp_length :] = (
+            0.2 + np.random.randn(n_samples - shift_start - ramp_length) * std
+        )
+
+        return hi_series, shift_start
+
+    def test_cusum_detects_gradual_shift(
+        self, gradual_shift_series: tuple[np.ndarray, int]
+    ):
+        """Test that CUSUM detects gradual shift."""
+        hi_series, shift_start = gradual_shift_series
+
+        detector = CUSUMOnsetDetector(drift=0.5, threshold=5.0)
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        assert result.onset_idx is not None, "CUSUM should detect gradual shift"
+        # Onset should be detected somewhere in the shift region
+        # Allow detection from shift_start to shift_start + 50 (shift region + margin)
+        assert result.onset_idx >= shift_start - 5, (
+            f"Onset detected too early: {result.onset_idx} < {shift_start - 5}"
+        )
+        assert result.onset_idx <= shift_start + 50, (
+            f"Onset detected too late: {result.onset_idx} > {shift_start + 50}"
+        )
+
+    def test_cusum_detects_earlier_than_threshold_for_gradual_shift(
+        self, gradual_shift_series: tuple[np.ndarray, int]
+    ):
+        """Test that CUSUM detects gradual shifts earlier than threshold detector.
+
+        This is a key advantage of CUSUM: it accumulates small deviations,
+        detecting shifts before any single sample exceeds a threshold.
+        """
+        hi_series, shift_start = gradual_shift_series
+
+        # CUSUM detector with default params
+        cusum = CUSUMOnsetDetector(drift=0.5, threshold=5.0)
+        cusum_result = cusum.fit_detect(hi_series, healthy_fraction=0.3)
+
+        # Threshold detector with standard 3-sigma threshold
+        threshold_det = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        threshold_result = threshold_det.fit_detect(hi_series, healthy_fraction=0.3)
+
+        # Both should detect onset
+        assert cusum_result.onset_idx is not None, "CUSUM should detect onset"
+        assert threshold_result.onset_idx is not None, "Threshold should detect onset"
+
+        # CUSUM should detect at same time or earlier than threshold
+        # (for gradual shifts, CUSUM is typically earlier)
+        assert cusum_result.onset_idx <= threshold_result.onset_idx, (
+            f"CUSUM ({cusum_result.onset_idx}) should detect no later than "
+            f"threshold ({threshold_result.onset_idx}) for gradual shifts"
+        )
+
+    def test_cusum_sensitivity_to_drift_parameter(
+        self, gradual_shift_series: tuple[np.ndarray, int]
+    ):
+        """Test that drift parameter affects detection sensitivity.
+
+        Lower drift = more sensitive (earlier detection, but more false positives)
+        Higher drift = less sensitive (later detection, but fewer false positives)
+        """
+        hi_series, shift_start = gradual_shift_series
+
+        # Lower drift = more sensitive
+        detector_low = CUSUMOnsetDetector(drift=0.25, threshold=5.0)
+        result_low = detector_low.fit_detect(hi_series, healthy_fraction=0.3)
+
+        # Higher drift = less sensitive
+        detector_high = CUSUMOnsetDetector(drift=1.0, threshold=5.0)
+        result_high = detector_high.fit_detect(hi_series, healthy_fraction=0.3)
+
+        # Both should detect (strong enough signal)
+        assert result_low.onset_idx is not None
+        assert result_high.onset_idx is not None
+
+        # Lower drift should detect at same time or earlier
+        assert result_low.onset_idx <= result_high.onset_idx, (
+            f"Lower drift ({result_low.onset_idx}) should detect no later than "
+            f"higher drift ({result_high.onset_idx})"
+        )
+
+    def test_cusum_no_false_alarm_on_healthy_series(
+        self, healthy_only_series: np.ndarray
+    ):
+        """Test that CUSUM doesn't trigger false alarms on healthy-only data."""
+        detector = CUSUMOnsetDetector(drift=0.5, threshold=5.0)
+        result = detector.fit_detect(healthy_only_series, healthy_fraction=0.3)
+
+        assert result.onset_idx is None, (
+            f"False alarm: CUSUM triggered at {result.onset_idx} on healthy series"
+        )
+
+
+class TestCUSUMDirection:
+    """Test CUSUM direction parameter for increase/decrease detection."""
+
+    @pytest.fixture
+    def upward_shift_series(self) -> tuple[np.ndarray, int]:
+        """Create series with upward mean shift."""
+        np.random.seed(42)
+        n_samples = 100
+        shift_idx = 50
+
+        hi_series = np.zeros(n_samples)
+        hi_series[:shift_idx] = 0.1 + np.random.randn(shift_idx) * 0.02
+        hi_series[shift_idx:] = 0.3 + np.random.randn(n_samples - shift_idx) * 0.02
+
+        return hi_series, shift_idx
+
+    @pytest.fixture
+    def downward_shift_series(self) -> tuple[np.ndarray, int]:
+        """Create series with downward mean shift."""
+        np.random.seed(42)
+        n_samples = 100
+        shift_idx = 50
+
+        hi_series = np.zeros(n_samples)
+        hi_series[:shift_idx] = 0.3 + np.random.randn(shift_idx) * 0.02
+        hi_series[shift_idx:] = 0.1 + np.random.randn(n_samples - shift_idx) * 0.02
+
+        return hi_series, shift_idx
+
+    def test_direction_increase_detects_upward_shift(
+        self, upward_shift_series: tuple[np.ndarray, int]
+    ):
+        """Test direction='increase' detects upward shifts."""
+        hi_series, shift_idx = upward_shift_series
+
+        detector = CUSUMOnsetDetector(direction="increase")
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        assert result.onset_idx is not None, "Should detect upward shift"
+        assert abs(result.onset_idx - shift_idx) <= 10, (
+            f"Detection {result.onset_idx} too far from true shift {shift_idx}"
+        )
+
+    def test_direction_increase_ignores_downward_shift(
+        self, downward_shift_series: tuple[np.ndarray, int]
+    ):
+        """Test direction='increase' ignores downward shifts."""
+        hi_series, _ = downward_shift_series
+
+        detector = CUSUMOnsetDetector(direction="increase")
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        assert result.onset_idx is None, (
+            f"direction='increase' should not detect downward shift, "
+            f"but detected at {result.onset_idx}"
+        )
+
+    def test_direction_decrease_detects_downward_shift(
+        self, downward_shift_series: tuple[np.ndarray, int]
+    ):
+        """Test direction='decrease' detects downward shifts."""
+        hi_series, shift_idx = downward_shift_series
+
+        detector = CUSUMOnsetDetector(direction="decrease")
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        assert result.onset_idx is not None, "Should detect downward shift"
+        assert abs(result.onset_idx - shift_idx) <= 10, (
+            f"Detection {result.onset_idx} too far from true shift {shift_idx}"
+        )
+
+    def test_direction_decrease_ignores_upward_shift(
+        self, upward_shift_series: tuple[np.ndarray, int]
+    ):
+        """Test direction='decrease' ignores upward shifts."""
+        hi_series, _ = upward_shift_series
+
+        detector = CUSUMOnsetDetector(direction="decrease")
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        assert result.onset_idx is None, (
+            f"direction='decrease' should not detect upward shift, "
+            f"but detected at {result.onset_idx}"
+        )
+
+    def test_direction_both_detects_either_shift(
+        self,
+        upward_shift_series: tuple[np.ndarray, int],
+        downward_shift_series: tuple[np.ndarray, int],
+    ):
+        """Test direction='both' detects shifts in either direction."""
+        hi_up, shift_up = upward_shift_series
+        hi_down, shift_down = downward_shift_series
+
+        detector = CUSUMOnsetDetector(direction="both")
+
+        # Should detect upward
+        result_up = detector.fit_detect(hi_up, healthy_fraction=0.3)
+        assert result_up.onset_idx is not None, "Should detect upward shift"
+
+        # Should detect downward
+        result_down = detector.fit_detect(hi_down, healthy_fraction=0.3)
+        assert result_down.onset_idx is not None, "Should detect downward shift"
+
+    def test_triggered_direction_in_result(
+        self, upward_shift_series: tuple[np.ndarray, int]
+    ):
+        """Test that triggered_direction is recorded in healthy_baseline."""
+        hi_series, _ = upward_shift_series
+
+        detector = CUSUMOnsetDetector(direction="both")
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        assert result.onset_idx is not None
+        assert "triggered_direction" in result.healthy_baseline
+        assert result.healthy_baseline["triggered_direction"] == "increase"
