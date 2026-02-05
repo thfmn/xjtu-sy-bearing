@@ -470,7 +470,7 @@ Integrate onset detection with existing RUL models to create complete two-stage 
 **Priority**: P0 | **Effort**: 3h | **Phase**: 4. Integration
 
 **Tasks**:
-- [ ] Create `src/onset/pipeline.py`
+- [x] Create `src/onset/pipeline.py`
 - [ ] Implement `TwoStagePipeline` class:
   - `__init__(onset_detector, rul_model, onset_model=None)`
   - `detect_onset(bearing_signals)` - use detector or classifier

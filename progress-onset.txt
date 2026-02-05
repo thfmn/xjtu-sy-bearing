@@ -854,3 +854,14 @@
     [x] Training time <5 minutes on CPU: YES (2.1 min total)
 2026-02-06 02:52:13 DONE: ONSET-16 Acceptance - All 4 acceptance criteria verified
   - ONSET-16 ALL TASK CHECKBOXES AND ACCEPTANCE CRITERIA NOW COMPLETE
+
+2026-02-06 02:53:52 START: Create src/onset/pipeline.py (ONSET-18 first checkbox)
+2026-02-06 02:55:38 DONE: Create src/onset/pipeline.py (ONSET-18 first checkbox)
+  - Created src/onset/pipeline.py with TwoStagePipeline class:
+    - __init__(onset_detector, rul_model, onset_model=None, max_rul=125)
+    - detect_onset(bearing_signals) -> OnsetResult (stub, NotImplementedError)
+    - predict_rul(bearing_signals, onset_idx) -> np.ndarray (stub, NotImplementedError)
+    - predict(bearing_signals) -> np.ndarray (stub, NotImplementedError)
+  - Input validation: TypeError for non-BaseOnsetDetector, ValueError for None rul_model
+  - Updated src/onset/__init__.py to export TwoStagePipeline
+  - Module imports cleanly, all 237 existing onset tests still passing

@@ -47,6 +47,9 @@ from src.onset.labels import (
     get_onset_label,
     load_onset_labels,
 )
+from src.onset.pipeline import (
+    TwoStagePipeline,
+)
 from src.onset.visualization import (
     plot_all_bearings_onset,
     plot_bearing_onset,
@@ -85,6 +88,8 @@ __all__: list[str] = [
     "add_onset_column",
     "get_onset_label",
     "load_onset_labels",
+    # Pipeline
+    "TwoStagePipeline",
     # Visualization
     "plot_all_bearings_onset",
     "plot_bearing_onset",
