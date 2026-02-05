@@ -317,7 +317,7 @@ Create visualization tools for onset detection validation and analysis.
   - Plot kurtosis time series with onset point marked
   - Show healthy region (green) vs degraded region (red) shading
   - Add threshold line if threshold-based detection used
-- [ ] Implement `plot_onset_comparison(bearing_id, manual_idx, auto_idx, features_df)`:
+- [x] Implement `plot_onset_comparison(bearing_id, manual_idx, auto_idx, features_df)`:
   - Compare manual vs automated onset labels on same plot
 - [ ] Implement `plot_all_bearings_onset(features_df, onset_labels, output_dir)`:
   - Generate grid of onset plots for all 15 bearings

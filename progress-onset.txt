@@ -464,10 +464,10 @@
     - plot_onset_comparison(bearing_id, manual_idx, auto_idx, features_df, save_path, figsize):
       Overlays manual (blue) and auto (red) onset lines, annotates diff
     - plot_all_bearings_onset(features_df, onset_labels, output_dir, figsize):
-      5×3 grid (one column per condition, 5 rows per condition)
+      5x3 grid (one column per condition, 5 rows per condition)
   - Updated src/onset/__init__.py to export all 3 visualization functions
   - Smoke tested: all functions render correctly with synthetic data
-  - 15-bearing 5×3 grid layout verified (PRD acceptance: "5x3 or 3x5")
+  - 15-bearing 5x3 grid layout verified (PRD acceptance: "5x3 or 3x5")
   - Save to file (DPI=150, bbox_inches='tight') verified working
   - All 186 existing onset tests still passing
 
@@ -485,3 +485,17 @@
   - Smoke tested in prior session (progress line 469)
   - All PRD spec requirements met
 2026-02-06 01:22:00 DONE: Implement plot_bearing_onset (ONSET-12 second checkbox)
+
+2026-02-06 01:23:41 START: Implement plot_onset_comparison (ONSET-12 third checkbox)
+2026-02-06 01:23:41 VERIFIED: plot_onset_comparison already fully implemented in src/onset/visualization.py (lines 88-141):
+  - Signature: plot_onset_comparison(bearing_id, manual_idx, auto_idx, features_df, save_path=None, figsize=(10,4))
+  - Plots kurtosis avg time series (line 118: ax.plot)
+  - Blue dashed line for manual onset (line 121: axvline blue dashed, label="Manual (idx=N)")
+  - Red dash-dot line for auto onset (line 123: axvline red dash-dot, label="Auto (idx=N)")
+  - Difference annotation in title (lines 126-131): shows "diff=+N" or "diff=-N"
+  - Handles None for either manual_idx or auto_idx gracefully
+  - Labeled axes, legend (lines 134-135)
+  - Save to file at DPI=150 (lines 137-139)
+  - PRD spec: "Compare manual vs automated onset labels on same plot" - FULLY MET
+  - Already smoke tested during ONSET-12 first checkbox (progress line 469)
+2026-02-06 01:23:41 DONE: Implement plot_onset_comparison (ONSET-12 third checkbox)
