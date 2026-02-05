@@ -319,7 +319,7 @@ Create visualization tools for onset detection validation and analysis.
   - Add threshold line if threshold-based detection used
 - [x] Implement `plot_onset_comparison(bearing_id, manual_idx, auto_idx, features_df)`:
   - Compare manual vs automated onset labels on same plot
-- [ ] Implement `plot_all_bearings_onset(features_df, onset_labels, output_dir)`:
+- [x] Implement `plot_all_bearings_onset(features_df, onset_labels, output_dir)`:
   - Generate grid of onset plots for all 15 bearings
 
 **Acceptance**:

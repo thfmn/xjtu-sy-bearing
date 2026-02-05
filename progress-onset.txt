@@ -499,3 +499,15 @@
   - PRD spec: "Compare manual vs automated onset labels on same plot" - FULLY MET
   - Already smoke tested during ONSET-12 first checkbox (progress line 469)
 2026-02-06 01:23:41 DONE: Implement plot_onset_comparison (ONSET-12 third checkbox)
+
+2026-02-06 01:28:38 START: Verify and check off plot_all_bearings_onset implementation (ONSET-12 fourth checkbox)
+2026-02-06 01:29:52 VERIFIED: plot_all_bearings_onset already fully implemented in src/onset/visualization.py (lines 144-234):
+  - Signature: plot_all_bearings_onset(features_df, onset_labels, output_dir=None, figsize=(18,12))
+  - Creates 5x3 grid (5 rows per condition, 3 columns for 3 conditions)
+  - Each subplot: kurtosis avg time series + green/red shading + onset vertical line
+  - Column headers annotated with condition labels (35Hz12kN, 37.5Hz11kN, 40Hz10kN)
+  - Saves to output_dir/onset_grid.png at DPI=150
+  - Hides unused axes if conditions have fewer than 5 bearings
+  - Smoke test passed: 15 visible axes, all titled, 327.6 KB PNG saved
+  - All 15 bearings correctly displayed in grid layout
+2026-02-06 01:29:52 DONE: Verify and check off plot_all_bearings_onset implementation (ONSET-12 fourth checkbox)
