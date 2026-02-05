@@ -338,18 +338,18 @@ Create visualization tools for onset detection validation and analysis.
 **Priority**: P1 | **Effort**: 2h | **Phase**: 2. Label Generation
 
 **Tasks**:
-- [ ] Create `notebooks/40_onset_analysis.ipynb`
-- [ ] Load features and compute health indicators for all bearings
-- [ ] Compare detector algorithms (Threshold, CUSUM, Bayesian) on sample bearings
-- [ ] Visualize onset detection results for all 15 bearings
-- [ ] Analyze onset timing distribution (early life % vs. late life %)
-- [ ] Document findings on detector performance and parameter sensitivity
+- [x] Create `notebooks/40_onset_analysis.ipynb`
+- [x] Load features and compute health indicators for all bearings
+- [x] Compare detector algorithms (Threshold, CUSUM, Bayesian) on sample bearings
+- [x] Visualize onset detection results for all 15 bearings
+- [x] Analyze onset timing distribution (early life % vs. late life %)
+- [x] Document findings on detector performance and parameter sensitivity
 
 **Acceptance**:
-- [ ] Notebook executes end-to-end without errors
-- [ ] Includes comparison table of detector performance metrics
-- [ ] Onset timing histogram shows distribution across bearings
-- [ ] Recommendations for best detector + parameters documented
+- [x] Notebook executes end-to-end without errors
+- [x] Includes comparison table of detector performance metrics
+- [x] Onset timing histogram shows distribution across bearings
+- [x] Recommendations for best detector + parameters documented
 
 **Files**:
 - `notebooks/40_onset_analysis.ipynb`

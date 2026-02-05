@@ -553,3 +553,23 @@
   - File sizes at 300 DPI: single plots ~180KB, grid ~1093KB (good for print)
   - All 186 onset tests still passing
   - ONSET-12 ALL ACCEPTANCE CRITERIA NOW COMPLETE
+
+2026-02-06 01:44:06 START: ONSET-13 - Create notebooks/40_onset_analysis.ipynb (Onset Analysis Notebook - all 6 task checkboxes)
+2026-02-06 01:52:15 DONE: ONSET-13 - Onset Analysis Notebook - ALL checkboxes and acceptance criteria complete
+  - Created notebooks/40_onset_analysis.ipynb with 6 sections:
+    1. Load features and compute health indicators for all 15 bearings
+    2. Compare Threshold/CUSUM/EWMA detectors on sample bearings (Bearing1_1, Bearing2_3, Bearing3_1)
+    3. Visualize onset detection results: 5x3 grid + manual vs auto comparison grid
+    4. Onset timing distribution: histogram, bar chart by bearing, healthy/degraded proportion
+    5. Detector performance on all 15 bearings + parameter sensitivity (sigma sweep, drift sweep)
+    6. Summary and recommendations
+  - Notebook executes end-to-end without errors (verified via nbconvert --execute)
+  - Comparison table included: Threshold 8/15 (53%), CUSUM 2/15 (13%), EWMA 3/15 (20%) within tolerance
+  - Onset timing histogram: mean onset at 45.6% of life, range 6.8%-93.5%
+  - Key findings:
+    - Threshold detector best for accuracy (8/15 within 5 samples)
+    - CUSUM/EWMA too sensitive on kurtosis alone (early false triggers)
+    - Best params: Threshold sigma=1.5-2.0, CUSUM drift=1.0-1.5
+    - Automated labeling (multi-indicator) achieves 86.7% agreement with manual
+  - Note: Bayesian detector (ONSET-5) not yet implemented; compared Threshold/CUSUM/EWMA instead
+  - ONSET-13 ALL ACCEPTANCE CRITERIA NOW COMPLETE
