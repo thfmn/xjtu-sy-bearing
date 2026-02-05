@@ -343,3 +343,17 @@
   - Tested: Bearing1_1 at idx 68→0, 69→1; Bearing2_1 at idx 451→0, 452→1
   - KeyError raised correctly for missing bearing
 2026-02-05 16:42:44 DONE: Implement get_onset_label(bearing_id, file_idx, onset_labels) function (ONSET-9 third checkbox)
+
+2026-02-05 16:43:48 START: Implement add_onset_column(features_df, onset_labels) function (ONSET-9 fourth checkbox)
+2026-02-05 16:46:52 VERIFIED: add_onset_column already fully implemented in src/onset/labels.py (lines 144-221):
+  - Takes features_df, onset_labels dict, and optional missing_behavior parameter
+  - Adds 'is_degraded' column: 0 (healthy) if file_idx < onset_file_idx, else 1 (degraded)
+  - Tested with Bearing1_1 (onset=69): idx 50→0, 68→0, 70→1 ✓
+  - Tested with Bearing2_1 (onset=452): idx 451→0, 452→1 ✓
+  - Missing bearings handling:
+    - missing_behavior='warn' (default): logs warning, sets NaN
+    - missing_behavior='skip': silent, sets NaN
+    - missing_behavior='error': raises KeyError
+  - All 154 onset tests passing
+2026-02-05 16:46:52 DONE: Implement add_onset_column(features_df, onset_labels) function (ONSET-9 fourth checkbox)
+  - ONSET-9 ALL TASK CHECKBOXES NOW COMPLETE

@@ -240,7 +240,7 @@ Generate onset labels for all bearings to enable supervised training and evaluat
   - Return dictionary mapping `bearing_id -> onset_file_idx`
 - [x] Implement `get_onset_label(bearing_id, file_idx, onset_labels)` function
   - Return 0 (healthy) if `file_idx < onset_file_idx`, else 1 (degraded)
-- [ ] Implement `add_onset_column(features_df, onset_labels)` function
+- [x] Implement `add_onset_column(features_df, onset_labels)` function
   - Add binary `is_degraded` column to features dataframe
 
 **Acceptance**:
