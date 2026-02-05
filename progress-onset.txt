@@ -373,3 +373,14 @@
   - TestGetOnsetLabel class (5 tests): healthy/degraded labels, boundary conditions
   - TestAddOnsetColumn class (10 tests): column creation, label distribution, missing handling
   - All 27 tests passing
+
+2026-02-05 22:22:59 START: ONSET-9 Acceptance - Binary labels are consistent with file ordering
+2026-02-05 22:22:59 VERIFIED: Binary labels are consistent with file ordering
+  - Tests already exist in test_labels.py (added in prior session)
+  - TestBinaryLabelConsistencyWithFileOrdering class (4 tests all passing):
+    - test_labels_monotonic_nondecreasing_for_all_bearings: verifies labels form 0...0->1...1 sequence
+    - test_transition_occurs_exactly_at_onset_idx: verifies boundary is exactly at onset_file_idx
+    - test_all_indices_before_onset_are_healthy: verifies all idx < onset are 0
+    - test_all_indices_at_and_after_onset_are_degraded: verifies all idx >= onset are 1
+  - All 31 tests passing (was 27 when first acceptance was checked, 4 more added for this criterion)
+2026-02-05 22:23:37 DONE: ONSET-9 Acceptance - Binary labels are consistent with file ordering
