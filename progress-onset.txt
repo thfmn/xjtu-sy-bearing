@@ -632,3 +632,14 @@
   - Verified: 30-window synthetic test with 3 bearings, B3 as val → 20 train + 10 val, no leakage
   - All 186 existing onset tests still passing
   - ONSET-14 ALL TASK CHECKBOXES NOW COMPLETE
+
+2026-02-06 02:02:50 START: ONSET-14 Acceptance - Dataset yields (window_features, binary_label) tuples
+2026-02-06 02:04:28 DONE: ONSET-14 Acceptance - Dataset yields (window_features, binary_label) tuples
+  - Created tests/onset/test_dataset.py with TestDatasetYieldsTuples class (6 tests)
+  - test_tf_dataset_yields_two_element_tuple: verifies batch is tuple of length 2
+  - test_window_features_shape_and_dtype: verifies (batch, window_size, 4) float32
+  - test_binary_label_shape_and_dtype: verifies (batch,) int32
+  - test_labels_are_binary: verifies all labels in {0, 1}
+  - test_numpy_result_yields_correct_types: verifies numpy arrays have correct dtypes/ndim
+  - test_total_samples_preserved_in_tf_dataset: verifies all samples present in tf.data
+  - All 6 tests passing

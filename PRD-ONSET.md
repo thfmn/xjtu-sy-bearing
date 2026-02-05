@@ -376,7 +376,7 @@ Implement a neural network classifier for onset detection to improve upon rule-b
 - [x] Support train/val split respecting bearing boundaries (no leakage)
 
 **Acceptance**:
-- [ ] Dataset yields `(window_features, binary_label)` tuples
+- [x] Dataset yields `(window_features, binary_label)` tuples
 - [ ] Class weights computed for imbalanced binary classification
 - [ ] No data leakage: bearings in train set not in val set
 - [ ] Window size is configurable (default 10 = ~10 seconds at 1 sample/sec)
