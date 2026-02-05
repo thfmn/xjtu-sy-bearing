@@ -476,8 +476,8 @@ Integrate onset detection with existing RUL models to create complete two-stage 
   - `detect_onset(bearing_signals)` - use detector or classifier
   - `predict_rul(bearing_signals, onset_idx)` - apply RUL model post-onset only
   - `predict(bearing_signals)` - full pipeline: onset detection -> RUL prediction
-- [ ] Support both rule-based detectors and ML classifier for Stage 1
-- [ ] Handle edge cases: no onset detected (predict max_rul), onset at start
+- [x] Support both rule-based detectors and ML classifier for Stage 1
+- [x] Handle edge cases: no onset detected (predict max_rul), onset at start
 
 **Acceptance**:
 - [ ] Pipeline correctly chains onset detection and RUL prediction

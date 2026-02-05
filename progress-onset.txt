@@ -877,3 +877,30 @@
   - predict(): chains detect_onset() → predict_rul()
   - All 237 existing onset tests still passing
   - Smoke tested with MockRulModel + MockOnsetClassifier: all 7 scenarios verified
+
+2026-02-06 02:58:34 START: Support both rule-based detectors and ML classifier for Stage 1 (ONSET-18 third checkbox)
+2026-02-06 03:00:09 DONE: Support both rule-based detectors and ML classifier for Stage 1 (ONSET-18 third checkbox)
+  - detect_onset() already dispatches to ML classifier (onset_model) or rule-based detector (onset_detector)
+  - Fixed predict() method: now accepts separate onset_signals and rul_signals parameters
+    - Before: single bearing_signals passed to both stages (broken when formats differ)
+    - After: onset_signals for Stage 1, rul_signals for Stage 2 (None falls back to onset_signals)
+  - Backward compatible: single-arg predict(hi_series) still works when both stages accept same format
+  - Verified both paths with smoke tests:
+    - Rule-based: ThresholdOnsetDetector on 1-D HI series + separate rul_signals for RUL model
+    - ML classifier: MockOnsetClassifier on 3-D windowed input + separate rul_signals for RUL model
+  - Verified detector swapping: Threshold/CUSUM/EWMA all work with same RUL model
+  - All 237 onset tests passing
+
+2026-02-06 03:00:38 START: Handle edge cases: no onset detected (predict max_rul), onset at start (ONSET-18 fourth checkbox)
+2026-02-06 03:00:38 VERIFIED: Edge cases already fully implemented in predict_rul() (pipeline.py lines 153-170):
+  - No onset detected (onset_idx=None): returns np.full(n_samples, max_rul) — line 156-157
+  - Onset at start (onset_idx<=0): all samples go through RUL model — line 160-162
+  - Onset at last index: only last sample goes to RUL model, rest get max_rul
+  - Onset beyond array length: all samples get max_rul (empty post_onset slice)
+  - Empty signals (0 samples): returns empty float32 array with correct shape
+  - Single sample: works for both onset and no-onset cases
+  - All 7 edge cases verified with smoke tests, all behave correctly
+  - No code changes needed — implementation was already complete from ONSET-18 second checkbox
+  - All 237 onset tests still passing
+2026-02-06 03:00:38 DONE: Handle edge cases: no onset detected (predict max_rul), onset at start (ONSET-18 fourth checkbox)
+  - ONSET-18 ALL TASK CHECKBOXES NOW COMPLETE
