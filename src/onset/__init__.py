@@ -11,4 +11,20 @@ Components:
 - Pipeline: Integrate onset detection with RUL prediction models
 """
 
-__all__: list[str] = []
+from src.onset.health_indicators import (
+    BearingHealthSeries,
+    compute_composite_hi,
+    get_all_bearing_ids,
+    load_all_bearings_health_series,
+    load_bearing_health_series,
+    smooth_health_indicator,
+)
+
+__all__: list[str] = [
+    "BearingHealthSeries",
+    "compute_composite_hi",
+    "get_all_bearing_ids",
+    "load_all_bearings_health_series",
+    "load_bearing_health_series",
+    "smooth_health_indicator",
+]
