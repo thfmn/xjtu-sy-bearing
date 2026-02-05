@@ -234,3 +234,13 @@
   - Verified disagreement scenario: confidence=0.103 when detectors significantly disagree
   - All 97 existing tests still passing
 
+2026-02-05 16:13:19 START: Add add_detector() and remove_detector() methods for flexibility (ONSET-7 fourth checkbox)
+2026-02-05 16:13:19 VERIFIED: Methods already implemented in EnsembleOnsetDetector (lines 758-793):
+  - add_detector(detector): adds new detector, validates BaseOnsetDetector, resets _fitted flag
+  - remove_detector(index): removes detector by index, raises ValueError if <2 remain
+  - Method chaining supported for add_detector
+  - Input validation: TypeError for non-BaseOnsetDetector, ValueError for minimum detector count
+  - All functionality verified via manual test - methods work correctly
+2026-02-05 16:14:05 DONE: Add add_detector() and remove_detector() methods for flexibility (ONSET-7 fourth checkbox)
+  - ONSET-7 ALL TASK CHECKBOXES NOW COMPLETE
+

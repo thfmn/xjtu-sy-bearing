@@ -185,7 +185,7 @@ Implement multiple onset detection algorithms to identify the point where bearin
   - `__init__(detectors: list[BaseOnsetDetector], voting='majority')`
   - Support voting strategies: `majority`, `unanimous`, `earliest`, `weighted`
 - [x] Implement confidence aggregation from individual detector confidences
-- [ ] Add `add_detector()` and `remove_detector()` methods for flexibility
+- [x] Add `add_detector()` and `remove_detector()` methods for flexibility
 
 **Acceptance**:
 - [ ] Ensemble combines at least 2 detector outputs
