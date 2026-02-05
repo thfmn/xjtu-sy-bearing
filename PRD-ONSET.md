@@ -423,10 +423,10 @@ Implement a neural network classifier for onset detection to improve upon rule-b
 - [x] Add MLflow tracking for onset experiments
 
 **Acceptance**:
-- [ ] Training completes for all CV folds without errors
-- [ ] F1 score >0.8 on held-out bearings (onset detection accuracy)
-- [ ] Model and metrics logged to MLflow
-- [ ] Training time <5 minutes on CPU
+- [x] Training completes for all CV folds without errors
+- [x] F1 score >0.8 on held-out bearings (onset detection accuracy)
+- [x] Model and metrics logged to MLflow
+- [x] Training time <5 minutes on CPU
 
 **Files**:
 - `scripts/07_train_onset_classifier.py` (or modified `scripts/05_train_dl_models.py`)

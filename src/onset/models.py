@@ -29,7 +29,7 @@ class OnsetClassifierConfig:
     """
 
     window_size: int = 10
-    n_features: int = N_FEATURES  # 4
+    n_features: int = N_FEATURES  # 8 (4 signed z-scores + 4 absolute z-scores)
     lstm_units: int = 32
     dense_units: int = 16
     dropout_rate: float = 0.3

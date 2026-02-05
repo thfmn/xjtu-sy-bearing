@@ -2,7 +2,7 @@
 
 Verifies:
 - Model compiles without errors
-- Input shape: (None, window_size, 4), output: (None, 1)
+- Input shape: (None, window_size, N_FEATURES), output: (None, 1)
 - Total parameters under 10K (lightweight)
 - Model supports predict_proba() equivalent via sigmoid output
 """
@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+
+from src.onset.dataset import N_FEATURES
 
 
 class TestModelCompilesWithoutErrors:
@@ -46,7 +48,7 @@ class TestModelCompilesWithoutErrors:
         compile_onset_classifier(model)
 
         # Create dummy data: 8 samples, window_size=10, 4 features
-        x = np.random.randn(8, 10, 4).astype(np.float32)
+        x = np.random.randn(8, 10, N_FEATURES).astype(np.float32)
         y = np.array([0, 1, 0, 1, 0, 1, 0, 1], dtype=np.int32)
 
         history = model.fit(x, y, epochs=1, verbose=0)
@@ -55,14 +57,14 @@ class TestModelCompilesWithoutErrors:
 
 
 class TestInputOutputShape:
-    """ONSET-15 Acceptance: Input shape: (None, window_size, 4), output: (None, 1)."""
+    """ONSET-15 Acceptance: Input shape: (None, window_size, N_FEATURES), output: (None, 1)."""
 
     def test_default_input_shape(self):
         from src.onset.models import build_onset_classifier
 
         model = build_onset_classifier()
         # input_shape includes batch dim as None
-        assert model.input_shape == (None, 10, 4)
+        assert model.input_shape == (None, 10, N_FEATURES)
 
     def test_default_output_shape(self):
         from src.onset.models import build_onset_classifier
@@ -75,21 +77,21 @@ class TestInputOutputShape:
 
         config = OnsetClassifierConfig(window_size=20)
         model = build_onset_classifier(config)
-        assert model.input_shape == (None, 20, 4)
+        assert model.input_shape == (None, 20, N_FEATURES)
         assert model.output_shape == (None, 1)
 
     def test_create_onset_classifier_shapes(self):
         from src.onset.models import create_onset_classifier
 
-        model = create_onset_classifier(input_dim=4, window_size=10)
-        assert model.input_shape == (None, 10, 4)
+        model = create_onset_classifier(input_dim=N_FEATURES, window_size=10)
+        assert model.input_shape == (None, 10, N_FEATURES)
         assert model.output_shape == (None, 1)
 
     def test_forward_pass_shapes(self):
         from src.onset.models import build_onset_classifier
 
         model = build_onset_classifier()
-        x = np.random.randn(5, 10, 4).astype(np.float32)
+        x = np.random.randn(5, 10, N_FEATURES).astype(np.float32)
         y = model.predict(x, verbose=0)
         assert y.shape == (5, 1)
 
@@ -120,12 +122,12 @@ class TestTotalParametersUnder10K:
 
         model = build_onset_classifier()
         total_params = model.count_params()
-        # LSTM(4->32): 4*32 + 32*32 + 32*4 = 128+1024+128 = 4,736 (with bias)
+        # LSTM(8->32): 4*(8+32+1)*32 = 5,248
         # Dense(32->16): 32*16+16 = 528
         # Dense(16->1): 16*1+1 = 17
-        # Total = 5,281
-        assert total_params == 5_281, (
-            f"Expected 5,281 params but got {total_params}; "
+        # Total = 5,793
+        assert total_params == 5_793, (
+            f"Expected 5,793 params but got {total_params}; "
             "architecture may have changed unintentionally"
         )
 
@@ -154,7 +156,7 @@ class TestPredictProba:
         from src.onset.models import build_onset_classifier, predict_proba
 
         model = build_onset_classifier()
-        x = np.random.randn(8, 10, 4).astype(np.float32)
+        x = np.random.randn(8, 10, N_FEATURES).astype(np.float32)
         proba = predict_proba(model, x, verbose=0)
         assert proba.shape == (8, 2)
 
@@ -162,7 +164,7 @@ class TestPredictProba:
         from src.onset.models import build_onset_classifier, predict_proba
 
         model = build_onset_classifier()
-        x = np.random.randn(10, 10, 4).astype(np.float32)
+        x = np.random.randn(10, 10, N_FEATURES).astype(np.float32)
         proba = predict_proba(model, x, verbose=0)
         row_sums = proba.sum(axis=1)
         np.testing.assert_allclose(row_sums, 1.0, atol=1e-6)
@@ -171,7 +173,7 @@ class TestPredictProba:
         from src.onset.models import build_onset_classifier, predict_proba
 
         model = build_onset_classifier()
-        x = np.random.randn(10, 10, 4).astype(np.float32)
+        x = np.random.randn(10, 10, N_FEATURES).astype(np.float32)
         proba = predict_proba(model, x, verbose=0)
         assert np.all(proba >= 0.0)
         assert np.all(proba <= 1.0)
@@ -181,7 +183,7 @@ class TestPredictProba:
         from src.onset.models import build_onset_classifier, predict_proba
 
         model = build_onset_classifier()
-        x = np.random.randn(5, 10, 4).astype(np.float32)
+        x = np.random.randn(5, 10, N_FEATURES).astype(np.float32)
         raw = model.predict(x, verbose=0).flatten()
         proba = predict_proba(model, x, verbose=0)
         np.testing.assert_allclose(proba[:, 1], raw, atol=1e-6)
@@ -190,7 +192,7 @@ class TestPredictProba:
         from src.onset.models import build_onset_classifier, predict_proba
 
         model = build_onset_classifier()
-        x = np.random.randn(5, 10, 4).astype(np.float32)
+        x = np.random.randn(5, 10, N_FEATURES).astype(np.float32)
         proba = predict_proba(model, x, verbose=0)
         np.testing.assert_allclose(proba[:, 0], 1.0 - proba[:, 1], atol=1e-6)
 
@@ -198,7 +200,7 @@ class TestPredictProba:
         from src.onset.models import build_onset_classifier, predict_proba
 
         model = build_onset_classifier()
-        x = np.random.randn(1, 10, 4).astype(np.float32)
+        x = np.random.randn(1, 10, N_FEATURES).astype(np.float32)
         proba = predict_proba(model, x, verbose=0)
         assert proba.shape == (1, 2)
         np.testing.assert_allclose(proba.sum(axis=1), 1.0, atol=1e-6)
@@ -219,7 +221,7 @@ class TestModelSaveAndLoad:
 
         loaded = keras.models.load_model(save_path)
 
-        x = np.random.randn(5, 10, 4).astype(np.float32)
+        x = np.random.randn(5, 10, N_FEATURES).astype(np.float32)
         np.testing.assert_allclose(
             model.predict(x, verbose=0),
             loaded.predict(x, verbose=0),
@@ -241,7 +243,7 @@ class TestModelSaveAndLoad:
         assert loaded.optimizer is not None
         assert loaded.loss is not None
 
-        x = np.random.randn(5, 10, 4).astype(np.float32)
+        x = np.random.randn(5, 10, N_FEATURES).astype(np.float32)
         np.testing.assert_allclose(
             model.predict(x, verbose=0),
             loaded.predict(x, verbose=0),
@@ -256,7 +258,7 @@ class TestModelSaveAndLoad:
         model = build_onset_classifier()
         compile_onset_classifier(model)
 
-        x_train = np.random.randn(16, 10, 4).astype(np.float32)
+        x_train = np.random.randn(16, 10, N_FEATURES).astype(np.float32)
         y_train = np.array([0, 1] * 8, dtype=np.int32)
         model.fit(x_train, y_train, epochs=3, verbose=0)
 
@@ -265,7 +267,7 @@ class TestModelSaveAndLoad:
 
         loaded = keras.models.load_model(save_path)
 
-        x_test = np.random.randn(8, 10, 4).astype(np.float32)
+        x_test = np.random.randn(8, 10, N_FEATURES).astype(np.float32)
         np.testing.assert_allclose(
             model.predict(x_test, verbose=0),
             loaded.predict(x_test, verbose=0),

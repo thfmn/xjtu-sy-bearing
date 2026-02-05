@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 
 from src.onset.dataset import (
+    N_FEATURES,
     OnsetDatasetResult,
     OnsetSplitResult,
     build_onset_tf_dataset,
@@ -94,7 +95,7 @@ class TestDatasetYieldsTuples:
         for windows, labels in tf_ds.take(1):
             # window_features: (batch, window_size, n_features)
             assert windows.shape[1] == window_size
-            assert windows.shape[2] == 4
+            assert windows.shape[2] == N_FEATURES
             assert windows.dtype.name == "float32"
 
     def test_binary_label_shape_and_dtype(
@@ -326,7 +327,7 @@ class TestWindowSizeConfigurable:
         result = create_onset_dataset(synthetic_df, onset_labels, window_size=1)
         # B1=20 + B2=15 + B3=25 = 60 total samples, window=1 -> 60 windows
         assert len(result.labels) == 60
-        assert result.windows.shape == (60, 1, 4)
+        assert result.windows.shape == (60, 1, N_FEATURES)
 
     def test_window_size_0_raises_value_error(self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]) -> None:
         with pytest.raises(ValueError, match="window_size must be >= 1"):

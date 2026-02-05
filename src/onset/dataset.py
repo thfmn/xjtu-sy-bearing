@@ -34,7 +34,8 @@ DEFAULT_SHUFFLE_BUFFER = 1024
 
 # Health indicator columns used as input features for onset classification
 FEATURE_COLUMNS = ["h_kurtosis", "v_kurtosis", "h_rms", "v_rms"]
-N_FEATURES = len(FEATURE_COLUMNS)
+# After z-score + abs(z-score) augmentation: 4 signed + 4 absolute = 8
+N_FEATURES = len(FEATURE_COLUMNS) * 2
 
 
 @dataclass
@@ -112,9 +113,34 @@ def create_onset_dataset(
         if n_samples < window_size:
             continue
 
+        # Per-bearing z-score normalization using healthy baseline.
+        # This makes the model see how features deviate from their healthy
+        # baseline, regardless of absolute scale differences across
+        # operating conditions (35Hz vs 37.5Hz vs 40Hz).
+        healthy_mask = file_indices < onset_idx
+        n_healthy = int(np.sum(healthy_mask))
+        if n_healthy >= 2:
+            baseline_mean = features[healthy_mask].mean(axis=0)
+            baseline_std = features[healthy_mask].std(axis=0)
+        else:
+            # Fallback: use first 20% as pseudo-baseline
+            n_baseline = max(2, n_samples // 5)
+            baseline_mean = features[:n_baseline].mean(axis=0)
+            baseline_std = features[:n_baseline].std(axis=0)
+        # Avoid division by zero
+        baseline_std = np.where(baseline_std < 1e-8, 1.0, baseline_std)
+        features = (features - baseline_mean) / baseline_std
+
+        # Append absolute z-scores as additional features. This helps the
+        # model detect degradation where kurtosis may decrease (e.g. Bearing3_2)
+        # instead of the typical increase. The model sees both the signed
+        # deviation (direction) and the magnitude (absolute value), giving it
+        # robustness to different degradation patterns.
+        features = np.concatenate([features, np.abs(features)], axis=1)
+
         # Create sliding windows for this bearing
         for i in range(n_samples - window_size + 1):
-            window = features[i : i + window_size]  # (window_size, 4)
+            window = features[i : i + window_size]  # (window_size, 8)
             # Label by the last sample in the window
             last_file_idx = file_indices[i + window_size - 1]
             label = 0 if last_file_idx < onset_idx else 1

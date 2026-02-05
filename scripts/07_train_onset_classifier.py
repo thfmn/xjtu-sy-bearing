@@ -123,7 +123,7 @@ def compute_fold_metrics(
     y_prob_list: list[np.ndarray] = []
     for x_batch, _ in val_ds:
         preds = model.predict(x_batch, verbose=0)
-        y_prob_list.append(preds.squeeze())
+        y_prob_list.append(preds.ravel())
     y_prob = np.concatenate(y_prob_list)
     y_pred = (y_prob >= 0.5).astype(int)
 

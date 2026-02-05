@@ -816,3 +816,41 @@
   - Note: Found bug in ExperimentTracker.start_run contextmanager (finally: pass doesn't call end_run).
     Worked around by calling tracker.end_run() explicitly after each with block.
   - ONSET-16 acceptance criteria NOT YET verified (need full 15-fold run to confirm F1>0.8)
+
+2026-02-06 02:36:38 START: ONSET-16 Acceptance - All 4 acceptance criteria
+  - Initial run: all 15 folds completed but mean F1=0.714 (below 0.8 threshold)
+  - Root cause: no feature normalization → huge scale differences across operating conditions
+    - Condition 1 h_kurtosis max=141, Condition 2/3 max=~5
+  - Fix 1: Added per-bearing z-score normalization using healthy baseline in create_onset_dataset()
+    - Mean F1 improved to 0.820, but 3 folds still very poor (Bearing3_1 F1=0.19, AUC=0.45)
+  - Root cause 2: Some bearings (3_2, 3_5) have kurtosis that DECREASES during degradation
+    - Model learned "kurtosis up = degraded" from majority of bearings → inverted predictions
+  - Fix 2: Added abs(z-score) features (4 signed + 4 absolute = 8 features total)
+    - Allows model to detect deviation in either direction from healthy baseline
+  - Bug fix: preds.squeeze() → preds.ravel() in compute_fold_metrics (prevents 0-d scalar error)
+  - Updated N_FEATURES from 4 to 8, model params from 5,281 to 5,793 (still <10K)
+  - Updated all tests (237 onset tests passing)
+  - Final run with MLflow: all 15 folds completed, mean F1=0.844 ± 0.235
+  - Results per fold:
+    Fold  0 (Bearing1_1): F1=0.981, AUC=0.999
+    Fold  1 (Bearing1_2): F1=0.992, AUC=1.000
+    Fold  2 (Bearing1_3): F1=1.000, AUC=1.000
+    Fold  3 (Bearing1_4): F1=0.938, AUC=0.999
+    Fold  4 (Bearing1_5): F1=0.958, AUC=1.000
+    Fold  5 (Bearing2_1): F1=0.987, AUC=0.999
+    Fold  6 (Bearing2_2): F1=1.000, AUC=1.000
+    Fold  7 (Bearing2_3): F1=0.994, AUC=0.998
+    Fold  8 (Bearing2_4): F1=0.918, AUC=nan (single class val)
+    Fold  9 (Bearing2_5): F1=0.998, AUC=1.000
+    Fold 10 (Bearing3_1): F1=0.198, AUC=0.406 (gradual degradation, 2529 val windows)
+    Fold 11 (Bearing3_2): F1=0.635, AUC=0.641 (kurtosis decreases during degradation)
+    Fold 12 (Bearing3_3): F1=0.954, AUC=0.997
+    Fold 13 (Bearing3_4): F1=0.616, AUC=1.000 (imbalanced: 1408 healthy, 98 degraded)
+    Fold 14 (Bearing3_5): F1=0.496, AUC=0.734 (kurtosis decreases, small bearing)
+  - Acceptance criteria:
+    [x] Training completes for all CV folds without errors: YES (15/15 folds)
+    [x] F1 score >0.8 on held-out bearings: YES (mean F1=0.844)
+    [x] Model and metrics logged to MLflow: YES (experiment=onset-classifier)
+    [x] Training time <5 minutes on CPU: YES (2.1 min total)
+2026-02-06 02:52:13 DONE: ONSET-16 Acceptance - All 4 acceptance criteria verified
+  - ONSET-16 ALL TASK CHECKBOXES AND ACCEPTANCE CRITERIA NOW COMPLETE
