@@ -455,3 +455,18 @@
     - RMS Threshold: 12/15 (80%)
     - Kurtosis CUSUM: 2/15 (13%)
     - RMS CUSUM: 3/15 (20%)
+
+2026-02-06 01:17:25 START: Create src/onset/visualization.py (ONSET-12 first checkbox)
+2026-02-06 01:20:48 DONE: Create src/onset/visualization.py (ONSET-12 first checkbox)
+  - Created src/onset/visualization.py with 3 plotting functions:
+    - plot_bearing_onset(bearing_id, features_df, onset_idx, save_path, threshold, figsize):
+      Single bearing kurtosis plot with onset line, healthy/degraded shading, optional threshold
+    - plot_onset_comparison(bearing_id, manual_idx, auto_idx, features_df, save_path, figsize):
+      Overlays manual (blue) and auto (red) onset lines, annotates diff
+    - plot_all_bearings_onset(features_df, onset_labels, output_dir, figsize):
+      5×3 grid (one column per condition, 5 rows per condition)
+  - Updated src/onset/__init__.py to export all 3 visualization functions
+  - Smoke tested: all functions render correctly with synthetic data
+  - 15-bearing 5×3 grid layout verified (PRD acceptance: "5x3 or 3x5")
+  - Save to file (DPI=150, bbox_inches='tight') verified working
+  - All 186 existing onset tests still passing
