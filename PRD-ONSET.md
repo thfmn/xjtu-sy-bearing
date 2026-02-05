@@ -191,7 +191,7 @@ Implement multiple onset detection algorithms to identify the point where bearin
 - [x] Ensemble combines at least 2 detector outputs
 - [x] `majority` voting requires >50% of detectors to agree on onset region
 - [x] `earliest` returns first detected onset across all detectors
-- [ ] Ensemble confidence is weighted average of individual confidences
+- [x] Ensemble confidence is weighted average of individual confidences
 - [ ] Handles case where detectors disagree significantly (return low confidence)
 
 **Files**:

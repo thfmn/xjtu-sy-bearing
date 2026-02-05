@@ -279,3 +279,14 @@
   - test_earliest_is_most_sensitive_strategy: verifies earliest is at least as sensitive as majority
   - test_earliest_preserves_earliest_detector_confidence: confidence from earliest detector, not highest
   - All 115 tests passing (was 108 before, +7 new tests)
+
+2026-02-05 16:26:48 START: ONSET-7 Acceptance - Ensemble confidence is weighted average of individual confidences
+2026-02-05 16:30:21 DONE: ONSET-7 Acceptance - Ensemble confidence is weighted average of individual confidences
+  - Added TestEnsembleWeightedAverageConfidence class to tests/onset/test_detectors.py (6 tests)
+  - test_weighted_average_formula_basic: verifies sum(c_i^2)/sum(c_i) formula with [0.9, 0.8, 0.7]
+  - test_higher_confidence_has_more_weight: proves high-confidence detectors influence result more
+  - test_uniform_confidences_give_that_value: verifies uniform confidences return that value
+  - test_zero_confidences_return_zero: verifies zero confidences return zero
+  - test_confidence_in_final_onset_result: end-to-end test verifying formula in real detection
+  - test_two_detectors_weighted_average: verifies formula with exactly 2 detectors
+  - All 121 tests passing (was 115 before, +6 new tests)

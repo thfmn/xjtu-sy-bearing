@@ -2387,3 +2387,236 @@ class TestEnsembleEarliestVoting:
         assert confidence == 0.65, (
             f"Confidence should be from earliest detector (0.65), not highest. Got {confidence}"
         )
+
+
+class TestEnsembleWeightedAverageConfidence:
+    """Test that ensemble confidence is weighted average of individual confidences.
+
+    ONSET-7 Acceptance: Ensemble confidence is weighted average of individual confidences.
+
+    The formula used is: weighted_avg = sum(c_i^2) / sum(c_i)
+    This is equivalent to Σ(c_i × w_i) where w_i = c_i / Σc_j.
+    Higher-confidence detectors have more influence on the final confidence.
+
+    The weighted average is then multiplied by a disagreement factor.
+    """
+
+    def test_weighted_average_formula_basic(self):
+        """Test the weighted average formula with known values.
+
+        With confidences [0.9, 0.8, 0.7]:
+        - sum(c_i^2) = 0.81 + 0.64 + 0.49 = 1.94
+        - sum(c_i) = 0.9 + 0.8 + 0.7 = 2.4
+        - weighted_avg = 1.94 / 2.4 ≈ 0.8083
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(3)]
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="majority",
+            tolerance=5,
+        )
+
+        # All detectors agree on onset within tolerance
+        mock_results = [
+            OnsetResult(onset_idx=50, onset_time=50.0, confidence=0.9, healthy_baseline={}),
+            OnsetResult(onset_idx=51, onset_time=51.0, confidence=0.8, healthy_baseline={}),
+            OnsetResult(onset_idx=52, onset_time=52.0, confidence=0.7, healthy_baseline={}),
+        ]
+
+        aggregated_conf, disagreement_factor = ensemble._aggregate_confidence(
+            mock_results, ensemble_onset_idx=51
+        )
+
+        # Expected: sum(c^2)/sum(c) = (0.81 + 0.64 + 0.49) / (0.9 + 0.8 + 0.7)
+        expected_weighted_avg = 1.94 / 2.4  # ≈ 0.8083
+
+        # Since all indices are within tolerance (spread=2 <= 5), disagreement_factor=1.0
+        assert abs(disagreement_factor - 1.0) < 1e-6, (
+            f"All agree within tolerance, disagreement_factor should be 1.0, "
+            f"got {disagreement_factor}"
+        )
+
+        # Aggregated confidence = weighted_avg * disagreement_factor
+        assert abs(aggregated_conf - expected_weighted_avg) < 0.01, (
+            f"Expected weighted avg ≈ {expected_weighted_avg:.4f}, "
+            f"got {aggregated_conf:.4f}"
+        )
+
+    def test_higher_confidence_has_more_weight(self):
+        """Test that higher confidence detectors influence the result more.
+
+        With one high-confidence detector (0.95) and two low (0.5, 0.5):
+        The weighted average should be closer to 0.95 than simple average.
+        Simple avg = (0.95 + 0.5 + 0.5) / 3 = 0.65
+        Weighted avg = (0.9025 + 0.25 + 0.25) / (0.95 + 0.5 + 0.5) = 1.4025 / 1.95 ≈ 0.719
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(3)]
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="majority",
+            tolerance=5,
+        )
+
+        mock_results = [
+            OnsetResult(onset_idx=50, onset_time=50.0, confidence=0.95, healthy_baseline={}),
+            OnsetResult(onset_idx=51, onset_time=51.0, confidence=0.5, healthy_baseline={}),
+            OnsetResult(onset_idx=52, onset_time=52.0, confidence=0.5, healthy_baseline={}),
+        ]
+
+        aggregated_conf, _ = ensemble._aggregate_confidence(mock_results, ensemble_onset_idx=51)
+
+        # Simple average would be 0.65
+        simple_avg = (0.95 + 0.5 + 0.5) / 3
+        # Weighted average should be higher (closer to the high-confidence detector)
+        expected_weighted = (0.9025 + 0.25 + 0.25) / (0.95 + 0.5 + 0.5)
+
+        assert aggregated_conf > simple_avg, (
+            f"Weighted avg ({aggregated_conf:.4f}) should be greater than "
+            f"simple avg ({simple_avg:.4f}) due to high-confidence detector"
+        )
+        assert abs(aggregated_conf - expected_weighted) < 0.01, (
+            f"Expected weighted avg ≈ {expected_weighted:.4f}, got {aggregated_conf:.4f}"
+        )
+
+    def test_uniform_confidences_give_that_value(self):
+        """When all confidences are equal, weighted avg equals that value.
+
+        With confidences [0.8, 0.8, 0.8]:
+        weighted_avg = (0.64 + 0.64 + 0.64) / (0.8 + 0.8 + 0.8) = 1.92 / 2.4 = 0.8
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(3)]
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="majority",
+            tolerance=5,
+        )
+
+        mock_results = [
+            OnsetResult(onset_idx=50, onset_time=50.0, confidence=0.8, healthy_baseline={}),
+            OnsetResult(onset_idx=51, onset_time=51.0, confidence=0.8, healthy_baseline={}),
+            OnsetResult(onset_idx=52, onset_time=52.0, confidence=0.8, healthy_baseline={}),
+        ]
+
+        aggregated_conf, disagreement_factor = ensemble._aggregate_confidence(
+            mock_results, ensemble_onset_idx=51
+        )
+
+        assert abs(disagreement_factor - 1.0) < 1e-6
+        assert abs(aggregated_conf - 0.8) < 1e-6, (
+            f"Uniform confidences of 0.8 should give weighted avg of 0.8, got {aggregated_conf}"
+        )
+
+    def test_zero_confidences_return_zero(self):
+        """When all confidences are zero, aggregated confidence is zero."""
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(3)]
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="majority",
+            tolerance=5,
+        )
+
+        mock_results = [
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+        ]
+
+        aggregated_conf, _ = ensemble._aggregate_confidence(mock_results, ensemble_onset_idx=None)
+
+        assert aggregated_conf == 0.0, (
+            f"Zero confidences should give zero aggregated confidence, got {aggregated_conf}"
+        )
+
+    def test_confidence_in_final_onset_result(self):
+        """Test that the final OnsetResult.confidence uses weighted average.
+
+        End-to-end test: create ensemble, run detection, verify confidence
+        reflects the weighted average formula.
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, EWMAOnsetDetector
+
+        np.random.seed(42)
+
+        # Create a clear onset signal
+        n_samples = 100
+        hi_series = np.zeros(n_samples)
+        hi_series[:50] = 0.1 + np.random.randn(50) * 0.02
+        hi_series[50:] = 0.5 + np.random.randn(50) * 0.02  # Strong shift
+
+        detector1 = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        detector2 = CUSUMOnsetDetector(drift=0.5, threshold=5.0)
+        detector3 = EWMAOnsetDetector(lambda_=0.2, L=3.0)
+
+        ensemble = EnsembleOnsetDetector(
+            detectors=[detector1, detector2, detector3],
+            voting="majority",
+            tolerance=5,
+        )
+
+        result = ensemble.fit_detect(hi_series, healthy_fraction=0.4)
+
+        # Get individual confidences from results
+        individual_results = result.healthy_baseline["individual_results"]
+        individual_confs = [ir["confidence"] for ir in individual_results]
+
+        # Compute expected weighted average manually
+        total_conf = sum(individual_confs)
+        if total_conf > 1e-10:
+            expected_weighted = sum(c * c for c in individual_confs) / total_conf
+        else:
+            expected_weighted = 0.0
+
+        # The final confidence should be based on weighted avg (possibly reduced by disagreement)
+        # Since we have a strong signal, all detectors should agree closely
+        # Check that confidence is in a reasonable range
+        assert 0.0 <= result.confidence <= 1.0, (
+            f"Confidence should be in [0, 1], got {result.confidence}"
+        )
+
+        # If disagreement_factor is in healthy_baseline, verify the math
+        if "disagreement_factor" in result.healthy_baseline:
+            disagreement = result.healthy_baseline["disagreement_factor"]
+            expected_final = expected_weighted * disagreement
+            assert abs(result.confidence - expected_final) < 0.05, (
+                f"Final confidence ({result.confidence:.4f}) should be "
+                f"weighted_avg ({expected_weighted:.4f}) × disagreement ({disagreement:.4f}) "
+                f"= {expected_final:.4f}"
+            )
+
+    def test_two_detectors_weighted_average(self):
+        """Test weighted average with exactly 2 detectors.
+
+        With confidences [0.6, 0.9]:
+        weighted_avg = (0.36 + 0.81) / (0.6 + 0.9) = 1.17 / 1.5 = 0.78
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(2)]
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="majority",
+            tolerance=5,
+        )
+
+        mock_results = [
+            OnsetResult(onset_idx=50, onset_time=50.0, confidence=0.6, healthy_baseline={}),
+            OnsetResult(onset_idx=51, onset_time=51.0, confidence=0.9, healthy_baseline={}),
+        ]
+
+        aggregated_conf, disagreement_factor = ensemble._aggregate_confidence(
+            mock_results, ensemble_onset_idx=50
+        )
+
+        expected = (0.36 + 0.81) / (0.6 + 0.9)  # = 0.78
+        assert abs(disagreement_factor - 1.0) < 1e-6  # Within tolerance
+        assert abs(aggregated_conf - expected) < 0.01, (
+            f"Expected weighted avg = {expected:.4f}, got {aggregated_conf:.4f}"
+        )
