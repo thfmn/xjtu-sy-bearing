@@ -540,3 +540,16 @@
   - Each subplot has title (bearing ID), tick labels (fontsize=7), and axis labels
   - Saved image is 760KB PNG at DPI=150 — readable at full resolution
 2026-02-06 01:37:26 DONE: ONSET-12 Acceptance - Grid plot fits 15 subplots in readable layout (5x3 or 3x5)
+
+2026-02-06 01:41:37 START: ONSET-12 Acceptance - Plots are publication-quality (labeled axes, legend, appropriate DPI)
+2026-02-06 01:43:24 DONE: ONSET-12 Acceptance - Plots are publication-quality (labeled axes, legend, appropriate DPI)
+  - Upgraded DPI from 150 to 300 (publication standard) across all 3 plot functions
+  - Added explicit font sizes via _FONT_SIZES dict for consistent, print-readable text
+  - Added ax.tick_params(labelsize=...) to plot_bearing_onset and plot_onset_comparison
+  - Added explicit fontsize= to all set_title(), set_xlabel(), set_ylabel() calls
+  - Added shared figure legend to plot_all_bearings_onset grid (Healthy/Degraded/Onset/Kurtosis)
+    using matplotlib Patch and Line2D handles, positioned at lower center with ncol=4
+  - Visually verified all 3 plot types: clear axes labels, legends, titles at 300 DPI
+  - File sizes at 300 DPI: single plots ~180KB, grid ~1093KB (good for print)
+  - All 186 onset tests still passing
+  - ONSET-12 ALL ACCEPTANCE CRITERIA NOW COMPLETE

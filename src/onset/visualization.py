@@ -16,12 +16,28 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 import numpy as np
 
 if TYPE_CHECKING:
     import pandas as pd
 
 from src.onset.health_indicators import BearingHealthSeries, load_bearing_health_series
+
+# Publication-quality defaults
+_DPI = 300
+_FONT_SIZES = {
+    "title": 11,
+    "axis_label": 10,
+    "legend": 8,
+    "tick": 8,
+    "grid_title": 9,
+    "grid_axis_label": 8,
+    "grid_tick": 7,
+    "grid_suptitle": 14,
+    "grid_cond_header": 10,
+}
 
 
 def plot_bearing_onset(
@@ -73,13 +89,14 @@ def plot_bearing_onset(
     if threshold is not None:
         ax.axhline(threshold, color="orange", linestyle=":", linewidth=1.0, label=f"Threshold={threshold:.2f}")
 
-    ax.set_xlabel("File Index")
-    ax.set_ylabel("Kurtosis (avg H+V)")
-    ax.set_title(f"{bearing_id} — {health.condition}")
-    ax.legend(loc="upper left", fontsize=8)
+    ax.set_xlabel("File Index", fontsize=_FONT_SIZES["axis_label"])
+    ax.set_ylabel("Kurtosis (avg H+V)", fontsize=_FONT_SIZES["axis_label"])
+    ax.set_title(f"{bearing_id} — {health.condition}", fontsize=_FONT_SIZES["title"])
+    ax.tick_params(labelsize=_FONT_SIZES["tick"])
+    ax.legend(loc="upper left", fontsize=_FONT_SIZES["legend"])
 
     if save_path is not None:
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        fig.savefig(save_path, dpi=_DPI, bbox_inches="tight")
         plt.close(fig)
 
     return fig
@@ -126,16 +143,20 @@ def plot_onset_comparison(
     if manual_idx is not None and auto_idx is not None:
         diff = auto_idx - manual_idx
         sign = "+" if diff >= 0 else ""
-        ax.set_title(f"{bearing_id} — Manual vs Auto (diff={sign}{diff})")
+        ax.set_title(
+            f"{bearing_id} — Manual vs Auto (diff={sign}{diff})",
+            fontsize=_FONT_SIZES["title"],
+        )
     else:
-        ax.set_title(f"{bearing_id} — Onset Comparison")
+        ax.set_title(f"{bearing_id} — Onset Comparison", fontsize=_FONT_SIZES["title"])
 
-    ax.set_xlabel("File Index")
-    ax.set_ylabel("Kurtosis (avg H+V)")
-    ax.legend(loc="upper left", fontsize=8)
+    ax.set_xlabel("File Index", fontsize=_FONT_SIZES["axis_label"])
+    ax.set_ylabel("Kurtosis (avg H+V)", fontsize=_FONT_SIZES["axis_label"])
+    ax.tick_params(labelsize=_FONT_SIZES["tick"])
+    ax.legend(loc="upper left", fontsize=_FONT_SIZES["legend"])
 
     if save_path is not None:
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        fig.savefig(save_path, dpi=_DPI, bbox_inches="tight")
         plt.close(fig)
 
     return fig
@@ -205,13 +226,13 @@ def plot_all_bearings_onset(
                 ax.axvspan(onset_idx, fi[-1], alpha=0.15, color="red")
                 ax.axvline(onset_idx, color="red", linestyle="--", linewidth=1.0)
 
-            ax.set_title(bid, fontsize=9, fontweight="bold")
-            ax.tick_params(labelsize=7)
+            ax.set_title(bid, fontsize=_FONT_SIZES["grid_title"], fontweight="bold")
+            ax.tick_params(labelsize=_FONT_SIZES["grid_tick"])
 
             if row_idx == n_rows - 1 or row_idx == len(bearings) - 1:
-                ax.set_xlabel("File Index", fontsize=8)
+                ax.set_xlabel("File Index", fontsize=_FONT_SIZES["grid_axis_label"])
             if col_idx == 0:
-                ax.set_ylabel("Kurtosis", fontsize=8)
+                ax.set_ylabel("Kurtosis", fontsize=_FONT_SIZES["grid_axis_label"])
 
         # Column header
         axes[0, col_idx].annotate(
@@ -219,16 +240,35 @@ def plot_all_bearings_onset(
             xy=(0.5, 1.15),
             xycoords="axes fraction",
             ha="center",
-            fontsize=10,
+            fontsize=_FONT_SIZES["grid_cond_header"],
             fontweight="bold",
         )
 
-    fig.suptitle("Onset Detection — All Bearings", fontsize=14, fontweight="bold")
+    fig.suptitle(
+        "Onset Detection — All Bearings",
+        fontsize=_FONT_SIZES["grid_suptitle"],
+        fontweight="bold",
+    )
+
+    # Shared legend for the grid (healthy/degraded/onset)
+    legend_elements = [
+        Patch(facecolor="green", alpha=0.15, edgecolor="green", label="Healthy"),
+        Patch(facecolor="red", alpha=0.15, edgecolor="red", label="Degraded"),
+        Line2D([0], [0], color="red", linestyle="--", linewidth=1.0, label="Onset"),
+        Line2D([0], [0], color="#2c3e50", linewidth=0.8, label="Kurtosis (avg)"),
+    ]
+    fig.legend(
+        handles=legend_elements,
+        loc="lower center",
+        ncol=4,
+        fontsize=_FONT_SIZES["legend"],
+        frameon=True,
+    )
 
     if output_dir is not None:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        fig.savefig(output_dir / "onset_grid.png", dpi=150, bbox_inches="tight")
+        fig.savefig(output_dir / "onset_grid.png", dpi=_DPI, bbox_inches="tight")
         plt.close(fig)
 
     return fig

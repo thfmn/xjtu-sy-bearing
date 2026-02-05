@@ -326,7 +326,7 @@ Create visualization tools for onset detection validation and analysis.
 - [x] Plots clearly show onset point with vertical line annotation
 - [x] Region shading makes healthy/degraded phases visually distinct
 - [x] Grid plot fits 15 subplots in readable layout (5x3 or 3x5)
-- [ ] Plots are publication-quality (labeled axes, legend, appropriate DPI)
+- [x] Plots are publication-quality (labeled axes, legend, appropriate DPI)
 
 **Files**:
 - `src/onset/visualization.py`
