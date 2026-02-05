@@ -13,7 +13,11 @@ Components:
 
 from src.onset.detectors import (
     BaseOnsetDetector,
+    CUSUMOnsetDetector,
+    EnsembleOnsetDetector,
+    EWMAOnsetDetector,
     OnsetResult,
+    ThresholdOnsetDetector,
 )
 from src.onset.health_indicators import (
     BearingHealthSeries,
@@ -34,5 +38,9 @@ __all__: list[str] = [
     "smooth_health_indicator",
     # Detectors
     "BaseOnsetDetector",
+    "CUSUMOnsetDetector",
+    "EnsembleOnsetDetector",
+    "EWMAOnsetDetector",
     "OnsetResult",
+    "ThresholdOnsetDetector",
 ]

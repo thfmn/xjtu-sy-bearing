@@ -9,7 +9,7 @@ Algorithms:
 - CUSUMOnsetDetector: Cumulative Sum change-point detection
 - EWMAOnsetDetector: Exponentially Weighted Moving Average change-point detection
 - BayesianOnsetDetector: Bayesian Online Change-Point Detection (planned)
-- EnsembleOnsetDetector: Combine multiple detectors with voting (planned)
+- EnsembleOnsetDetector: Combine multiple detectors with voting
 
 Reference:
 - Threshold/CUSUM: Standard Statistical Process Control methods
@@ -673,3 +673,349 @@ class EWMAOnsetDetector(BaseOnsetDetector):
             confidence=confidence,
             healthy_baseline=healthy_baseline,
         )
+
+
+class EnsembleOnsetDetector(BaseOnsetDetector):
+    """Ensemble detector combining multiple onset detectors with voting.
+
+    Combines predictions from multiple onset detectors using configurable
+    voting strategies. This provides more robust onset detection than any
+    single detector, especially when detectors have complementary strengths.
+
+    Voting Strategies:
+    - "majority": Onset at index where >50% of detectors agree (within tolerance).
+        Good balance between sensitivity and false positive reduction.
+    - "unanimous": Onset only where ALL detectors agree (within tolerance).
+        Most conservative, lowest false positive rate, may miss some onsets.
+    - "earliest": Onset at the earliest detected onset across all detectors.
+        Most sensitive, highest recall, but also highest false positive rate.
+    - "weighted": Onset determined by confidence-weighted voting.
+        Uses individual detector confidences to weight the votes.
+
+    Attributes:
+        detectors: List of onset detectors to combine.
+        voting: Voting strategy ("majority", "unanimous", "earliest", "weighted").
+        tolerance: Index tolerance for considering two onsets as "agreeing".
+        _fitted: Whether all detectors have been fitted.
+
+    Example:
+        >>> threshold_det = ThresholdOnsetDetector(threshold_sigma=3.0)
+        >>> cusum_det = CUSUMOnsetDetector(drift=0.5, threshold=5.0)
+        >>> ensemble = EnsembleOnsetDetector(
+        ...     detectors=[threshold_det, cusum_det],
+        ...     voting="majority"
+        ... )
+        >>> result = ensemble.fit_detect(hi_series)
+    """
+
+    VALID_VOTING_STRATEGIES = ("majority", "unanimous", "earliest", "weighted")
+
+    def __init__(
+        self,
+        detectors: list[BaseOnsetDetector],
+        voting: str = "majority",
+        tolerance: int = 5,
+    ) -> None:
+        """Initialize the ensemble onset detector.
+
+        Args:
+            detectors: List of onset detectors to combine. Must contain at
+                least 2 detectors. All detectors must inherit from BaseOnsetDetector.
+            voting: Voting strategy to use:
+                - "majority": >50% agreement required (default)
+                - "unanimous": All detectors must agree
+                - "earliest": Use first detected onset
+                - "weighted": Confidence-weighted voting
+            tolerance: Maximum index difference to consider two onsets as
+                "agreeing" for majority/unanimous voting. Default 5 samples.
+
+        Raises:
+            ValueError: If fewer than 2 detectors provided, invalid voting
+                strategy, or tolerance is negative.
+            TypeError: If any detector doesn't inherit from BaseOnsetDetector.
+        """
+        if len(detectors) < 2:
+            raise ValueError("Ensemble requires at least 2 detectors")
+        if voting not in self.VALID_VOTING_STRATEGIES:
+            raise ValueError(
+                f"voting must be one of {self.VALID_VOTING_STRATEGIES}, got '{voting}'"
+            )
+        if tolerance < 0:
+            raise ValueError("tolerance must be non-negative")
+
+        for i, det in enumerate(detectors):
+            if not isinstance(det, BaseOnsetDetector):
+                raise TypeError(
+                    f"Detector at index {i} must inherit from BaseOnsetDetector, "
+                    f"got {type(det).__name__}"
+                )
+
+        self.detectors = list(detectors)  # Copy to avoid external mutation
+        self.voting = voting
+        self.tolerance = tolerance
+        self._fitted = False
+
+    def add_detector(self, detector: BaseOnsetDetector) -> "EnsembleOnsetDetector":
+        """Add a detector to the ensemble.
+
+        Args:
+            detector: Onset detector to add. Must inherit from BaseOnsetDetector.
+
+        Returns:
+            Self, for method chaining.
+
+        Raises:
+            TypeError: If detector doesn't inherit from BaseOnsetDetector.
+        """
+        if not isinstance(detector, BaseOnsetDetector):
+            raise TypeError(
+                f"Detector must inherit from BaseOnsetDetector, got {type(detector).__name__}"
+            )
+        self.detectors.append(detector)
+        self._fitted = False  # New detector needs fitting
+        return self
+
+    def remove_detector(self, index: int) -> BaseOnsetDetector:
+        """Remove a detector from the ensemble by index.
+
+        Args:
+            index: Index of detector to remove.
+
+        Returns:
+            The removed detector.
+
+        Raises:
+            ValueError: If removal would leave fewer than 2 detectors.
+            IndexError: If index is out of range.
+        """
+        if len(self.detectors) <= 2:
+            raise ValueError("Cannot remove detector: ensemble requires at least 2")
+        return self.detectors.pop(index)
+
+    def fit(self, healthy_samples: np.ndarray) -> "EnsembleOnsetDetector":
+        """Fit all detectors on the healthy samples.
+
+        Args:
+            healthy_samples: Array of health indicator values from healthy period.
+
+        Returns:
+            Self, for method chaining.
+        """
+        healthy_samples = np.asarray(healthy_samples)
+        for detector in self.detectors:
+            detector.fit(healthy_samples)
+        self._fitted = True
+        return self
+
+    def detect(self, hi_series: np.ndarray) -> OnsetResult:
+        """Detect onset using ensemble voting.
+
+        Runs all detectors and combines their predictions using the specified
+        voting strategy.
+
+        Args:
+            hi_series: Full health indicator time series for a bearing.
+
+        Returns:
+            OnsetResult with:
+            - onset_idx: Ensemble onset index based on voting strategy, or None
+            - onset_time: Same as onset_idx
+            - confidence: Aggregated confidence from individual detectors
+            - healthy_baseline: Dict with ensemble info and individual results
+
+        Raises:
+            RuntimeError: If ensemble has not been fitted.
+        """
+        if not self._fitted:
+            raise RuntimeError("Ensemble not fitted. Call fit() first.")
+
+        hi_series = np.asarray(hi_series)
+
+        # Collect individual detector results
+        results: list[OnsetResult] = []
+        for detector in self.detectors:
+            result = detector.detect(hi_series)
+            results.append(result)
+
+        # Apply voting strategy
+        if self.voting == "earliest":
+            onset_idx, confidence = self._vote_earliest(results)
+        elif self.voting == "unanimous":
+            onset_idx, confidence = self._vote_unanimous(results)
+        elif self.voting == "weighted":
+            onset_idx, confidence = self._vote_weighted(results)
+        else:  # majority
+            onset_idx, confidence = self._vote_majority(results)
+
+        # Build healthy_baseline with ensemble info
+        healthy_baseline = {
+            "voting_strategy": self.voting,
+            "n_detectors": len(self.detectors),
+            "tolerance": self.tolerance,
+            "individual_results": [
+                {
+                    "detector": type(d).__name__,
+                    "onset_idx": r.onset_idx,
+                    "confidence": r.confidence,
+                }
+                for d, r in zip(self.detectors, results)
+            ],
+        }
+
+        if onset_idx is None:
+            return OnsetResult(
+                onset_idx=None,
+                onset_time=None,
+                confidence=confidence,
+                healthy_baseline=healthy_baseline,
+            )
+
+        return OnsetResult(
+            onset_idx=onset_idx,
+            onset_time=float(onset_idx),
+            confidence=confidence,
+            healthy_baseline=healthy_baseline,
+        )
+
+    def _vote_earliest(self, results: list[OnsetResult]) -> tuple[int | None, float]:
+        """Return the earliest detected onset across all detectors.
+
+        Args:
+            results: List of OnsetResult from each detector.
+
+        Returns:
+            Tuple of (onset_idx, confidence). Confidence is the confidence of
+            the detector that detected the earliest onset.
+        """
+        earliest_idx = None
+        earliest_confidence = 0.0
+
+        for result in results:
+            if result.onset_idx is not None:
+                if earliest_idx is None or result.onset_idx < earliest_idx:
+                    earliest_idx = result.onset_idx
+                    earliest_confidence = result.confidence
+
+        return earliest_idx, earliest_confidence
+
+    def _vote_unanimous(self, results: list[OnsetResult]) -> tuple[int | None, float]:
+        """Return onset only if ALL detectors agree within tolerance.
+
+        Args:
+            results: List of OnsetResult from each detector.
+
+        Returns:
+            Tuple of (onset_idx, confidence). Returns None if any detector
+            didn't detect onset or if disagreement exceeds tolerance.
+            Confidence is the minimum of all detector confidences.
+        """
+        onset_indices = [r.onset_idx for r in results if r.onset_idx is not None]
+
+        # All detectors must detect an onset
+        if len(onset_indices) != len(results):
+            return None, 0.0
+
+        # Check if all indices are within tolerance of each other
+        min_idx = min(onset_indices)
+        max_idx = max(onset_indices)
+
+        if max_idx - min_idx > self.tolerance:
+            # Disagreement too large - reduce confidence significantly
+            avg_conf = np.mean([r.confidence for r in results])
+            return None, avg_conf * 0.5  # Low confidence due to disagreement
+
+        # Unanimous agreement - return median index
+        median_idx = int(np.median(onset_indices))
+        min_confidence = min(r.confidence for r in results)
+
+        return median_idx, min_confidence
+
+    def _vote_majority(self, results: list[OnsetResult]) -> tuple[int | None, float]:
+        """Return onset if >50% of detectors agree within tolerance.
+
+        Uses a clustering approach: finds groups of detectors that agree
+        (within tolerance) and returns the consensus of the largest group.
+
+        Args:
+            results: List of OnsetResult from each detector.
+
+        Returns:
+            Tuple of (onset_idx, confidence). Returns None if no majority.
+            Confidence is the average of agreeing detectors' confidences.
+        """
+        onset_indices = [(i, r.onset_idx, r.confidence) for i, r in enumerate(results)]
+        valid_onsets = [(i, idx, conf) for i, idx, conf in onset_indices if idx is not None]
+
+        # If less than half detected anything, no majority
+        majority_threshold = len(results) / 2
+        if len(valid_onsets) < majority_threshold:
+            return None, 0.0
+
+        # Cluster valid onsets by tolerance
+        # Simple greedy clustering: assign each to nearest existing cluster
+        clusters: list[list[tuple[int, int, float]]] = []
+
+        for det_i, idx, conf in valid_onsets:
+            assigned = False
+            for cluster in clusters:
+                # Check if this onset is within tolerance of cluster center
+                cluster_indices = [c[1] for c in cluster]
+                cluster_center = int(np.median(cluster_indices))
+                if abs(idx - cluster_center) <= self.tolerance:
+                    cluster.append((det_i, idx, conf))
+                    assigned = True
+                    break
+            if not assigned:
+                clusters.append([(det_i, idx, conf)])
+
+        # Find largest cluster
+        largest_cluster = max(clusters, key=len)
+
+        # Check if largest cluster has majority
+        if len(largest_cluster) < majority_threshold:
+            # No majority - return low confidence
+            return None, np.mean([r.confidence for r in results]) * 0.3
+
+        # Return median of largest cluster
+        cluster_indices = [c[1] for c in largest_cluster]
+        cluster_confs = [c[2] for c in largest_cluster]
+        median_idx = int(np.median(cluster_indices))
+        avg_confidence = float(np.mean(cluster_confs))
+
+        return median_idx, avg_confidence
+
+    def _vote_weighted(self, results: list[OnsetResult]) -> tuple[int | None, float]:
+        """Return confidence-weighted average onset index.
+
+        Detectors with higher confidence have more influence on the final
+        onset index. If total weight is too low, returns None.
+
+        Args:
+            results: List of OnsetResult from each detector.
+
+        Returns:
+            Tuple of (onset_idx, confidence). Confidence is the normalized
+            sum of weights for detectors that detected onset.
+        """
+        valid_onsets = [(r.onset_idx, r.confidence) for r in results if r.onset_idx is not None]
+
+        if not valid_onsets:
+            return None, 0.0
+
+        total_confidence = sum(r.confidence for r in results)
+        if total_confidence < 1e-10:
+            return None, 0.0
+
+        # Weighted average of onset indices
+        weighted_sum = sum(idx * conf for idx, conf in valid_onsets)
+        valid_weight = sum(conf for _, conf in valid_onsets)
+
+        if valid_weight < 1e-10:
+            return None, 0.0
+
+        weighted_idx = int(round(weighted_sum / valid_weight))
+
+        # Confidence: proportion of total confidence from detecting detectors
+        confidence = valid_weight / total_confidence
+
+        return weighted_idx, confidence
