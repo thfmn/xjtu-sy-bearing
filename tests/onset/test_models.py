@@ -202,3 +202,88 @@ class TestPredictProba:
         proba = predict_proba(model, x, verbose=0)
         assert proba.shape == (1, 2)
         np.testing.assert_allclose(proba.sum(axis=1), 1.0, atol=1e-6)
+
+
+class TestModelSaveAndLoad:
+    """ONSET-17: Test model can be saved and loaded (.keras format)."""
+
+    def test_save_and_load_uncompiled(self, tmp_path):
+        """Uncompiled model can be saved and loaded with identical predictions."""
+        import keras
+
+        from src.onset.models import build_onset_classifier
+
+        model = build_onset_classifier()
+        save_path = str(tmp_path / "onset_uncompiled.keras")
+        model.save(save_path)
+
+        loaded = keras.models.load_model(save_path)
+
+        x = np.random.randn(5, 10, 4).astype(np.float32)
+        np.testing.assert_allclose(
+            model.predict(x, verbose=0),
+            loaded.predict(x, verbose=0),
+        )
+
+    def test_save_and_load_compiled(self, tmp_path):
+        """Compiled model retains optimizer and loss after save/load."""
+        import keras
+
+        from src.onset.models import build_onset_classifier, compile_onset_classifier
+
+        model = build_onset_classifier()
+        compile_onset_classifier(model)
+        save_path = str(tmp_path / "onset_compiled.keras")
+        model.save(save_path)
+
+        loaded = keras.models.load_model(save_path)
+
+        assert loaded.optimizer is not None
+        assert loaded.loss is not None
+
+        x = np.random.randn(5, 10, 4).astype(np.float32)
+        np.testing.assert_allclose(
+            model.predict(x, verbose=0),
+            loaded.predict(x, verbose=0),
+        )
+
+    def test_save_and_load_after_training(self, tmp_path):
+        """Model trained for a few steps produces identical predictions after reload."""
+        import keras
+
+        from src.onset.models import build_onset_classifier, compile_onset_classifier
+
+        model = build_onset_classifier()
+        compile_onset_classifier(model)
+
+        x_train = np.random.randn(16, 10, 4).astype(np.float32)
+        y_train = np.array([0, 1] * 8, dtype=np.int32)
+        model.fit(x_train, y_train, epochs=3, verbose=0)
+
+        save_path = str(tmp_path / "onset_trained.keras")
+        model.save(save_path)
+
+        loaded = keras.models.load_model(save_path)
+
+        x_test = np.random.randn(8, 10, 4).astype(np.float32)
+        np.testing.assert_allclose(
+            model.predict(x_test, verbose=0),
+            loaded.predict(x_test, verbose=0),
+        )
+
+    def test_loaded_model_architecture_matches(self, tmp_path):
+        """Loaded model has same input/output shapes and param count."""
+        import keras
+
+        from src.onset.models import build_onset_classifier
+
+        model = build_onset_classifier()
+        save_path = str(tmp_path / "onset_arch.keras")
+        model.save(save_path)
+
+        loaded = keras.models.load_model(save_path)
+
+        assert loaded.input_shape == model.input_shape
+        assert loaded.output_shape == model.output_shape
+        assert loaded.count_params() == model.count_params()
+        assert loaded.name == model.name

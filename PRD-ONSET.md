@@ -439,19 +439,19 @@ Implement a neural network classifier for onset detection to improve upon rule-b
 **Priority**: P0 | **Effort**: 1h | **Phase**: 3. Model Development
 
 **Tasks**:
-- [ ] Create `tests/onset/test_models.py`
-- [ ] Test `create_onset_classifier()` produces correct output shape
-- [ ] Test model forward pass with dummy data
-- [ ] Test model can be saved and loaded (`.keras` format)
-- [ ] Create `tests/onset/test_dataset.py`
-- [ ] Test `create_onset_dataset()` produces balanced batches
-- [ ] Test no data leakage in train/val split
+- [x] Create `tests/onset/test_models.py`
+- [x] Test `create_onset_classifier()` produces correct output shape
+- [x] Test model forward pass with dummy data
+- [x] Test model can be saved and loaded (`.keras` format)
+- [x] Create `tests/onset/test_dataset.py`
+- [x] Test `create_onset_dataset()` produces balanced batches
+- [x] Test no data leakage in train/val split
 
 **Acceptance**:
-- [ ] All tests pass with `pytest tests/onset/`
-- [ ] Model tests verify input/output shapes
-- [ ] Dataset tests verify class distribution and split integrity
-- [ ] Coverage >90% for `models.py` and `dataset.py`
+- [x] All tests pass with `pytest tests/onset/`
+- [x] Model tests verify input/output shapes
+- [x] Dataset tests verify class distribution and split integrity
+- [x] Coverage >90% for `models.py` and `dataset.py`
 
 **Files**:
 - `tests/onset/test_models.py`

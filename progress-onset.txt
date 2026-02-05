@@ -766,3 +766,27 @@
   - Updated src/onset/__init__.py to export predict_proba
   - All 20 tests passing (was 14 before, +6 new predict_proba tests)
   - ONSET-15 ALL ACCEPTANCE CRITERIA NOW COMPLETE
+
+2026-02-06 02:29:44 START: ONSET-17 - Onset Model Unit Tests (all checkboxes)
+  - test_models.py already exists (20 tests from ONSET-15)
+  - test_dataset.py already exists (27 tests from ONSET-14)
+  - Most checkboxes already satisfied; need to add: test model save/load (.keras format)
+2026-02-06 02:31:26 DONE: ONSET-17 - Onset Model Unit Tests - ALL checkboxes and acceptance criteria complete
+  - Added TestModelSaveAndLoad class to tests/onset/test_models.py (4 tests):
+    - test_save_and_load_uncompiled: save/load uncompiled model, verify identical predictions
+    - test_save_and_load_compiled: save/load compiled model, verify optimizer/loss retained
+    - test_save_and_load_after_training: save/load after 3 epochs training, verify identical predictions
+    - test_loaded_model_architecture_matches: verify input/output shapes, param count, name match
+  - Previously existing tests from ONSET-15 (20 tests) cover all other checkboxes:
+    - TestModelCompilesWithoutErrors (4 tests): compile, factory, training step
+    - TestInputOutputShape (6 tests): input/output shapes, forward pass, custom configs
+    - TestTotalParametersUnder10K (4 tests): param count, regression test
+    - TestPredictProba (6 tests): sklearn-compatible predict_proba interface
+  - Previously existing tests from ONSET-14 (27 tests) cover dataset checkboxes:
+    - TestDatasetYieldsTuples (6 tests): tf.data yields (features, label) tuples
+    - TestClassWeightsComputed (7 tests): balanced class weights formula
+    - TestNoDataLeakage (7 tests): bearing-level train/val split integrity
+    - TestWindowSizeConfigurable (7 tests): configurable window parameter
+  - Total: 24 model tests + 27 dataset tests = 51 tests, ALL passing
+  - Coverage: models.py 100%, dataset.py 91% — both exceed >90% requirement
+  - ONSET-17 ALL TASK CHECKBOXES AND ACCEPTANCE CRITERIA COMPLETE
