@@ -434,3 +434,24 @@
   - Coverage: 100% for labels.py (62/62 stmts, 0 missed) — exceeds >90% requirement
   - Covers: valid YAML, missing bearing, malformed YAML (missing key, missing required field)
 2026-02-06 01:08:16 DONE: ONSET-11 - Onset Label Unit Tests - ALL checkboxes and acceptance criteria complete
+
+2026-02-06 01:10:34 START: ONSET-10 - Create scripts/06_generate_onset_labels.py (Automated Onset Labeling Script - all 7 checkboxes)
+2026-02-06 01:15:53 DONE: ONSET-10 - Automated Onset Labeling Script - ALL checkboxes and acceptance criteria complete
+  - Created scripts/06_generate_onset_labels.py with multi-indicator strategy:
+    - ThresholdOnsetDetector (σ=2.0, min_consecutive=5) on kurtosis avg and RMS avg
+    - CUSUMOnsetDetector (drift=0.5, threshold=5.0) on kurtosis avg and RMS avg
+    - Selection priority: kurtosis_threshold > rms_threshold > kurtosis_cusum > rms_cusum
+    - Baseline guard: if kurtosis triggers within healthy fraction (20%), prefer RMS
+    - healthy_fraction=0.2 (matches manual labeling methodology's 20% baseline)
+  - Script runs on all 15 bearings without errors
+  - Output CSV saved to outputs/onset/onset_labels_auto.csv with required columns
+  - Agreement with manual labels: 13/15 = 86.7% (>80% requirement met)
+    - Matching bearings (13): 1_1(+3), 1_2(+0), 1_3(+1), 1_4(+0), 1_5(-2),
+      2_1(+0), 2_2(+0), 2_3(+4), 2_4(+0), 2_5(+0), 3_3(+0), 3_4(-1), 3_5(+0)
+    - Disagreements (2): Bearing3_1 (auto=1097 vs manual=748, composite-based),
+      Bearing3_2 (auto=1231 vs manual=169, low-confidence manual label, within onset_range)
+  - Individual detector performance:
+    - Kurtosis Threshold: 8/15 (53%)
+    - RMS Threshold: 12/15 (80%)
+    - Kurtosis CUSUM: 2/15 (13%)
+    - RMS CUSUM: 3/15 (20%)

@@ -259,19 +259,19 @@ Generate onset labels for all bearings to enable supervised training and evaluat
 **Priority**: P1 | **Effort**: 2h | **Phase**: 2. Label Generation
 
 **Tasks**:
-- [ ] Create `scripts/06_generate_onset_labels.py`
-- [ ] Load features from `outputs/features/features_v2.csv`
-- [ ] Apply `ThresholdOnsetDetector` to each bearing's kurtosis series
-- [ ] Apply `CUSUMOnsetDetector` as secondary detector
-- [ ] Compare automated labels to manual labels (if available)
-- [ ] Output comparison report: agreement rate, disagreement cases
-- [ ] Save automated labels to `outputs/onset/onset_labels_auto.csv`
+- [x] Create `scripts/06_generate_onset_labels.py`
+- [x] Load features from `outputs/features/features_v2.csv`
+- [x] Apply `ThresholdOnsetDetector` to each bearing's kurtosis series
+- [x] Apply `CUSUMOnsetDetector` as secondary detector
+- [x] Compare automated labels to manual labels (if available)
+- [x] Output comparison report: agreement rate, disagreement cases
+- [x] Save automated labels to `outputs/onset/onset_labels_auto.csv`
 
 **Acceptance**:
-- [ ] Script runs on all 15 bearings without errors
-- [ ] Output CSV has columns: `bearing_id`, `condition`, `onset_file_idx`, `detector_method`
-- [ ] Agreement with manual labels >80% (within 5 samples tolerance)
-- [ ] Disagreements logged for manual review
+- [x] Script runs on all 15 bearings without errors
+- [x] Output CSV has columns: `bearing_id`, `condition`, `onset_file_idx`, `detector_method`
+- [x] Agreement with manual labels >80% (within 5 samples tolerance)
+- [x] Disagreements logged for manual review
 
 **Files**:
 - `scripts/06_generate_onset_labels.py`
