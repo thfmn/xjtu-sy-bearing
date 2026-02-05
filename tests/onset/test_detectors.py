@@ -1365,3 +1365,363 @@ class TestCUSUMDriftSensitivityTradeoff:
                        results[i + 1]["false_positive"] == results[i]["false_positive"], (
                     f"Higher drift should not have more false positives"
                 )
+
+
+# ============================================================================
+# ONSET-4 Acceptance: Works for both sudden and gradual degradation patterns
+# ============================================================================
+
+
+class TestCUSUMSuddenAndGradualPatterns:
+    """Test that CUSUM works for both sudden and gradual degradation patterns.
+
+    This validates the ONSET-4 acceptance criterion:
+    "Works for both sudden and gradual degradation patterns"
+
+    Bearing degradation in real-world scenarios can manifest as:
+    1. Sudden failures: Abrupt increase in kurtosis/RMS (e.g., spalling)
+    2. Gradual wear: Slow, progressive increase over time (e.g., surface fatigue)
+
+    The CUSUM detector should handle both cases effectively.
+    """
+
+    @pytest.fixture
+    def sudden_degradation_series(self) -> tuple[np.ndarray, int]:
+        """Create series simulating sudden degradation (step change).
+
+        Models a bearing that experiences sudden spalling or defect,
+        causing an immediate jump in health indicator values.
+        """
+        np.random.seed(42)
+        n_samples = 120
+        sudden_onset = 60  # Degradation starts abruptly here
+
+        hi_series = np.zeros(n_samples)
+        std = 0.03
+
+        # Healthy phase: stable low values
+        hi_series[:sudden_onset] = 0.1 + np.random.randn(sudden_onset) * std
+
+        # Sudden degradation: immediate step to higher level
+        hi_series[sudden_onset:] = 0.4 + np.random.randn(n_samples - sudden_onset) * std
+
+        return hi_series, sudden_onset
+
+    @pytest.fixture
+    def gradual_degradation_series(self) -> tuple[np.ndarray, int]:
+        """Create series simulating gradual degradation (slow ramp).
+
+        Models a bearing with progressive surface fatigue,
+        causing a slow but steady increase in health indicator.
+        """
+        np.random.seed(42)
+        n_samples = 150
+        gradual_start = 50  # Degradation starts ramping here
+        ramp_duration = 60  # Takes 60 samples to fully degrade
+
+        hi_series = np.zeros(n_samples)
+        std = 0.025
+
+        # Healthy phase
+        hi_series[:gradual_start] = 0.1 + np.random.randn(gradual_start) * std
+
+        # Gradual ramp: linear increase from 0.1 to 0.35 over ramp_duration
+        for i in range(ramp_duration):
+            idx = gradual_start + i
+            progress = i / ramp_duration
+            hi_series[idx] = 0.1 + progress * 0.25 + np.random.randn() * std
+
+        # Fully degraded phase
+        remaining = n_samples - gradual_start - ramp_duration
+        hi_series[gradual_start + ramp_duration:] = (
+            0.35 + np.random.randn(remaining) * std
+        )
+
+        return hi_series, gradual_start
+
+    def test_cusum_detects_sudden_degradation(
+        self, sudden_degradation_series: tuple[np.ndarray, int]
+    ):
+        """Test that CUSUM detects sudden step-change degradation."""
+        hi_series, true_onset = sudden_degradation_series
+        TOLERANCE = 10  # Allow 10 samples tolerance
+
+        detector = CUSUMOnsetDetector(drift=0.5, threshold=5.0)
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        assert result.onset_idx is not None, "CUSUM should detect sudden degradation"
+        assert abs(result.onset_idx - true_onset) <= TOLERANCE, (
+            f"Sudden onset detection error {abs(result.onset_idx - true_onset)} "
+            f"exceeds tolerance {TOLERANCE}. Detected: {result.onset_idx}, True: {true_onset}"
+        )
+
+    def test_cusum_detects_gradual_degradation(
+        self, gradual_degradation_series: tuple[np.ndarray, int]
+    ):
+        """Test that CUSUM detects gradual ramp degradation."""
+        hi_series, true_onset = gradual_degradation_series
+        # Gradual onset is inherently ambiguous - allow detection anywhere in ramp region
+        EARLY_BOUND = true_onset - 5
+        LATE_BOUND = true_onset + 40  # Within ramp duration
+
+        detector = CUSUMOnsetDetector(drift=0.5, threshold=5.0)
+        result = detector.fit_detect(hi_series, healthy_fraction=0.25)
+
+        assert result.onset_idx is not None, "CUSUM should detect gradual degradation"
+        assert result.onset_idx >= EARLY_BOUND, (
+            f"Onset detected too early: {result.onset_idx} < {EARLY_BOUND}"
+        )
+        assert result.onset_idx <= LATE_BOUND, (
+            f"Onset detected too late: {result.onset_idx} > {LATE_BOUND}"
+        )
+
+    def test_cusum_works_on_both_patterns_same_params(
+        self,
+        sudden_degradation_series: tuple[np.ndarray, int],
+        gradual_degradation_series: tuple[np.ndarray, int],
+    ):
+        """Test that same CUSUM parameters work for both sudden and gradual patterns.
+
+        This is important for practical use: we need parameters that work
+        across different bearing failure modes without retuning.
+        """
+        hi_sudden, onset_sudden = sudden_degradation_series
+        hi_gradual, onset_gradual = gradual_degradation_series
+
+        # Use same detector configuration for both
+        detector = CUSUMOnsetDetector(drift=0.5, threshold=5.0)
+
+        # Test sudden
+        result_sudden = detector.fit_detect(hi_sudden, healthy_fraction=0.3)
+        assert result_sudden.onset_idx is not None, (
+            "Same params should work for sudden degradation"
+        )
+
+        # Test gradual
+        result_gradual = detector.fit_detect(hi_gradual, healthy_fraction=0.25)
+        assert result_gradual.onset_idx is not None, (
+            "Same params should work for gradual degradation"
+        )
+
+        # Both detections should be valid
+        assert isinstance(result_sudden, OnsetResult)
+        assert isinstance(result_gradual, OnsetResult)
+        assert result_sudden.confidence > 0
+        assert result_gradual.confidence > 0
+
+    @pytest.mark.parametrize(
+        "drift,threshold",
+        [
+            (0.25, 4.0),  # More sensitive
+            (0.5, 5.0),   # Default/balanced
+            (0.75, 6.0),  # Less sensitive
+        ],
+    )
+    def test_cusum_parameter_robustness_both_patterns(
+        self, drift: float, threshold: float
+    ):
+        """Test various CUSUM parameters work for both degradation patterns.
+
+        Validates that the algorithm is robust across parameter choices,
+        not just a single hand-tuned configuration.
+        """
+        np.random.seed(42)
+
+        # Sudden pattern
+        hi_sudden = np.zeros(100)
+        hi_sudden[:50] = 0.1 + np.random.randn(50) * 0.02
+        hi_sudden[50:] = 0.35 + np.random.randn(50) * 0.02
+
+        # Gradual pattern
+        np.random.seed(43)
+        hi_gradual = np.zeros(100)
+        hi_gradual[:40] = 0.1 + np.random.randn(40) * 0.02
+        for i in range(30):
+            hi_gradual[40 + i] = 0.1 + (i / 30) * 0.25 + np.random.randn() * 0.02
+        hi_gradual[70:] = 0.35 + np.random.randn(30) * 0.02
+
+        detector = CUSUMOnsetDetector(drift=drift, threshold=threshold)
+
+        # Both should be detected (signals are strong enough)
+        result_sudden = detector.fit_detect(hi_sudden, healthy_fraction=0.3)
+        result_gradual = detector.fit_detect(hi_gradual, healthy_fraction=0.3)
+
+        assert result_sudden.onset_idx is not None, (
+            f"Sudden not detected with drift={drift}, threshold={threshold}"
+        )
+        assert result_gradual.onset_idx is not None, (
+            f"Gradual not detected with drift={drift}, threshold={threshold}"
+        )
+
+
+class TestEWMASuddenAndGradualPatterns:
+    """Test that EWMA detector works for both sudden and gradual degradation.
+
+    EWMA is the optional variant from ONSET-4 and should also handle
+    both degradation patterns effectively.
+    """
+
+    def test_ewma_detects_sudden_degradation(self):
+        """Test EWMA handles sudden step-change degradation."""
+        from src.onset.detectors import EWMAOnsetDetector
+
+        np.random.seed(42)
+        n_samples = 100
+        sudden_onset = 50
+
+        hi_series = np.zeros(n_samples)
+        hi_series[:sudden_onset] = 0.1 + np.random.randn(sudden_onset) * 0.02
+        hi_series[sudden_onset:] = 0.4 + np.random.randn(n_samples - sudden_onset) * 0.02
+
+        detector = EWMAOnsetDetector(lambda_=0.2, L=3.0)
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        assert result.onset_idx is not None, "EWMA should detect sudden degradation"
+        assert abs(result.onset_idx - sudden_onset) <= 15, (
+            f"EWMA onset error {abs(result.onset_idx - sudden_onset)} too large"
+        )
+
+    def test_ewma_detects_gradual_degradation(self):
+        """Test EWMA handles gradual ramp degradation."""
+        from src.onset.detectors import EWMAOnsetDetector
+
+        np.random.seed(42)
+        n_samples = 120
+        gradual_start = 40
+
+        hi_series = np.zeros(n_samples)
+        hi_series[:gradual_start] = 0.1 + np.random.randn(gradual_start) * 0.02
+
+        for i in range(40):
+            hi_series[gradual_start + i] = 0.1 + (i / 40) * 0.25 + np.random.randn() * 0.02
+
+        hi_series[gradual_start + 40:] = 0.35 + np.random.randn(n_samples - gradual_start - 40) * 0.02
+
+        detector = EWMAOnsetDetector(lambda_=0.2, L=3.0)
+        result = detector.fit_detect(hi_series, healthy_fraction=0.25)
+
+        assert result.onset_idx is not None, "EWMA should detect gradual degradation"
+        # Should detect somewhere in or near the ramp region
+        assert result.onset_idx >= gradual_start - 5
+        assert result.onset_idx <= gradual_start + 50
+
+    def test_ewma_returns_onset_result_dataclass(self):
+        """Test EWMA returns same OnsetResult dataclass as other detectors."""
+        from src.onset.detectors import EWMAOnsetDetector
+
+        np.random.seed(42)
+        hi_series = np.zeros(80)
+        hi_series[:40] = 0.1 + np.random.randn(40) * 0.02
+        hi_series[40:] = 0.5 + np.random.randn(40) * 0.02
+
+        detector = EWMAOnsetDetector(lambda_=0.2, L=3.0)
+        result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+        # Verify it's the same dataclass with same fields
+        assert isinstance(result, OnsetResult)
+        assert hasattr(result, "onset_idx")
+        assert hasattr(result, "onset_time")
+        assert hasattr(result, "confidence")
+        assert hasattr(result, "healthy_baseline")
+
+        # onset_time should match onset_idx (unit time steps)
+        if result.onset_idx is not None:
+            assert result.onset_time == float(result.onset_idx)
+
+
+class TestOnsetResultConsistency:
+    """Test that all detectors return the same OnsetResult dataclass structure.
+
+    This validates the ONSET-4 acceptance criterion:
+    "Returns same OnsetResult dataclass as threshold detector"
+    """
+
+    def test_all_detectors_return_onset_result(self):
+        """Test that all detector types return OnsetResult dataclass."""
+        from src.onset.detectors import EWMAOnsetDetector
+
+        np.random.seed(42)
+        hi_series = np.zeros(100)
+        hi_series[:50] = 0.1 + np.random.randn(50) * 0.02
+        hi_series[50:] = 0.5 + np.random.randn(50) * 0.02
+
+        detectors = [
+            ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3),
+            CUSUMOnsetDetector(drift=0.5, threshold=5.0),
+            EWMAOnsetDetector(lambda_=0.2, L=3.0),
+        ]
+
+        for detector in detectors:
+            result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+            assert isinstance(result, OnsetResult), (
+                f"{detector.__class__.__name__} should return OnsetResult"
+            )
+
+    def test_onset_result_fields_consistent_across_detectors(self):
+        """Test all detectors populate OnsetResult fields consistently."""
+        from src.onset.detectors import EWMAOnsetDetector
+
+        np.random.seed(42)
+        hi_series = np.zeros(100)
+        hi_series[:50] = 0.1 + np.random.randn(50) * 0.02
+        hi_series[50:] = 0.5 + np.random.randn(50) * 0.02
+
+        detectors = [
+            ("Threshold", ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)),
+            ("CUSUM", CUSUMOnsetDetector(drift=0.5, threshold=5.0)),
+            ("EWMA", EWMAOnsetDetector(lambda_=0.2, L=3.0)),
+        ]
+
+        for name, detector in detectors:
+            result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+            # All should detect onset (strong signal)
+            assert result.onset_idx is not None, f"{name} should detect onset"
+
+            # onset_idx and onset_time should be consistent
+            assert isinstance(result.onset_idx, int), f"{name} onset_idx should be int"
+            assert result.onset_time == float(result.onset_idx), (
+                f"{name} onset_time should equal float(onset_idx)"
+            )
+
+            # Confidence should be in valid range
+            assert 0.0 <= result.confidence <= 1.0, (
+                f"{name} confidence should be in [0, 1]"
+            )
+
+            # healthy_baseline should contain common fields
+            assert "mean" in result.healthy_baseline, (
+                f"{name} should have 'mean' in healthy_baseline"
+            )
+            assert "std" in result.healthy_baseline, (
+                f"{name} should have 'std' in healthy_baseline"
+            )
+            assert "n_samples" in result.healthy_baseline, (
+                f"{name} should have 'n_samples' in healthy_baseline"
+            )
+
+    def test_no_onset_result_consistent_across_detectors(self):
+        """Test all detectors return consistent result when no onset detected."""
+        from src.onset.detectors import EWMAOnsetDetector
+
+        np.random.seed(42)
+        # Healthy-only series (no onset)
+        hi_series = 0.1 + np.random.randn(100) * 0.02
+
+        detectors = [
+            ("Threshold", ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)),
+            ("CUSUM", CUSUMOnsetDetector(drift=0.5, threshold=5.0)),
+            ("EWMA", EWMAOnsetDetector(lambda_=0.2, L=3.0)),
+        ]
+
+        for name, detector in detectors:
+            result = detector.fit_detect(hi_series, healthy_fraction=0.3)
+
+            # All should return no onset
+            assert result.onset_idx is None, f"{name} should return None onset_idx"
+            assert result.onset_time is None, f"{name} should return None onset_time"
+            assert result.confidence == 0.0, f"{name} should return 0.0 confidence"
+            assert isinstance(result.healthy_baseline, dict), (
+                f"{name} should return dict healthy_baseline"
+            )
