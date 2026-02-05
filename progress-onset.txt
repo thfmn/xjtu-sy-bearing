@@ -573,3 +573,11 @@
     - Automated labeling (multi-indicator) achieves 86.7% agreement with manual
   - Note: Bayesian detector (ONSET-5) not yet implemented; compared Threshold/CUSUM/EWMA instead
   - ONSET-13 ALL ACCEPTANCE CRITERIA NOW COMPLETE
+
+2026-02-06 01:53:10 START: Create src/onset/dataset.py (ONSET-14 first checkbox)
+2026-02-06 01:54:21 DONE: Create src/onset/dataset.py (ONSET-14 first checkbox)
+  - Created src/onset/dataset.py with module docstring, imports, and constants
+  - FEATURE_COLUMNS = ["h_kurtosis", "v_kurtosis", "h_rms", "v_rms"] (4 health indicator features)
+  - TYPE_CHECKING imports for pd, tf, OnsetLabelEntry (lazy to avoid heavy TF import at module level)
+  - Module imports cleanly: verified with `import src.onset.dataset`
+  - Functions to be implemented in subsequent checkboxes: create_onset_dataset, build_onset_tf_dataset, compute_class_weights, split_by_bearing

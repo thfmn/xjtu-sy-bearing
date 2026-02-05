@@ -367,7 +367,7 @@ Implement a neural network classifier for onset detection to improve upon rule-b
 **Priority**: P1 | **Effort**: 2h | **Phase**: 3. Model Development
 
 **Tasks**:
-- [ ] Create `src/onset/dataset.py`
+- [x] Create `src/onset/dataset.py`
 - [ ] Implement `create_onset_dataset(features_df, onset_labels, window_size=10)`:
   - Create sliding window sequences of health indicators
   - Label each window as 0 (healthy) or 1 (contains onset or post-onset)
