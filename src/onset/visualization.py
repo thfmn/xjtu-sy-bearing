@@ -63,11 +63,11 @@ def plot_bearing_onset(
 
     # Shade healthy vs degraded regions
     if onset_idx is not None:
-        ax.axvspan(file_indices[0], onset_idx, alpha=0.10, color="green", label="Healthy")
-        ax.axvspan(onset_idx, file_indices[-1], alpha=0.10, color="red", label="Degraded")
+        ax.axvspan(file_indices[0], onset_idx, alpha=0.15, color="green", label="Healthy")
+        ax.axvspan(onset_idx, file_indices[-1], alpha=0.15, color="red", label="Degraded")
         ax.axvline(onset_idx, color="red", linestyle="--", linewidth=1.5, label=f"Onset (idx={onset_idx})")
     else:
-        ax.axvspan(file_indices[0], file_indices[-1], alpha=0.10, color="green", label="Healthy (no onset)")
+        ax.axvspan(file_indices[0], file_indices[-1], alpha=0.15, color="green", label="Healthy (no onset)")
 
     # Optional threshold line
     if threshold is not None:
@@ -201,8 +201,8 @@ def plot_all_bearings_onset(
             ax.plot(fi, kurtosis_avg, linewidth=0.8, color="#2c3e50")
 
             if onset_idx is not None:
-                ax.axvspan(fi[0], onset_idx, alpha=0.10, color="green")
-                ax.axvspan(onset_idx, fi[-1], alpha=0.10, color="red")
+                ax.axvspan(fi[0], onset_idx, alpha=0.15, color="green")
+                ax.axvspan(onset_idx, fi[-1], alpha=0.15, color="red")
                 ax.axvline(onset_idx, color="red", linestyle="--", linewidth=1.0)
 
             ax.set_title(bid, fontsize=9, fontweight="bold")
