@@ -248,3 +248,179 @@ class ThresholdOnsetDetector(BaseOnsetDetector):
             confidence=confidence,
             healthy_baseline=healthy_baseline,
         )
+
+
+class CUSUMOnsetDetector(BaseOnsetDetector):
+    """CUSUM (Cumulative Sum) change-point detector for onset detection.
+
+    Implements the tabular CUSUM algorithm for detecting mean shifts in time series.
+    CUSUM accumulates deviations from a target mean, making it sensitive to small
+    but persistent shifts - ideal for detecting gradual bearing degradation.
+
+    The algorithm maintains upper and lower cumulative sums:
+    - S_high(t) = max(0, S_high(t-1) + (x_t - μ - k))  # Detects increase
+    - S_low(t)  = max(0, S_low(t-1) + (μ - k - x_t))   # Detects decrease
+
+    Onset is detected when S_high exceeds threshold h (for degradation, we focus
+    on increasing trends in health indicators like kurtosis).
+
+    Attributes:
+        drift: Allowable drift (k) in units of standard deviation. Controls
+            sensitivity: smaller k detects smaller shifts but increases false alarms.
+        threshold: Decision threshold (h) in units of standard deviation.
+            Onset triggered when cumulative sum exceeds h * std.
+        _target_mean: Fitted target mean from healthy samples.
+        _std: Fitted standard deviation from healthy samples.
+        _n_samples: Number of samples used for baseline fitting.
+
+    Reference:
+        Page, E.S. (1954). "Continuous Inspection Schemes".
+        Montgomery, D.C. (2009). "Statistical Quality Control", 6th ed.
+    """
+
+    def __init__(
+        self,
+        drift: float = 0.5,
+        threshold: float = 5.0,
+    ) -> None:
+        """Initialize the CUSUM onset detector.
+
+        Args:
+            drift: Allowable drift parameter (k) in std units. Controls the
+                reference value shift from target mean. Typical range: 0.25-1.0.
+                Default 0.5 is a common choice for detecting 1-sigma shifts.
+            threshold: Decision threshold (h) in std units. Onset detected when
+                cumulative sum exceeds threshold * std. Typical range: 4-6.
+                Default 5.0 provides reasonable ARL (Average Run Length) properties.
+
+        Raises:
+            ValueError: If drift or threshold is not positive.
+        """
+        if drift <= 0:
+            raise ValueError("drift must be positive")
+        if threshold <= 0:
+            raise ValueError("threshold must be positive")
+
+        self.drift = drift
+        self.threshold = threshold
+        self._target_mean: float | None = None
+        self._std: float | None = None
+        self._n_samples: int = 0
+
+    def fit(self, healthy_samples: np.ndarray) -> "CUSUMOnsetDetector":
+        """Learn target mean and standard deviation from healthy samples.
+
+        Args:
+            healthy_samples: Array of health indicator values from healthy period.
+                Should be at least 3 samples for meaningful statistics.
+
+        Returns:
+            Self, for method chaining.
+
+        Raises:
+            ValueError: If healthy_samples has fewer than 2 valid samples.
+        """
+        healthy_samples = np.asarray(healthy_samples)
+        if healthy_samples.size < 2:
+            raise ValueError("Need at least 2 samples to compute baseline statistics")
+
+        # Filter out NaN values for robust estimation
+        valid_samples = healthy_samples[~np.isnan(healthy_samples)]
+        if valid_samples.size < 2:
+            raise ValueError("Need at least 2 non-NaN samples for baseline")
+
+        self._target_mean = float(np.mean(valid_samples))
+        self._std = float(np.std(valid_samples, ddof=1))  # Sample std
+        self._n_samples = int(valid_samples.size)
+
+        # Handle zero or near-zero std (constant signal)
+        if self._std < 1e-10:
+            self._std = 1e-10
+
+        return self
+
+    def detect(self, hi_series: np.ndarray) -> OnsetResult:
+        """Detect onset point using CUSUM algorithm.
+
+        Computes upper and lower CUSUM statistics and returns the first index
+        where either exceeds the threshold. For bearing degradation (increasing
+        health indicators), we primarily look for upward shifts via S_high.
+
+        Args:
+            hi_series: Full health indicator time series for a bearing.
+
+        Returns:
+            OnsetResult with:
+            - onset_idx: First index where CUSUM exceeds threshold, or None
+            - onset_time: Same as onset_idx (assuming unit time steps)
+            - confidence: Normalized CUSUM value at onset (how far it exceeded)
+            - healthy_baseline: Dict with target_mean, std, n_samples, drift, threshold
+
+        Raises:
+            RuntimeError: If detector has not been fitted.
+        """
+        if self._target_mean is None or self._std is None:
+            raise RuntimeError("Detector not fitted. Call fit() first.")
+
+        hi_series = np.asarray(hi_series)
+        n = len(hi_series)
+
+        # CUSUM parameters in original units
+        k = self.drift * self._std  # Reference value (allowable slack)
+        h = self.threshold * self._std  # Decision threshold
+
+        # Initialize CUSUM statistics
+        s_high = 0.0  # Upper CUSUM (detects increase)
+        s_low = 0.0   # Lower CUSUM (detects decrease)
+
+        onset_idx = None
+        max_cusum = 0.0
+
+        for i in range(n):
+            x = hi_series[i]
+
+            # Skip NaN values (don't update CUSUM)
+            if np.isnan(x):
+                continue
+
+            # Update CUSUM statistics
+            s_high = max(0.0, s_high + (x - self._target_mean - k))
+            s_low = max(0.0, s_low + (self._target_mean - k - x))
+
+            # Track maximum for confidence calculation
+            current_max = max(s_high, s_low)
+            if current_max > max_cusum:
+                max_cusum = current_max
+
+            # Check for onset (upward shift is primary for degradation)
+            if onset_idx is None and s_high > h:
+                onset_idx = i
+
+        # Build result
+        healthy_baseline = {
+            "mean": self._target_mean,
+            "std": self._std,
+            "n_samples": self._n_samples,
+            "drift": self.drift,
+            "threshold": self.threshold,
+            "decision_threshold_h": h,
+        }
+
+        if onset_idx is None:
+            return OnsetResult(
+                onset_idx=None,
+                onset_time=None,
+                confidence=0.0,
+                healthy_baseline=healthy_baseline,
+            )
+
+        # Confidence: how far CUSUM exceeded threshold, normalized to [0, 1]
+        # Use the max CUSUM value reached, normalized by threshold
+        confidence = min(1.0, max_cusum / (2 * h)) if h > 0 else 1.0
+
+        return OnsetResult(
+            onset_idx=onset_idx,
+            onset_time=float(onset_idx),
+            confidence=confidence,
+            healthy_baseline=healthy_baseline,
+        )
