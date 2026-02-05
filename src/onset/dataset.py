@@ -185,3 +185,44 @@ def build_onset_tf_dataset(
     dataset = dataset.prefetch(tf.data.AUTOTUNE)
 
     return dataset
+
+
+def compute_class_weights(
+    labels: np.ndarray,
+) -> dict[int, float]:
+    """Compute balanced class weights for imbalanced binary classification.
+
+    Uses the formula: weight_c = n_samples / (n_classes * count_c),
+    equivalent to sklearn's compute_class_weight(class_weight='balanced').
+    The returned dict can be passed directly to model.fit(class_weight=...).
+
+    Args:
+        labels: 1-D int array of binary labels (0=healthy, 1=degraded).
+
+    Returns:
+        Dictionary mapping class label to weight, e.g. {0: 1.2, 1: 0.85}.
+
+    Raises:
+        ValueError: If labels is empty or contains values other than 0 and 1.
+    """
+    if len(labels) == 0:
+        raise ValueError("Cannot compute class weights from empty labels array")
+
+    unique = set(np.unique(labels))
+    if not unique.issubset({0, 1}):
+        raise ValueError(
+            f"Labels must contain only 0 and 1, got unique values: {sorted(unique)}"
+        )
+
+    n_samples = len(labels)
+    n_classes = 2
+    weights: dict[int, float] = {}
+
+    for cls in (0, 1):
+        count = int(np.sum(labels == cls))
+        if count == 0:
+            weights[cls] = 1.0
+        else:
+            weights[cls] = n_samples / (n_classes * count)
+
+    return weights

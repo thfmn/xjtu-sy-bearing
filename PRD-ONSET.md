@@ -372,7 +372,7 @@ Implement a neural network classifier for onset detection to improve upon rule-b
   - Create sliding window sequences of health indicators
   - Label each window as 0 (healthy) or 1 (contains onset or post-onset)
 - [x] Implement TensorFlow Dataset generator for onset classification
-- [ ] Add class balancing via oversampling minority class (onset samples are rare)
+- [x] Add class balancing via oversampling minority class (onset samples are rare)
 - [ ] Support train/val split respecting bearing boundaries (no leakage)
 
 **Acceptance**:

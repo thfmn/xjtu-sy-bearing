@@ -27,6 +27,7 @@ from src.onset.health_indicators import (
     load_bearing_health_series,
     smooth_health_indicator,
 )
+from src.onset.dataset import compute_class_weights
 from src.onset.labels import (
     OnsetLabelEntry,
     add_onset_column,
@@ -54,6 +55,8 @@ __all__: list[str] = [
     "EWMAOnsetDetector",
     "OnsetResult",
     "ThresholdOnsetDetector",
+    # Dataset
+    "compute_class_weights",
     # Labels
     "OnsetLabelEntry",
     "add_onset_column",
