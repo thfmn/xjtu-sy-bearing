@@ -1636,7 +1636,7 @@ class TestOnsetResultConsistency:
     "Returns same OnsetResult dataclass as threshold detector"
     """
 
-    def test_all_detectors_return_onset_result(self):
+    def test_all_detectors_return_onset_result(self):  # noqa: D102
         """Test that all detector types return OnsetResult dataclass."""
         from src.onset.detectors import EWMAOnsetDetector
 
@@ -1725,3 +1725,146 @@ class TestOnsetResultConsistency:
             assert isinstance(result.healthy_baseline, dict), (
                 f"{name} should return dict healthy_baseline"
             )
+
+
+# ============================================================================
+# ONSET-7 Acceptance: EnsembleOnsetDetector Tests
+# ============================================================================
+
+
+class TestEnsembleOnsetDetector:
+    """Test EnsembleOnsetDetector acceptance criteria for ONSET-7.
+
+    Acceptance criteria:
+    - Ensemble combines at least 2 detector outputs
+    - 'majority' voting requires >50% of detectors to agree on onset region
+    - 'earliest' returns first detected onset across all detectors
+    - Ensemble confidence is weighted average of individual confidences
+    - Handles case where detectors disagree significantly (return low confidence)
+    """
+
+    @pytest.fixture
+    def onset_series(self) -> tuple[np.ndarray, int]:
+        """Create synthetic series with known onset at index 50."""
+        np.random.seed(42)
+        n_samples = 100
+        onset_idx = 50
+
+        hi_series = np.zeros(n_samples)
+        hi_series[:onset_idx] = 0.1 + np.random.randn(onset_idx) * 0.02
+        hi_series[onset_idx:] = 0.4 + np.random.randn(n_samples - onset_idx) * 0.02
+
+        return hi_series, onset_idx
+
+    @pytest.fixture
+    def healthy_series(self) -> np.ndarray:
+        """Create healthy-only series with no onset."""
+        np.random.seed(42)
+        return 0.1 + np.random.randn(100) * 0.02
+
+    def test_ensemble_requires_minimum_2_detectors(self):
+        """Test that ensemble raises error with fewer than 2 detectors."""
+        from src.onset.detectors import EnsembleOnsetDetector
+
+        with pytest.raises(ValueError, match="at least 2 detectors"):
+            EnsembleOnsetDetector(detectors=[ThresholdOnsetDetector()])
+
+        with pytest.raises(ValueError, match="at least 2 detectors"):
+            EnsembleOnsetDetector(detectors=[])
+
+    def test_ensemble_combines_2_detector_outputs(
+        self, onset_series: tuple[np.ndarray, int]
+    ):
+        """Test that ensemble combines at least 2 detector outputs.
+
+        ONSET-7 Acceptance: Ensemble combines at least 2 detector outputs
+        """
+        from src.onset.detectors import EnsembleOnsetDetector
+
+        hi_series, true_onset = onset_series
+
+        # Create ensemble with exactly 2 detectors
+        detector1 = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        detector2 = CUSUMOnsetDetector(drift=0.5, threshold=5.0)
+
+        ensemble = EnsembleOnsetDetector(
+            detectors=[detector1, detector2],
+            voting="majority",
+        )
+        result = ensemble.fit_detect(hi_series, healthy_fraction=0.3)
+
+        # Verify ensemble returns a valid result
+        assert isinstance(result, OnsetResult)
+        assert result.onset_idx is not None, "Ensemble should detect onset"
+
+        # Verify individual_results contains 2 entries
+        assert "individual_results" in result.healthy_baseline
+        individual_results = result.healthy_baseline["individual_results"]
+        assert len(individual_results) == 2, (
+            f"Expected 2 individual results, got {len(individual_results)}"
+        )
+
+        # Verify both detectors contributed
+        detector_names = [r["detector"] for r in individual_results]
+        assert "ThresholdOnsetDetector" in detector_names
+        assert "CUSUMOnsetDetector" in detector_names
+
+    def test_ensemble_combines_3_detector_outputs(
+        self, onset_series: tuple[np.ndarray, int]
+    ):
+        """Test that ensemble works with 3 detectors."""
+        from src.onset.detectors import EnsembleOnsetDetector, EWMAOnsetDetector
+
+        hi_series, true_onset = onset_series
+
+        # Create ensemble with 3 detectors
+        detector1 = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        detector2 = CUSUMOnsetDetector(drift=0.5, threshold=5.0)
+        detector3 = EWMAOnsetDetector(lambda_=0.2, L=3.0)
+
+        ensemble = EnsembleOnsetDetector(
+            detectors=[detector1, detector2, detector3],
+            voting="majority",
+        )
+        result = ensemble.fit_detect(hi_series, healthy_fraction=0.3)
+
+        # Verify ensemble combines all 3
+        individual_results = result.healthy_baseline["individual_results"]
+        assert len(individual_results) == 3, "Should have 3 individual results"
+
+        # All detectors should detect onset for this clear signal
+        for i, ir in enumerate(individual_results):
+            assert ir["onset_idx"] is not None, (
+                f"Detector {ir['detector']} should detect onset"
+            )
+
+    def test_ensemble_n_detectors_matches_individual_results(
+        self, onset_series: tuple[np.ndarray, int]
+    ):
+        """Test that n_detectors in healthy_baseline matches actual count."""
+        from src.onset.detectors import EnsembleOnsetDetector, EWMAOnsetDetector
+
+        hi_series, _ = onset_series
+
+        # Test with 2 detectors
+        ensemble2 = EnsembleOnsetDetector(
+            detectors=[
+                ThresholdOnsetDetector(),
+                CUSUMOnsetDetector(),
+            ],
+            voting="majority",
+        )
+        result2 = ensemble2.fit_detect(hi_series, healthy_fraction=0.3)
+        assert result2.healthy_baseline["n_detectors"] == 2
+
+        # Test with 3 detectors
+        ensemble3 = EnsembleOnsetDetector(
+            detectors=[
+                ThresholdOnsetDetector(),
+                CUSUMOnsetDetector(),
+                EWMAOnsetDetector(),
+            ],
+            voting="majority",
+        )
+        result3 = ensemble3.fit_detect(hi_series, healthy_fraction=0.3)
+        assert result3.healthy_baseline["n_detectors"] == 3

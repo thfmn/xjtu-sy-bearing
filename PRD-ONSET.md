@@ -188,7 +188,7 @@ Implement multiple onset detection algorithms to identify the point where bearin
 - [x] Add `add_detector()` and `remove_detector()` methods for flexibility
 
 **Acceptance**:
-- [ ] Ensemble combines at least 2 detector outputs
+- [x] Ensemble combines at least 2 detector outputs
 - [ ] `majority` voting requires >50% of detectors to agree on onset region
 - [ ] `earliest` returns first detected onset across all detectors
 - [ ] Ensemble confidence is weighted average of individual confidences

@@ -244,3 +244,12 @@
 2026-02-05 16:14:05 DONE: Add add_detector() and remove_detector() methods for flexibility (ONSET-7 fourth checkbox)
   - ONSET-7 ALL TASK CHECKBOXES NOW COMPLETE
 
+2026-02-05 16:14:35 START: ONSET-7 Acceptance - Ensemble combines at least 2 detector outputs
+2026-02-05 16:17:25 DONE: ONSET-7 Acceptance - Ensemble combines at least 2 detector outputs
+  - Added TestEnsembleOnsetDetector class to tests/onset/test_detectors.py (4 tests)
+  - test_ensemble_requires_minimum_2_detectors: validates ValueError raised for <2 detectors
+  - test_ensemble_combines_2_detector_outputs: verifies 2 detectors produce valid combined result
+  - test_ensemble_combines_3_detector_outputs: verifies 3 detectors work together
+  - test_ensemble_n_detectors_matches_individual_results: validates n_detectors field accuracy
+  - All 101 tests passing (was 97 before, +4 ensemble tests)
+
