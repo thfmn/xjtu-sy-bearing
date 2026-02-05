@@ -470,3 +470,18 @@
   - 15-bearing 5×3 grid layout verified (PRD acceptance: "5x3 or 3x5")
   - Save to file (DPI=150, bbox_inches='tight') verified working
   - All 186 existing onset tests still passing
+
+2026-02-06 01:22:00 START: Implement plot_bearing_onset (ONSET-12 second checkbox)
+2026-02-06 01:22:00 VERIFIED: plot_bearing_onset already fully implemented in src/onset/visualization.py (lines 27-85):
+  - Signature: plot_bearing_onset(bearing_id, features_df, onset_idx, save_path=None, threshold=None, figsize=(10,4))
+  - Plots kurtosis avg time series (line 62: ax.plot with kurtosis_avg)
+  - Green shading for healthy region (line 66: axvspan green)
+  - Red shading for degraded region (line 67: axvspan red)
+  - Vertical dashed onset line (line 68: axvline red dashed)
+  - Horizontal threshold line when provided (lines 73-74: axhline orange dotted)
+  - Labeled axes, legend, title with condition (lines 76-79)
+  - Save to file at DPI=150 (lines 81-83)
+  - Handles no-onset case (lines 70: full green shading)
+  - Smoke tested in prior session (progress line 469)
+  - All PRD spec requirements met
+2026-02-06 01:22:00 DONE: Implement plot_bearing_onset (ONSET-12 second checkbox)

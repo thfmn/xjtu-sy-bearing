@@ -313,7 +313,7 @@ Create visualization tools for onset detection validation and analysis.
 
 **Tasks**:
 - [x] Create `src/onset/visualization.py`
-- [ ] Implement `plot_bearing_onset(bearing_id, features_df, onset_idx, save_path=None)`:
+- [x] Implement `plot_bearing_onset(bearing_id, features_df, onset_idx, save_path=None)`:
   - Plot kurtosis time series with onset point marked
   - Show healthy region (green) vs degraded region (red) shading
   - Add threshold line if threshold-based detection used
