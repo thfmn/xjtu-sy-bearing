@@ -244,7 +244,7 @@ Generate onset labels for all bearings to enable supervised training and evaluat
   - Add binary `is_degraded` column to features dataframe
 
 **Acceptance**:
-- [ ] Loader correctly parses YAML with all 15 bearings
+- [x] Loader correctly parses YAML with all 15 bearings
 - [ ] Binary labels are consistent with file ordering
 - [ ] `add_onset_column()` produces correct label distribution per bearing
 - [ ] Handles missing bearings gracefully (warning + skip)

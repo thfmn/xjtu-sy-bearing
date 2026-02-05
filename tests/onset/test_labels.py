@@ -1,0 +1,366 @@
+"""Tests for onset label loading and management (ONSET-11).
+
+Tests cover:
+- ONSET-9 Acceptance: Loader correctly parses YAML with all 15 bearings
+- ONSET-9 Acceptance: Binary labels are consistent with file ordering
+- ONSET-9 Acceptance: add_onset_column produces correct label distribution per bearing
+- ONSET-9 Acceptance: Handles missing bearings gracefully (warning + skip)
+"""
+
+import warnings
+from pathlib import Path
+
+import pandas as pd
+import pytest
+
+from src.onset.labels import (
+    DEFAULT_ONSET_LABELS_PATH,
+    OnsetLabelEntry,
+    add_onset_column,
+    get_onset_label,
+    load_onset_labels,
+)
+
+
+class TestLoadOnsetLabels:
+    """Tests for load_onset_labels function."""
+
+    def test_loads_all_15_bearings(self) -> None:
+        """ONSET-9 Acceptance: Loader correctly parses YAML with all 15 bearings."""
+        labels = load_onset_labels()
+
+        # Must have exactly 15 bearings
+        assert len(labels) == 15, f"Expected 15 bearings, got {len(labels)}"
+
+        # Verify all expected bearing IDs are present
+        expected_bearing_ids = [
+            "Bearing1_1",
+            "Bearing1_2",
+            "Bearing1_3",
+            "Bearing1_4",
+            "Bearing1_5",
+            "Bearing2_1",
+            "Bearing2_2",
+            "Bearing2_3",
+            "Bearing2_4",
+            "Bearing2_5",
+            "Bearing3_1",
+            "Bearing3_2",
+            "Bearing3_3",
+            "Bearing3_4",
+            "Bearing3_5",
+        ]
+        for bearing_id in expected_bearing_ids:
+            assert bearing_id in labels, f"Missing bearing: {bearing_id}"
+
+    def test_returns_onset_label_entry_dataclass(self) -> None:
+        """Each entry should be an OnsetLabelEntry dataclass."""
+        labels = load_onset_labels()
+
+        for bearing_id, entry in labels.items():
+            assert isinstance(entry, OnsetLabelEntry), f"{bearing_id} is not OnsetLabelEntry"
+            # Verify all required fields are populated
+            assert entry.bearing_id == bearing_id
+            assert entry.condition in ["35Hz12kN", "37.5Hz11kN", "40Hz10kN"]
+            assert isinstance(entry.onset_file_idx, int)
+            assert entry.onset_file_idx >= 0
+            assert entry.confidence in ["high", "medium", "low"]
+            assert entry.detection_method in ["kurtosis", "rms", "composite"]
+
+    def test_parses_onset_range_correctly(self) -> None:
+        """onset_range should be parsed as tuple or None."""
+        labels = load_onset_labels()
+
+        # Bearing2_4 has onset_range: [7, 15]
+        assert labels["Bearing2_4"].onset_range is not None
+        assert labels["Bearing2_4"].onset_range == (7, 15)
+
+        # Bearing1_1 has no onset_range
+        assert labels["Bearing1_1"].onset_range is None
+
+    def test_parses_notes_correctly(self) -> None:
+        """Notes field should be populated or empty string."""
+        labels = load_onset_labels()
+
+        for bearing_id, entry in labels.items():
+            assert isinstance(entry.notes, str), f"{bearing_id}.notes is not string"
+
+    def test_condition_distribution(self) -> None:
+        """Verify correct number of bearings per condition."""
+        labels = load_onset_labels()
+
+        condition_counts = {}
+        for entry in labels.values():
+            condition_counts[entry.condition] = condition_counts.get(entry.condition, 0) + 1
+
+        assert condition_counts["35Hz12kN"] == 5, "Condition 1 should have 5 bearings"
+        assert condition_counts["37.5Hz11kN"] == 5, "Condition 2 should have 5 bearings"
+        assert condition_counts["40Hz10kN"] == 5, "Condition 3 should have 5 bearings"
+
+    def test_confidence_distribution(self) -> None:
+        """Verify at least 10 high-confidence labels (ONSET-8 acceptance)."""
+        labels = load_onset_labels()
+
+        high_count = sum(1 for e in labels.values() if e.confidence == "high")
+        assert high_count >= 10, f"Expected >=10 high confidence labels, got {high_count}"
+
+    def test_known_onset_indices(self) -> None:
+        """Verify specific known onset indices from YAML."""
+        labels = load_onset_labels()
+
+        # Spot-check several bearings
+        assert labels["Bearing1_1"].onset_file_idx == 69
+        assert labels["Bearing1_5"].onset_file_idx == 27
+        assert labels["Bearing2_1"].onset_file_idx == 452
+        assert labels["Bearing3_1"].onset_file_idx == 748
+
+    def test_custom_yaml_path(self, tmp_path: Path) -> None:
+        """load_onset_labels should accept custom YAML path."""
+        # Create minimal valid YAML
+        yaml_content = """
+bearings:
+  - bearing_id: TestBearing1
+    condition: 35Hz12kN
+    onset_file_idx: 50
+    confidence: high
+    detection_method: kurtosis
+"""
+        yaml_path = tmp_path / "test_labels.yaml"
+        yaml_path.write_text(yaml_content)
+
+        labels = load_onset_labels(yaml_path)
+        assert len(labels) == 1
+        assert "TestBearing1" in labels
+        assert labels["TestBearing1"].onset_file_idx == 50
+
+    def test_file_not_found_raises_error(self, tmp_path: Path) -> None:
+        """Should raise FileNotFoundError for missing YAML file."""
+        with pytest.raises(FileNotFoundError):
+            load_onset_labels(tmp_path / "nonexistent.yaml")
+
+    def test_missing_bearings_key_raises_error(self, tmp_path: Path) -> None:
+        """Should raise KeyError if YAML lacks 'bearings' key."""
+        yaml_path = tmp_path / "bad.yaml"
+        yaml_path.write_text("other_key: value")
+
+        with pytest.raises(KeyError, match="bearings"):
+            load_onset_labels(yaml_path)
+
+    def test_missing_required_field_raises_error(self, tmp_path: Path) -> None:
+        """Should raise KeyError if entry missing required field."""
+        yaml_content = """
+bearings:
+  - bearing_id: Test
+    condition: 35Hz12kN
+    # Missing onset_file_idx, confidence, detection_method
+"""
+        yaml_path = tmp_path / "incomplete.yaml"
+        yaml_path.write_text(yaml_content)
+
+        with pytest.raises(KeyError, match="onset_file_idx"):
+            load_onset_labels(yaml_path)
+
+    def test_default_path_exists(self) -> None:
+        """Default YAML path should exist."""
+        assert DEFAULT_ONSET_LABELS_PATH.exists(), f"Default path missing: {DEFAULT_ONSET_LABELS_PATH}"
+
+
+class TestGetOnsetLabel:
+    """Tests for get_onset_label function."""
+
+    @pytest.fixture
+    def labels(self) -> dict[str, OnsetLabelEntry]:
+        """Load labels once for tests."""
+        return load_onset_labels()
+
+    def test_healthy_before_onset(self, labels: dict[str, OnsetLabelEntry]) -> None:
+        """ONSET-9 Acceptance: Binary labels consistent - healthy before onset."""
+        # Bearing1_1 has onset at 69
+        assert get_onset_label("Bearing1_1", 0, labels) == 0
+        assert get_onset_label("Bearing1_1", 50, labels) == 0
+        assert get_onset_label("Bearing1_1", 68, labels) == 0
+
+    def test_degraded_at_and_after_onset(self, labels: dict[str, OnsetLabelEntry]) -> None:
+        """ONSET-9 Acceptance: Binary labels consistent - degraded at/after onset."""
+        # Bearing1_1 has onset at 69
+        assert get_onset_label("Bearing1_1", 69, labels) == 1
+        assert get_onset_label("Bearing1_1", 70, labels) == 1
+        assert get_onset_label("Bearing1_1", 100, labels) == 1
+
+    def test_boundary_condition_exact_onset(self, labels: dict[str, OnsetLabelEntry]) -> None:
+        """Test exact boundary: file_idx == onset_file_idx should return 1."""
+        # Bearing2_1 has onset at 452
+        assert get_onset_label("Bearing2_1", 451, labels) == 0  # Just before
+        assert get_onset_label("Bearing2_1", 452, labels) == 1  # Exact onset
+        assert get_onset_label("Bearing2_1", 453, labels) == 1  # Just after
+
+    def test_missing_bearing_raises_key_error(self, labels: dict[str, OnsetLabelEntry]) -> None:
+        """Should raise KeyError for unknown bearing."""
+        with pytest.raises(KeyError, match="NonexistentBearing"):
+            get_onset_label("NonexistentBearing", 50, labels)
+
+    def test_all_bearings_have_valid_labels(self, labels: dict[str, OnsetLabelEntry]) -> None:
+        """Every bearing should return valid label (0 or 1)."""
+        for bearing_id, entry in labels.items():
+            # Test healthy region
+            label = get_onset_label(bearing_id, 0, labels)
+            assert label == 0, f"{bearing_id} should be healthy at idx 0"
+
+            # Test degraded region (at onset)
+            label = get_onset_label(bearing_id, entry.onset_file_idx, labels)
+            assert label == 1, f"{bearing_id} should be degraded at onset idx {entry.onset_file_idx}"
+
+
+class TestAddOnsetColumn:
+    """Tests for add_onset_column function."""
+
+    @pytest.fixture
+    def labels(self) -> dict[str, OnsetLabelEntry]:
+        """Load labels once for tests."""
+        return load_onset_labels()
+
+    def test_adds_is_degraded_column(self, labels: dict[str, OnsetLabelEntry]) -> None:
+        """Should add 'is_degraded' column to DataFrame."""
+        df = pd.DataFrame({"bearing_id": ["Bearing1_1"], "file_idx": [50]})
+        result = add_onset_column(df, labels)
+
+        assert "is_degraded" in result.columns
+
+    def test_does_not_modify_original(self, labels: dict[str, OnsetLabelEntry]) -> None:
+        """Should return copy, not modify original DataFrame."""
+        df = pd.DataFrame({"bearing_id": ["Bearing1_1"], "file_idx": [50]})
+        original_cols = list(df.columns)
+
+        _ = add_onset_column(df, labels)
+
+        assert list(df.columns) == original_cols
+        assert "is_degraded" not in df.columns
+
+    def test_correct_labels_for_bearing(self, labels: dict[str, OnsetLabelEntry]) -> None:
+        """ONSET-9 Acceptance: add_onset_column produces correct label distribution."""
+        # Create test data for Bearing1_1 (onset at 69)
+        df = pd.DataFrame(
+            {
+                "bearing_id": ["Bearing1_1"] * 5,
+                "file_idx": [50, 68, 69, 70, 100],
+            }
+        )
+
+        result = add_onset_column(df, labels)
+
+        expected = [0, 0, 1, 1, 1]
+        assert result["is_degraded"].tolist() == expected
+
+    def test_multiple_bearings(self, labels: dict[str, OnsetLabelEntry]) -> None:
+        """Should handle multiple bearings in same DataFrame."""
+        df = pd.DataFrame(
+            {
+                "bearing_id": ["Bearing1_1", "Bearing2_1", "Bearing1_1", "Bearing2_1"],
+                "file_idx": [50, 451, 70, 452],
+            }
+        )
+
+        result = add_onset_column(df, labels)
+
+        # Bearing1_1: onset=69, Bearing2_1: onset=452
+        expected = [0, 0, 1, 1]  # 50<69, 451<452, 70>=69, 452>=452
+        assert result["is_degraded"].tolist() == expected
+
+    def test_missing_bearing_warn_mode(self, labels: dict[str, OnsetLabelEntry]) -> None:
+        """ONSET-9 Acceptance: Handles missing bearings gracefully (warning + NaN)."""
+        df = pd.DataFrame(
+            {
+                "bearing_id": ["Bearing1_1", "UnknownBearing"],
+                "file_idx": [50, 10],
+            }
+        )
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = add_onset_column(df, labels, missing_behavior="warn")
+
+            # Should emit warning
+            assert len(w) == 1
+            assert "UnknownBearing" in str(w[0].message)
+
+        # First row should have valid label, second should be NaN
+        assert result["is_degraded"].iloc[0] == 0
+        assert pd.isna(result["is_degraded"].iloc[1])
+
+    def test_missing_bearing_skip_mode(self, labels: dict[str, OnsetLabelEntry]) -> None:
+        """skip mode should silently set NaN without warning."""
+        df = pd.DataFrame(
+            {
+                "bearing_id": ["UnknownBearing"],
+                "file_idx": [10],
+            }
+        )
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = add_onset_column(df, labels, missing_behavior="skip")
+
+            # Should NOT emit warning
+            assert len(w) == 0
+
+        assert pd.isna(result["is_degraded"].iloc[0])
+
+    def test_missing_bearing_error_mode(self, labels: dict[str, OnsetLabelEntry]) -> None:
+        """error mode should raise KeyError for missing bearing."""
+        df = pd.DataFrame(
+            {
+                "bearing_id": ["UnknownBearing"],
+                "file_idx": [10],
+            }
+        )
+
+        with pytest.raises(KeyError, match="UnknownBearing"):
+            add_onset_column(df, labels, missing_behavior="error")
+
+    def test_missing_required_columns_raises_error(
+        self, labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """Should raise ValueError if required columns missing."""
+        df = pd.DataFrame({"bearing_id": ["Bearing1_1"]})  # Missing file_idx
+
+        with pytest.raises(ValueError, match="file_idx"):
+            add_onset_column(df, labels)
+
+    def test_full_bearing_distribution(self, labels: dict[str, OnsetLabelEntry]) -> None:
+        """Test label distribution across full range of a bearing."""
+        # Bearing1_5 has onset at 27, total life ~52 files
+        file_indices = list(range(52))
+        df = pd.DataFrame(
+            {
+                "bearing_id": ["Bearing1_5"] * 52,
+                "file_idx": file_indices,
+            }
+        )
+
+        result = add_onset_column(df, labels)
+
+        # Count healthy vs degraded
+        healthy_count = (result["is_degraded"] == 0).sum()
+        degraded_count = (result["is_degraded"] == 1).sum()
+
+        # onset at 27 means 0-26 healthy (27 samples), 27-51 degraded (25 samples)
+        assert healthy_count == 27
+        assert degraded_count == 25
+
+    def test_preserves_other_columns(self, labels: dict[str, OnsetLabelEntry]) -> None:
+        """Should preserve all existing columns in DataFrame."""
+        df = pd.DataFrame(
+            {
+                "bearing_id": ["Bearing1_1"],
+                "file_idx": [50],
+                "extra_col1": ["value1"],
+                "extra_col2": [123],
+            }
+        )
+
+        result = add_onset_column(df, labels)
+
+        assert "extra_col1" in result.columns
+        assert "extra_col2" in result.columns
+        assert result["extra_col1"].iloc[0] == "value1"
+        assert result["extra_col2"].iloc[0] == 123

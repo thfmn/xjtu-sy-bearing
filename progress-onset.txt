@@ -357,3 +357,19 @@
   - All 154 onset tests passing
 2026-02-05 16:46:52 DONE: Implement add_onset_column(features_df, onset_labels) function (ONSET-9 fourth checkbox)
   - ONSET-9 ALL TASK CHECKBOXES NOW COMPLETE
+
+2026-02-05 16:47:27 START: ONSET-9 Acceptance - Loader correctly parses YAML with all 15 bearings
+2026-02-05 16:51:25 DONE: ONSET-9 Acceptance - Loader correctly parses YAML with all 15 bearings
+  - Created tests/onset/test_labels.py with 27 tests (100% coverage on labels.py)
+  - TestLoadOnsetLabels class (12 tests):
+    - test_loads_all_15_bearings: verifies exactly 15 bearings loaded, all IDs present
+    - test_returns_onset_label_entry_dataclass: verifies dataclass fields
+    - test_parses_onset_range_correctly: verifies tuple parsing or None
+    - test_condition_distribution: verifies 5 bearings per condition
+    - test_confidence_distribution: verifies >=10 high confidence
+    - test_known_onset_indices: spot-checks known values
+    - test_custom_yaml_path, test_file_not_found_raises_error, test_missing_bearings_key_raises_error
+    - test_missing_required_field_raises_error, test_default_path_exists
+  - TestGetOnsetLabel class (5 tests): healthy/degraded labels, boundary conditions
+  - TestAddOnsetColumn class (10 tests): column creation, label distribution, missing handling
+  - All 27 tests passing
