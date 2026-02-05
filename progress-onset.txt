@@ -655,3 +655,15 @@
   - test_empty_labels_raises_value_error: empty array → ValueError
   - test_non_binary_labels_raises_value_error: non-binary labels → ValueError
   - All 13 tests passing (was 6 before, +7 new class weight tests)
+
+2026-02-06 02:06:26 START: ONSET-14 Acceptance - No data leakage: bearings in train set not in val set
+2026-02-06 02:07:12 DONE: ONSET-14 Acceptance - No data leakage: bearings in train set not in val set
+  - Added TestNoDataLeakage class to tests/onset/test_dataset.py (7 tests)
+  - test_train_val_bearing_ids_are_disjoint: verifies no bearing ID in both train and val
+  - test_val_contains_only_specified_bearings: val set has only specified bearings
+  - test_train_excludes_val_bearings: train set has zero windows from val bearings
+  - test_all_windows_accounted_for: total = train + val (no lost/duplicated windows)
+  - test_split_ids_metadata_matches_actual_data: metadata lists match actual bearing IDs
+  - test_multiple_val_bearings_no_leakage: 2 val bearings, train only has remaining
+  - test_windows_content_matches_original: window content identical to original (no corruption)
+  - All 20 tests passing (was 13 before, +7 new no-leakage tests)

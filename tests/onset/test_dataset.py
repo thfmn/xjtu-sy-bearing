@@ -191,3 +191,90 @@ class TestClassWeightsComputed:
     def test_non_binary_labels_raises_value_error(self) -> None:
         with pytest.raises(ValueError, match="only 0 and 1"):
             compute_class_weights(np.array([0, 1, 2], dtype=np.int32))
+
+
+# ---------------------------------------------------------------------------
+# ONSET-14 Acceptance: No data leakage: bearings in train set not in val set
+# ---------------------------------------------------------------------------
+
+
+class TestNoDataLeakage:
+    """Verify split_by_bearing enforces strict bearing-level separation."""
+
+    def test_train_val_bearing_ids_are_disjoint(
+        self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """No bearing ID appears in both train and val sets."""
+        result = create_onset_dataset(synthetic_df, onset_labels, window_size=5)
+        split = split_by_bearing(result, val_bearing_ids=["B2"])
+        train_ids = set(split.train.bearing_ids)
+        val_ids = set(split.val.bearing_ids)
+        assert train_ids & val_ids == set(), (
+            f"Leakage: bearing IDs in both sets: {train_ids & val_ids}"
+        )
+
+    def test_val_contains_only_specified_bearings(
+        self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """Val set contains windows exclusively from the specified val bearing IDs."""
+        result = create_onset_dataset(synthetic_df, onset_labels, window_size=5)
+        split = split_by_bearing(result, val_bearing_ids=["B3"])
+        val_unique = set(split.val.bearing_ids)
+        assert val_unique == {"B3"}, f"Expected only B3 in val, got {val_unique}"
+
+    def test_train_excludes_val_bearings(
+        self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """Train set contains no windows from the val bearing IDs."""
+        result = create_onset_dataset(synthetic_df, onset_labels, window_size=5)
+        split = split_by_bearing(result, val_bearing_ids=["B1", "B3"])
+        train_unique = set(split.train.bearing_ids)
+        assert "B1" not in train_unique, "B1 leaked into train set"
+        assert "B3" not in train_unique, "B3 leaked into train set"
+        assert train_unique == {"B2"}, f"Expected only B2 in train, got {train_unique}"
+
+    def test_all_windows_accounted_for(
+        self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """Total windows = train windows + val windows (none lost or duplicated)."""
+        result = create_onset_dataset(synthetic_df, onset_labels, window_size=5)
+        split = split_by_bearing(result, val_bearing_ids=["B2"])
+        total = len(result.labels)
+        train_count = len(split.train.labels)
+        val_count = len(split.val.labels)
+        assert train_count + val_count == total, (
+            f"Window count mismatch: {train_count} + {val_count} != {total}"
+        )
+
+    def test_split_ids_metadata_matches_actual_data(
+        self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """split.train_bearing_ids and split.val_bearing_ids match actual data."""
+        result = create_onset_dataset(synthetic_df, onset_labels, window_size=5)
+        split = split_by_bearing(result, val_bearing_ids=["B2"])
+        assert set(split.val_bearing_ids) == set(split.val.bearing_ids)
+        assert set(split.train_bearing_ids) == set(split.train.bearing_ids)
+
+    def test_multiple_val_bearings_no_leakage(
+        self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """With 2 val bearings, train only has the remaining bearing."""
+        result = create_onset_dataset(synthetic_df, onset_labels, window_size=5)
+        split = split_by_bearing(result, val_bearing_ids=["B1", "B2"])
+        assert set(split.train.bearing_ids) == {"B3"}
+        assert set(split.val.bearing_ids) == {"B1", "B2"}
+
+    def test_windows_content_matches_original(
+        self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """Windows in split subsets have identical content to original (no corruption)."""
+        result = create_onset_dataset(synthetic_df, onset_labels, window_size=5)
+        split = split_by_bearing(result, val_bearing_ids=["B2"])
+
+        # Rebuild expected subsets from original data
+        b2_mask = np.array([b == "B2" for b in result.bearing_ids])
+        expected_val_windows = result.windows[b2_mask]
+        expected_val_labels = result.labels[b2_mask]
+
+        np.testing.assert_array_equal(split.val.windows, expected_val_windows)
+        np.testing.assert_array_equal(split.val.labels, expected_val_labels)
