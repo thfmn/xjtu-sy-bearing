@@ -268,3 +268,14 @@
     - test_majority_5_detectors_3_agree_passes: 3/5 = 60% > 50% ✓
   - All 108 tests passing (was 101 before, +7 new tests)
 
+2026-02-05 16:22:39 START: ONSET-7 Acceptance - earliest returns first detected onset across all detectors
+2026-02-05 16:26:04 DONE: ONSET-7 Acceptance - earliest returns first detected onset across all detectors
+  - Added TestEnsembleEarliestVoting class to tests/onset/test_detectors.py (7 tests)
+  - test_earliest_returns_minimum_onset_idx: verifies earliest picks minimum onset_idx
+  - test_earliest_ignores_none_detections: skips None results, picks earliest among detected
+  - test_earliest_returns_none_when_no_detectors_fire: returns None when all detectors return None
+  - test_earliest_with_single_detector_firing: handles case where only 1 detector fires
+  - test_earliest_on_real_series_with_multiple_detectors: end-to-end test with Threshold/CUSUM/EWMA
+  - test_earliest_is_most_sensitive_strategy: verifies earliest is at least as sensitive as majority
+  - test_earliest_preserves_earliest_detector_confidence: confidence from earliest detector, not highest
+  - All 115 tests passing (was 108 before, +7 new tests)

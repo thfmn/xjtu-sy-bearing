@@ -2137,3 +2137,253 @@ class TestEnsembleMajorityVoting:
             "3/5 detectors (60%) should achieve majority"
         )
         assert onset_idx == 50, f"Median of (49, 50, 51) should be 50, got {onset_idx}"
+
+
+class TestEnsembleEarliestVoting:
+    """Test 'earliest' voting returns first detected onset across all detectors.
+
+    ONSET-7 Acceptance: 'earliest' returns first detected onset across all detectors.
+
+    The 'earliest' strategy is the most sensitive approach - it triggers onset
+    at the first index where ANY detector fires. This maximizes recall (catching
+    all potential onsets) at the cost of potentially more false positives.
+    """
+
+    def test_earliest_returns_minimum_onset_idx(self):
+        """Test that earliest voting returns the smallest onset_idx.
+
+        With 3 detectors detecting at indices 55, 48, 52,
+        the earliest (48) should be returned.
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(3)]
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="earliest",
+            tolerance=5,
+        )
+
+        # Detector 2 detects earliest at index 48
+        mock_results = [
+            OnsetResult(onset_idx=55, onset_time=55.0, confidence=0.9, healthy_baseline={}),
+            OnsetResult(onset_idx=48, onset_time=48.0, confidence=0.85, healthy_baseline={}),
+            OnsetResult(onset_idx=52, onset_time=52.0, confidence=0.8, healthy_baseline={}),
+        ]
+
+        onset_idx, confidence = ensemble._vote_earliest(mock_results)
+
+        assert onset_idx == 48, f"Earliest should be 48, got {onset_idx}"
+        assert confidence == 0.85, (
+            f"Confidence should be from earliest detector (0.85), got {confidence}"
+        )
+
+    def test_earliest_ignores_none_detections(self):
+        """Test that earliest voting ignores detectors that didn't detect onset.
+
+        If some detectors return None, earliest should pick the minimum
+        among those that DID detect.
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(4)]
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="earliest",
+            tolerance=5,
+        )
+
+        # 2 detectors detected nothing, 2 detected at 60 and 55
+        mock_results = [
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+            OnsetResult(onset_idx=60, onset_time=60.0, confidence=0.7, healthy_baseline={}),
+            OnsetResult(onset_idx=55, onset_time=55.0, confidence=0.9, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+        ]
+
+        onset_idx, confidence = ensemble._vote_earliest(mock_results)
+
+        assert onset_idx == 55, f"Earliest detected should be 55, got {onset_idx}"
+        assert confidence == 0.9, (
+            f"Confidence should be from earliest detector (0.9), got {confidence}"
+        )
+
+    def test_earliest_returns_none_when_no_detectors_fire(self):
+        """Test that earliest returns None when no detectors detect onset."""
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(3)]
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="earliest",
+            tolerance=5,
+        )
+
+        # No detector detected anything
+        mock_results = [
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+        ]
+
+        onset_idx, confidence = ensemble._vote_earliest(mock_results)
+
+        assert onset_idx is None, "No detection should return None"
+        assert confidence == 0.0, "Confidence should be 0.0 with no detection"
+
+    def test_earliest_with_single_detector_firing(self):
+        """Test earliest when only one detector detects onset.
+
+        Even if 2/3 detectors don't detect anything, earliest should
+        return the one detection.
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(3)]
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="earliest",
+            tolerance=5,
+        )
+
+        # Only detector 2 detected something
+        mock_results = [
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+            OnsetResult(onset_idx=42, onset_time=42.0, confidence=0.75, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+        ]
+
+        onset_idx, confidence = ensemble._vote_earliest(mock_results)
+
+        assert onset_idx == 42, f"Single detection at 42 should be returned, got {onset_idx}"
+        assert confidence == 0.75, f"Confidence should be 0.75, got {confidence}"
+
+    def test_earliest_on_real_series_with_multiple_detectors(self):
+        """Test earliest voting on actual time series with real detectors.
+
+        Different detectors (Threshold, CUSUM, EWMA) may detect at slightly
+        different times. Earliest should return the first one.
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, EWMAOnsetDetector
+
+        np.random.seed(42)
+        n_samples = 120
+        true_onset = 60
+
+        hi_series = np.zeros(n_samples)
+        hi_series[:true_onset] = 0.1 + np.random.randn(true_onset) * 0.02
+        # Gradual ramp - different detectors may trigger at different times
+        for i in range(20):
+            hi_series[true_onset + i] = 0.1 + (i / 20) * 0.4 + np.random.randn() * 0.02
+        hi_series[true_onset + 20:] = 0.5 + np.random.randn(n_samples - true_onset - 20) * 0.02
+
+        # Create ensemble with 3 different detector types
+        detector1 = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        detector2 = CUSUMOnsetDetector(drift=0.5, threshold=5.0)
+        detector3 = EWMAOnsetDetector(lambda_=0.2, L=3.0)
+
+        ensemble = EnsembleOnsetDetector(
+            detectors=[detector1, detector2, detector3],
+            voting="earliest",
+            tolerance=5,
+        )
+        result = ensemble.fit_detect(hi_series, healthy_fraction=0.4)
+
+        # Get individual results
+        individual_results = result.healthy_baseline["individual_results"]
+        individual_indices = [ir["onset_idx"] for ir in individual_results]
+        detected_indices = [idx for idx in individual_indices if idx is not None]
+
+        # The ensemble should return the earliest among detected
+        if detected_indices:
+            expected_earliest = min(detected_indices)
+            assert result.onset_idx == expected_earliest, (
+                f"Ensemble earliest ({result.onset_idx}) should match min of "
+                f"individual detections ({expected_earliest}). "
+                f"Individual indices: {individual_indices}"
+            )
+
+    def test_earliest_is_most_sensitive_strategy(self):
+        """Test that earliest is more sensitive than majority/unanimous.
+
+        On borderline signals, earliest should detect when others might not
+        achieve consensus.
+        """
+        from src.onset.detectors import EnsembleOnsetDetector
+
+        np.random.seed(42)
+
+        # Borderline signal - only some detectors will catch it
+        n_samples = 100
+        hi_series = np.zeros(n_samples)
+        hi_series[:50] = 0.1 + np.random.randn(50) * 0.025
+        hi_series[50:] = 0.18 + np.random.randn(50) * 0.025  # Subtle shift
+
+        # Use detectors with different sensitivity
+        detector1 = ThresholdOnsetDetector(threshold_sigma=2.0, min_consecutive=3)  # Sensitive
+        detector2 = ThresholdOnsetDetector(threshold_sigma=4.0, min_consecutive=3)  # Less sensitive
+        detector3 = ThresholdOnsetDetector(threshold_sigma=5.0, min_consecutive=3)  # Insensitive
+
+        # Test earliest
+        ensemble_earliest = EnsembleOnsetDetector(
+            detectors=[
+                ThresholdOnsetDetector(threshold_sigma=2.0, min_consecutive=3),
+                ThresholdOnsetDetector(threshold_sigma=4.0, min_consecutive=3),
+                ThresholdOnsetDetector(threshold_sigma=5.0, min_consecutive=3),
+            ],
+            voting="earliest",
+        )
+        result_earliest = ensemble_earliest.fit_detect(hi_series, healthy_fraction=0.4)
+
+        # Test majority
+        ensemble_majority = EnsembleOnsetDetector(
+            detectors=[
+                ThresholdOnsetDetector(threshold_sigma=2.0, min_consecutive=3),
+                ThresholdOnsetDetector(threshold_sigma=4.0, min_consecutive=3),
+                ThresholdOnsetDetector(threshold_sigma=5.0, min_consecutive=3),
+            ],
+            voting="majority",
+        )
+        result_majority = ensemble_majority.fit_detect(hi_series, healthy_fraction=0.4)
+
+        # Earliest should detect if ANY detector fires
+        # (the sensitive one with threshold_sigma=2.0 should fire)
+        # Majority might not detect if only 1/3 fires
+        if result_earliest.onset_idx is not None and result_majority.onset_idx is not None:
+            # If both detect, earliest should be <= majority (can't be later)
+            assert result_earliest.onset_idx <= result_majority.onset_idx, (
+                f"Earliest ({result_earliest.onset_idx}) should not be later than "
+                f"majority ({result_majority.onset_idx})"
+            )
+        # If majority doesn't detect but earliest does, that's expected behavior
+        # (earliest is more sensitive)
+
+    def test_earliest_preserves_earliest_detector_confidence(self):
+        """Test that confidence comes from the detector that detected earliest.
+
+        When using 'earliest' voting, the reported confidence should be
+        from the specific detector that had the earliest onset.
+        """
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(3)]
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="earliest",
+            tolerance=5,
+        )
+
+        # Detector 3 has earliest onset (40) with confidence 0.65
+        mock_results = [
+            OnsetResult(onset_idx=60, onset_time=60.0, confidence=0.95, healthy_baseline={}),
+            OnsetResult(onset_idx=55, onset_time=55.0, confidence=0.88, healthy_baseline={}),
+            OnsetResult(onset_idx=40, onset_time=40.0, confidence=0.65, healthy_baseline={}),
+        ]
+
+        onset_idx, confidence = ensemble._vote_earliest(mock_results)
+
+        assert onset_idx == 40, f"Earliest should be 40, got {onset_idx}"
+        # Confidence should be from earliest detector, NOT from highest confidence
+        assert confidence == 0.65, (
+            f"Confidence should be from earliest detector (0.65), not highest. Got {confidence}"
+        )
