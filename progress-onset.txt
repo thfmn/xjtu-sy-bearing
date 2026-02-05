@@ -421,3 +421,16 @@
     - test_missing_bearing_error_mode: verifies KeyError raised
 2026-02-06 01:06:41 DONE: ONSET-9 Acceptance - Handles missing bearings gracefully (warning + skip)
   - ONSET-9 ALL ACCEPTANCE CRITERIA NOW COMPLETE
+
+2026-02-06 01:08:16 START: ONSET-11 - Onset Label Unit Tests (all checkboxes)
+2026-02-06 01:08:16 VERIFIED: ONSET-11 ALL task checkboxes and acceptance criteria already satisfied by prior ONSET-9 work:
+  - tests/onset/test_labels.py already exists with 32 tests (created during ONSET-9 acceptance)
+  - TestLoadOnsetLabels (12 tests): parses valid YAML, custom path, missing file, malformed YAML
+  - TestGetOnsetLabel (5 tests): healthy/degraded labels, boundary conditions, missing bearing KeyError
+  - TestAddOnsetColumn (10 tests): column creation, label distribution, missing bearing handling (warn/skip/error)
+  - TestBinaryLabelConsistencyWithFileOrdering (4 tests): monotonic labels, exact transition, before/after
+  - test_custom_yaml_path serves as fixture with sample onset labels YAML
+  - All 32 tests pass
+  - Coverage: 100% for labels.py (62/62 stmts, 0 missed) — exceeds >90% requirement
+  - Covers: valid YAML, missing bearing, malformed YAML (missing key, missing required field)
+2026-02-06 01:08:16 DONE: ONSET-11 - Onset Label Unit Tests - ALL checkboxes and acceptance criteria complete

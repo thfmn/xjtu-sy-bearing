@@ -284,17 +284,17 @@ Generate onset labels for all bearings to enable supervised training and evaluat
 **Priority**: P0 | **Effort**: 1h | **Phase**: 2. Label Generation
 
 **Tasks**:
-- [ ] Create `tests/onset/test_labels.py`
-- [ ] Test `load_onset_labels()` parses valid YAML correctly
-- [ ] Test `get_onset_label()` returns correct binary value
-- [ ] Test `add_onset_column()` adds column with expected distribution
-- [ ] Test error handling for missing/malformed YAML
-- [ ] Add fixture with sample onset labels YAML
+- [x] Create `tests/onset/test_labels.py`
+- [x] Test `load_onset_labels()` parses valid YAML correctly
+- [x] Test `get_onset_label()` returns correct binary value
+- [x] Test `add_onset_column()` adds column with expected distribution
+- [x] Test error handling for missing/malformed YAML
+- [x] Add fixture with sample onset labels YAML
 
 **Acceptance**:
-- [ ] All tests pass with `pytest tests/onset/test_labels.py`
-- [ ] Tests cover: valid YAML, missing bearing, malformed YAML
-- [ ] Coverage >90% for `labels.py`
+- [x] All tests pass with `pytest tests/onset/test_labels.py`
+- [x] Tests cover: valid YAML, missing bearing, malformed YAML
+- [x] Coverage >90% for `labels.py`
 
 **Files**:
 - `tests/onset/test_labels.py`
