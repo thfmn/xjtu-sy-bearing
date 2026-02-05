@@ -408,3 +408,16 @@
     Bearing3_4: 1515 files (onset=1417, 1417 healthy + 98 degraded)
     Bearing3_5: 114 files (onset=29, 29 healthy + 85 degraded)
   - All 32 tests passing (was 31 before, +1 new test)
+
+2026-02-06 01:06:41 START: ONSET-9 Acceptance - Handles missing bearings gracefully (warning + skip)
+2026-02-06 01:06:41 VERIFIED: Missing bearing handling already fully implemented and tested:
+  - add_onset_column() has missing_behavior parameter: 'warn' (default), 'skip', 'error'
+  - 'warn': emits UserWarning with missing bearing IDs, sets is_degraded to NaN
+  - 'skip': silently sets is_degraded to NaN (no warning)
+  - 'error': raises KeyError for missing bearing
+  - 3 dedicated tests in test_labels.py all passing:
+    - test_missing_bearing_warn_mode: verifies warning emitted + NaN set
+    - test_missing_bearing_skip_mode: verifies silent NaN, no warning
+    - test_missing_bearing_error_mode: verifies KeyError raised
+2026-02-06 01:06:41 DONE: ONSET-9 Acceptance - Handles missing bearings gracefully (warning + skip)
+  - ONSET-9 ALL ACCEPTANCE CRITERIA NOW COMPLETE
