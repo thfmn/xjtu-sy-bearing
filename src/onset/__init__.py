@@ -37,6 +37,7 @@ from src.onset.dataset import (
 from src.onset.models import (
     OnsetClassifierConfig,
     build_onset_classifier,
+    compile_onset_classifier,
     create_onset_classifier,
 )
 from src.onset.labels import (
@@ -75,6 +76,7 @@ __all__: list[str] = [
     # Models
     "OnsetClassifierConfig",
     "build_onset_classifier",
+    "compile_onset_classifier",
     "create_onset_classifier",
     # Labels
     "OnsetLabelEntry",

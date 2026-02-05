@@ -392,12 +392,12 @@ Implement a neural network classifier for onset detection to improve upon rule-b
 
 **Tasks**:
 - [x] Create `src/onset/models.py`
-- [ ] Implement `create_onset_classifier(input_dim=4, window_size=10)`:
+- [x] Implement `create_onset_classifier(input_dim=4, window_size=10)`:
   - Input: (window_size, 4) - 4 health indicators over time window
   - Architecture: LSTM(32) -> Dense(16) -> Dense(1, sigmoid)
   - Lightweight model for fast inference
-- [ ] Add dropout (0.3) and L2 regularization for small dataset
-- [ ] Configure binary crossentropy loss with class weights
+- [x] Add dropout (0.3) and L2 regularization for small dataset
+- [x] Configure binary crossentropy loss with class weights
 
 **Acceptance**:
 - [ ] Model compiles without errors

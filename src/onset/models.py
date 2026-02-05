@@ -91,6 +91,43 @@ def build_onset_classifier(
     return model
 
 
+def compile_onset_classifier(
+    model,
+    learning_rate: float = 1e-3,
+):
+    """Compile the onset classifier with binary crossentropy loss.
+
+    Configures the model for binary classification with:
+    - Binary crossentropy loss (sigmoid output, from_logits=False)
+    - Adam optimizer with configurable learning rate
+    - Metrics: accuracy, AUC-ROC, precision, recall
+
+    Class weights for imbalanced data should be passed to model.fit()
+    via the class_weight parameter (use compute_class_weights() from
+    src.onset.dataset).
+
+    Args:
+        model: Uncompiled Keras model from build_onset_classifier().
+        learning_rate: Learning rate for Adam optimizer. Default 1e-3.
+
+    Returns:
+        Compiled Keras model (same object, modified in-place).
+    """
+    import keras
+
+    model.compile(
+        optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
+        loss=keras.losses.BinaryCrossentropy(),
+        metrics=[
+            keras.metrics.BinaryAccuracy(name="accuracy"),
+            keras.metrics.AUC(name="auc"),
+            keras.metrics.Precision(name="precision"),
+            keras.metrics.Recall(name="recall"),
+        ],
+    )
+    return model
+
+
 def create_onset_classifier(
     input_dim: int = N_FEATURES,
     window_size: int = 10,

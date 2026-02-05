@@ -693,3 +693,31 @@
   - Forward pass verified with dummy data: predictions in [0,1] range
   - Updated src/onset/__init__.py to export OnsetClassifierConfig, build_onset_classifier, create_onset_classifier
   - All 213 existing onset tests still passing
+
+2026-02-06 02:11:58 START: Implement create_onset_classifier(input_dim=4, window_size=10) (ONSET-15 second checkbox)
+2026-02-06 02:13:07 VERIFIED: create_onset_classifier already fully implemented in src/onset/models.py (lines 94-114):
+  - Factory function wrapping build_onset_classifier() with PRD-matching interface
+  - Input: (window_size=10, n_features=4) → shape (None, 10, 4) verified
+  - Architecture: LSTM(32) → Dropout(0.3) → Dense(16, relu, L2=1e-3) → Dropout(0.3) → Dense(1, sigmoid) verified
+  - Total parameters: 5,281 (under 10K) verified
+  - Forward pass: predictions shape (2,1), values in [0,1] verified
+  - Lightweight for fast inference: 5.3K params, single LSTM layer, instant inference
+2026-02-06 02:13:07 DONE: Implement create_onset_classifier(input_dim=4, window_size=10) (ONSET-15 second checkbox)
+
+2026-02-06 02:13:06 START: Add dropout (0.3) and L2 regularization for small dataset (ONSET-15 third checkbox)
+2026-02-06 02:13:06 VERIFIED: Dropout and L2 regularization already implemented in build_onset_classifier():
+  - Line 71: Dropout(0.3) after LSTM layer
+  - Line 81: Dropout(0.3) after Dense hidden layer
+  - Line 77: kernel_regularizer=regularizers.L2(1e-3) on Dense hidden layer
+  - Config: dropout_rate=0.3, l2_factor=1e-3 as defaults in OnsetClassifierConfig
+2026-02-06 02:13:06 DONE: Add dropout (0.3) and L2 regularization for small dataset (ONSET-15 third checkbox)
+
+2026-02-06 02:13:06 START: Configure binary crossentropy loss with class weights (ONSET-15 fourth checkbox)
+2026-02-06 02:17:36 DONE: Configure binary crossentropy loss with class weights (ONSET-15 fourth checkbox)
+  - Added compile_onset_classifier(model, learning_rate=1e-3) function to src/onset/models.py
+  - Configures: BinaryCrossentropy loss, Adam optimizer, BinaryAccuracy + AUC + Precision + Recall metrics
+  - Class weights passed via model.fit(class_weight=compute_class_weights(labels)) at training time
+  - Verified: compiled model trains correctly with class weights, all 5 metrics tracked in history
+  - Updated src/onset/__init__.py to export compile_onset_classifier
+  - All 213 existing onset tests still passing
+  - ONSET-15 ALL TASK CHECKBOXES NOW COMPLETE
