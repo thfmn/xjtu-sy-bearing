@@ -865,3 +865,15 @@
   - Input validation: TypeError for non-BaseOnsetDetector, ValueError for None rul_model
   - Updated src/onset/__init__.py to export TwoStagePipeline
   - Module imports cleanly, all 237 existing onset tests still passing
+
+2026-02-06 02:56:13 START: Implement TwoStagePipeline class methods (ONSET-18 second checkbox)
+  - detect_onset(bearing_signals): use detector or classifier
+  - predict_rul(bearing_signals, onset_idx): apply RUL model post-onset only
+  - predict(bearing_signals): full pipeline: onset detection -> RUL prediction
+2026-02-06 02:57:54 DONE: Implement TwoStagePipeline class methods (ONSET-18 second checkbox)
+  - detect_onset(): dispatches to _detect_onset_ml() if onset_model provided, else onset_detector.detect()
+  - _detect_onset_ml(): runs onset_model.predict(), finds first P(degraded) > 0.5, returns OnsetResult
+  - predict_rul(): pre-onset → max_rul, post-onset → rul_model.predict(), handles None/0/mid onset_idx
+  - predict(): chains detect_onset() → predict_rul()
+  - All 237 existing onset tests still passing
+  - Smoke tested with MockRulModel + MockOnsetClassifier: all 7 scenarios verified

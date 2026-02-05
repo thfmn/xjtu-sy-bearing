@@ -88,13 +88,48 @@ class TwoStagePipeline:
             bearing_signals: Health indicator time series for a single
                 bearing. Shape depends on which detector is used:
                 - Rule-based: 1-D array of composite health indicator values.
-                - ML classifier: 2-D array (n_samples, n_features) or 3-D
+                - ML classifier: 3-D array
                   (n_windows, window_size, n_features).
 
         Returns:
             OnsetResult with onset_idx and confidence.
         """
-        raise NotImplementedError("detect_onset will be implemented in ONSET-18 checkbox 2")
+        if self.onset_model is not None:
+            return self._detect_onset_ml(bearing_signals)
+        return self.onset_detector.detect(bearing_signals)
+
+    def _detect_onset_ml(self, bearing_signals: np.ndarray) -> OnsetResult:
+        """Detect onset using the ML onset classifier.
+
+        The classifier outputs P(degraded) for each window. Onset is the
+        first window where P(degraded) > 0.5.
+
+        Args:
+            bearing_signals: 3-D array (n_windows, window_size, n_features).
+
+        Returns:
+            OnsetResult with onset_idx set to the first degraded window index.
+        """
+        preds = self.onset_model.predict(bearing_signals, verbose=0)
+        probs = np.asarray(preds).ravel()  # (n_windows,)
+
+        degraded_mask = probs > 0.5
+        if not np.any(degraded_mask):
+            return OnsetResult(
+                onset_idx=None,
+                onset_time=None,
+                confidence=0.0,
+                healthy_baseline={"method": "ml_classifier"},
+            )
+
+        onset_idx = int(np.argmax(degraded_mask))
+        confidence = float(probs[onset_idx])
+        return OnsetResult(
+            onset_idx=onset_idx,
+            onset_time=float(onset_idx),
+            confidence=confidence,
+            healthy_baseline={"method": "ml_classifier"},
+        )
 
     def predict_rul(
         self,
@@ -115,7 +150,24 @@ class TwoStagePipeline:
         Returns:
             1-D numpy array of RUL predictions, one per sample.
         """
-        raise NotImplementedError("predict_rul will be implemented in ONSET-18 checkbox 3")
+        n_samples = bearing_signals.shape[0]
+
+        # No onset detected → all samples are healthy
+        if onset_idx is None:
+            return np.full(n_samples, self.max_rul, dtype=np.float32)
+
+        # Onset at start → all samples go through RUL model
+        if onset_idx <= 0:
+            preds = self.rul_model.predict(bearing_signals, verbose=0)
+            return np.asarray(preds).ravel().astype(np.float32)
+
+        # Mixed: pre-onset gets max_rul, post-onset gets model predictions
+        rul = np.full(n_samples, self.max_rul, dtype=np.float32)
+        post_onset = bearing_signals[onset_idx:]
+        if post_onset.shape[0] > 0:
+            preds = self.rul_model.predict(post_onset, verbose=0)
+            rul[onset_idx:] = np.asarray(preds).ravel()
+        return rul
 
     def predict(self, bearing_signals: np.ndarray) -> np.ndarray:
         """Full two-stage prediction: detect onset, then predict RUL.
@@ -131,4 +183,5 @@ class TwoStagePipeline:
         Returns:
             1-D numpy array of RUL predictions, one per sample.
         """
-        raise NotImplementedError("predict will be implemented in ONSET-18 checkbox 4")
+        onset_result = self.detect_onset(bearing_signals)
+        return self.predict_rul(bearing_signals, onset_result.onset_idx)
