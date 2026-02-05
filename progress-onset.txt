@@ -790,3 +790,29 @@
   - Total: 24 model tests + 27 dataset tests = 51 tests, ALL passing
   - Coverage: models.py 100%, dataset.py 91% — both exceed >90% requirement
   - ONSET-17 ALL TASK CHECKBOXES AND ACCEPTANCE CRITERIA COMPLETE
+
+2026-02-06 02:32:06 START: Create scripts/07_train_onset_classifier.py (ONSET-16 - all 6 checkboxes)
+  - Decision: Create separate script rather than modifying 05_train_dl_models.py because:
+    - Fundamentally different task (binary classification vs regression)
+    - Different data pipeline (sliding windows of health indicators vs spectrograms/features)
+    - Different metrics (F1/AUC-ROC vs MAE/RMSE/PHM08)
+    - Avoids risk to working RUL training script
+2026-02-06 02:35:43 DONE: Create scripts/07_train_onset_classifier.py (ONSET-16 - all 6 task checkboxes)
+  - Created scripts/07_train_onset_classifier.py (~300 lines) with:
+    - Leave-one-bearing-out CV: 15 folds, each fold holds out 1 bearing
+    - Metrics: accuracy, precision, recall, F1, AUC-ROC (sklearn)
+    - MLflow tracking: per-fold runs + aggregate summary run (experiment=onset-classifier)
+    - Best model saved to outputs/models/onset_classifier.keras (highest F1 across folds)
+    - CV results CSV saved to outputs/models/onset_classifier_cv_results.csv
+    - Early stopping (patience=10, restore_best_weights=True) on val_loss
+    - Class weights for imbalanced training data
+    - CLI: --folds, --epochs, --batch-size, --learning-rate, --window-size, --dry-run, --tracking
+  - Verified working:
+    - Dry run: builds model and prints summary correctly
+    - Training (--folds 0,5 --epochs 5 --tracking none): 2 folds complete, F1=0.72-0.95
+    - MLflow (--folds 0 --epochs 3 --tracking mlflow): logs to experiment=onset-classifier
+    - Saved model: outputs/models/onset_classifier.keras (100KB)
+    - Saved CSV: outputs/models/onset_classifier_cv_results.csv
+  - Note: Found bug in ExperimentTracker.start_run contextmanager (finally: pass doesn't call end_run).
+    Worked around by calling tracker.end_run() explicitly after each with block.
+  - ONSET-16 acceptance criteria NOT YET verified (need full 15-fold run to confirm F1>0.8)

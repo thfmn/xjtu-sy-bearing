@@ -415,12 +415,12 @@ Implement a neural network classifier for onset detection to improve upon rule-b
 **Priority**: P1 | **Effort**: 2h | **Phase**: 3. Model Development
 
 **Tasks**:
-- [ ] Add onset classifier training to `scripts/05_train_dl_models.py` (new mode)
-- [ ] Or create separate `scripts/07_train_onset_classifier.py`
-- [ ] Implement leave-one-bearing-out cross-validation for onset model
-- [ ] Log metrics: accuracy, precision, recall, F1, AUC-ROC
-- [ ] Save best model to `outputs/models/onset_classifier.keras`
-- [ ] Add MLflow tracking for onset experiments
+- [x] Add onset classifier training to `scripts/05_train_dl_models.py` (new mode)
+- [x] Or create separate `scripts/07_train_onset_classifier.py`
+- [x] Implement leave-one-bearing-out cross-validation for onset model
+- [x] Log metrics: accuracy, precision, recall, F1, AUC-ROC
+- [x] Save best model to `outputs/models/onset_classifier.keras`
+- [x] Add MLflow tracking for onset experiments
 
 **Acceptance**:
 - [ ] Training completes for all CV folds without errors
