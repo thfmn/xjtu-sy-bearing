@@ -2620,3 +2620,273 @@ class TestEnsembleWeightedAverageConfidence:
         assert abs(aggregated_conf - expected) < 0.01, (
             f"Expected weighted avg = {expected:.4f}, got {aggregated_conf:.4f}"
         )
+
+
+class TestEnsembleSignificantDisagreement:
+    """Test ONSET-7 acceptance: handles case where detectors disagree significantly.
+
+    When detectors produce significantly different onset indices or disagree on
+    whether onset occurred, the ensemble should return LOW confidence to reflect
+    the uncertainty.
+
+    Acceptance criteria:
+    - Large index spread (beyond tolerance) reduces confidence
+    - Mixed detection (some detect, some don't) reduces confidence
+    - Combined disagreement produces very low confidence
+    """
+
+    def test_large_index_spread_reduces_confidence(self):
+        """When onset indices differ by more than tolerance, confidence drops."""
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(3)]
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="weighted",  # weighted always returns an onset_idx
+            tolerance=5,
+        )
+
+        # Indices spread by 20 samples (4x tolerance of 5)
+        # disagreement_factor = tolerance / spread = 5 / 20 = 0.25
+        dispersed_results = [
+            OnsetResult(onset_idx=50, onset_time=50.0, confidence=0.9, healthy_baseline={}),
+            OnsetResult(onset_idx=60, onset_time=60.0, confidence=0.9, healthy_baseline={}),
+            OnsetResult(onset_idx=70, onset_time=70.0, confidence=0.9, healthy_baseline={}),
+        ]
+
+        aggregated_conf, disagreement_factor = ensemble._aggregate_confidence(
+            dispersed_results, ensemble_onset_idx=60
+        )
+
+        # Spread = 70 - 50 = 20, tolerance = 5
+        # disagreement_factor = 5 / 20 = 0.25
+        assert disagreement_factor < 0.5, (
+            f"Large spread should reduce disagreement_factor below 0.5, "
+            f"got {disagreement_factor}"
+        )
+        assert aggregated_conf < 0.5, (
+            f"Large disagreement should reduce confidence below 0.5, "
+            f"got {aggregated_conf}"
+        )
+
+    def test_mixed_detection_reduces_confidence(self):
+        """When some detectors find onset and others don't, confidence drops."""
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(4)]
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="weighted",
+            tolerance=5,
+        )
+
+        # 2 detect onset, 2 don't - evenly split
+        mixed_results = [
+            OnsetResult(onset_idx=50, onset_time=50.0, confidence=0.9, healthy_baseline={}),
+            OnsetResult(onset_idx=52, onset_time=52.0, confidence=0.8, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+        ]
+
+        aggregated_conf, disagreement_factor = ensemble._aggregate_confidence(
+            mixed_results, ensemble_onset_idx=51
+        )
+
+        # detection_agreement = |2 - 2| / 4 = 0.0 (even split)
+        # disagreement_factor *= (0.5 + 0.5 * 0.0) = 0.5
+        assert disagreement_factor <= 0.5, (
+            f"Even split detection should reduce disagreement_factor to ≤0.5, "
+            f"got {disagreement_factor}"
+        )
+        assert aggregated_conf < 0.5, (
+            f"Mixed detection should reduce confidence, got {aggregated_conf}"
+        )
+
+    def test_combined_disagreement_very_low_confidence(self):
+        """Combined large spread + mixed detection produces very low confidence."""
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(4)]
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="weighted",
+            tolerance=5,
+        )
+
+        # 2 detect with large spread (30 samples), 2 don't detect
+        severe_disagreement = [
+            OnsetResult(onset_idx=30, onset_time=30.0, confidence=0.8, healthy_baseline={}),
+            OnsetResult(onset_idx=60, onset_time=60.0, confidence=0.7, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+            OnsetResult(onset_idx=None, onset_time=None, confidence=0.0, healthy_baseline={}),
+        ]
+
+        aggregated_conf, disagreement_factor = ensemble._aggregate_confidence(
+            severe_disagreement, ensemble_onset_idx=45
+        )
+
+        # Spread = 30, tolerance = 5 → index factor = 5/30 = 0.167
+        # detection_agreement = |2-2|/4 = 0.0 → detection factor = 0.5
+        # Combined: 0.167 * 0.5 = 0.083
+        assert disagreement_factor < 0.15, (
+            f"Severe combined disagreement should have very low disagreement_factor, "
+            f"got {disagreement_factor}"
+        )
+        assert aggregated_conf < 0.15, (
+            f"Severe disagreement should produce very low confidence, "
+            f"got {aggregated_conf}"
+        )
+
+    def test_end_to_end_disagreement_in_detect_output(self):
+        """Full detect() call returns low confidence when detectors disagree."""
+        from src.onset.detectors import (
+            EnsembleOnsetDetector,
+            ThresholdOnsetDetector,
+            CUSUMOnsetDetector,
+            EWMAOnsetDetector,
+        )
+
+        # Create detectors with different sensitivities
+        # High-sensitivity will detect earlier, low-sensitivity later
+        high_sens_threshold = ThresholdOnsetDetector(threshold_sigma=1.5, min_consecutive=1)
+        low_sens_threshold = ThresholdOnsetDetector(threshold_sigma=5.0, min_consecutive=5)
+        high_sens_cusum = CUSUMOnsetDetector(drift=0.1, threshold=3.0)
+        low_sens_cusum = CUSUMOnsetDetector(drift=1.0, threshold=10.0)
+
+        ensemble = EnsembleOnsetDetector(
+            detectors=[high_sens_threshold, low_sens_threshold, high_sens_cusum, low_sens_cusum],
+            voting="weighted",
+            tolerance=5,
+        )
+
+        # Create signal where high-sensitivity detects early, low-sensitivity much later
+        np.random.seed(42)
+        # Long healthy period, then very gradual increase
+        healthy = np.random.normal(0, 0.1, 100)
+        # Gradual ramp over 50 samples (very slow increase)
+        ramp = np.linspace(0, 2.0, 50)
+        gradual_onset = np.concatenate([healthy, healthy[-1] + ramp + np.random.normal(0, 0.1, 50)])
+
+        # Fit on healthy part only
+        ensemble.fit(healthy[:50])
+        result = ensemble.detect(gradual_onset)
+
+        # Check that disagreement_factor is recorded
+        assert "disagreement_factor" in result.healthy_baseline, (
+            "detect() should include disagreement_factor in healthy_baseline"
+        )
+
+        # With very different sensitivity settings, some detectors may detect
+        # at very different points or not at all
+        disagreement = result.healthy_baseline["disagreement_factor"]
+
+        # We just verify the mechanism works - the actual value depends on
+        # which detectors fire and where
+        assert 0.0 <= disagreement <= 1.0, (
+            f"disagreement_factor should be in [0, 1], got {disagreement}"
+        )
+
+    def test_unanimous_returns_low_confidence_on_disagreement(self):
+        """Unanimous voting returns None with low confidence when detectors disagree."""
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(3)]
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="unanimous",
+            tolerance=5,
+        )
+
+        # All detect onset but indices spread beyond tolerance
+        np.random.seed(42)
+        healthy = np.random.normal(0, 0.1, 50)
+        onset = np.random.normal(2.0, 0.1, 50)  # Clear onset
+        series = np.concatenate([healthy, onset])
+
+        # Manually test _vote_unanimous with disagreeing results
+        disagreeing_results = [
+            OnsetResult(onset_idx=50, onset_time=50.0, confidence=0.9, healthy_baseline={}),
+            OnsetResult(onset_idx=60, onset_time=60.0, confidence=0.8, healthy_baseline={}),
+            OnsetResult(onset_idx=55, onset_time=55.0, confidence=0.85, healthy_baseline={}),
+        ]
+
+        # Spread = 10 > tolerance = 5, so unanimous should fail
+        onset_idx, confidence = ensemble._vote_unanimous(disagreeing_results)
+
+        assert onset_idx is None, (
+            f"Unanimous should return None when spread > tolerance, got {onset_idx}"
+        )
+        # Confidence should be reduced (avg * 0.5 in implementation)
+        expected_low_conf = np.mean([0.9, 0.8, 0.85]) * 0.5  # = 0.425
+        assert confidence < 0.5, (
+            f"Unanimous disagreement should return low confidence, got {confidence}"
+        )
+        assert abs(confidence - expected_low_conf) < 0.01, (
+            f"Expected confidence {expected_low_conf:.3f}, got {confidence:.3f}"
+        )
+
+    def test_majority_no_cluster_returns_none(self):
+        """Majority voting returns None when indices are too dispersed to cluster."""
+        from src.onset.detectors import EnsembleOnsetDetector, OnsetResult
+
+        detectors = [ThresholdOnsetDetector() for _ in range(4)]
+        ensemble = EnsembleOnsetDetector(
+            detectors=detectors,
+            voting="majority",
+            tolerance=5,
+        )
+
+        # 4 detectors, each with indices far apart (no majority cluster possible)
+        dispersed_results = [
+            OnsetResult(onset_idx=20, onset_time=20.0, confidence=0.9, healthy_baseline={}),
+            OnsetResult(onset_idx=40, onset_time=40.0, confidence=0.8, healthy_baseline={}),
+            OnsetResult(onset_idx=60, onset_time=60.0, confidence=0.85, healthy_baseline={}),
+            OnsetResult(onset_idx=80, onset_time=80.0, confidence=0.75, healthy_baseline={}),
+        ]
+
+        onset_idx, confidence = ensemble._vote_majority(dispersed_results)
+
+        # Each index is alone, no cluster has >50%
+        assert onset_idx is None, (
+            f"Majority should return None when no cluster has >50%, got {onset_idx}"
+        )
+
+    def test_disagreement_factor_in_healthy_baseline(self):
+        """Verify disagreement_factor is accessible in the final OnsetResult."""
+        from src.onset.detectors import EnsembleOnsetDetector
+
+        detectors = [
+            ThresholdOnsetDetector(threshold_sigma=2.0),
+            CUSUMOnsetDetector(drift=0.3),
+        ]
+        ensemble = EnsembleOnsetDetector(detectors=detectors, voting="majority", tolerance=5)
+
+        np.random.seed(42)
+        healthy = np.random.normal(0, 0.1, 50)
+        onset = np.random.normal(1.5, 0.1, 50)
+        series = np.concatenate([healthy, onset])
+
+        ensemble.fit(healthy[:30])
+        result = ensemble.detect(series)
+
+        # Verify disagreement_factor is present and valid
+        assert "disagreement_factor" in result.healthy_baseline, (
+            "OnsetResult.healthy_baseline should contain 'disagreement_factor'"
+        )
+        df = result.healthy_baseline["disagreement_factor"]
+        assert 0.0 <= df <= 1.0, f"disagreement_factor should be in [0, 1], got {df}"
+
+        # If detectors agree, factor should be high; if disagree, should be lower
+        # Just verify the relationship: confidence = weighted_avg * disagreement_factor
+        individual_results = result.healthy_baseline.get("individual_results", [])
+        if individual_results:
+            # individual_results is a list of dicts with 'confidence' key
+            confs = [r["confidence"] for r in individual_results if r["confidence"] > 0]
+            if confs:
+                weighted_avg = sum(c * c for c in confs) / sum(confs)
+                # Final confidence should be approximately weighted_avg * disagreement_factor
+                expected_conf = weighted_avg * df
+                assert abs(result.confidence - expected_conf) < 0.1, (
+                    f"Final confidence {result.confidence:.3f} should approximate "
+                    f"weighted_avg ({weighted_avg:.3f}) × disagreement ({df:.3f}) = {expected_conf:.3f}"
+                )

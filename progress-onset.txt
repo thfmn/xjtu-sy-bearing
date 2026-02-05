@@ -290,3 +290,16 @@
   - test_confidence_in_final_onset_result: end-to-end test verifying formula in real detection
   - test_two_detectors_weighted_average: verifies formula with exactly 2 detectors
   - All 121 tests passing (was 115 before, +6 new tests)
+
+2026-02-05 16:31:01 START: ONSET-7 Acceptance - Handles case where detectors disagree significantly (return low confidence)
+2026-02-05 16:33:03 DONE: ONSET-7 Acceptance - Handles case where detectors disagree significantly (return low confidence)
+  - Added TestEnsembleSignificantDisagreement class to tests/onset/test_detectors.py (7 tests)
+  - test_large_index_spread_reduces_confidence: verifies spread=20 > tolerance=5 → disagree_factor=0.25 < 0.5
+  - test_mixed_detection_reduces_confidence: verifies even split (2 detect, 2 don't) → disagree_factor ≤ 0.5
+  - test_combined_disagreement_very_low_confidence: verifies spread + mixed → disagree_factor < 0.15
+  - test_end_to_end_disagreement_in_detect_output: verifies disagreement_factor in healthy_baseline
+  - test_unanimous_returns_low_confidence_on_disagreement: verifies spread > tolerance → None + low conf
+  - test_majority_no_cluster_returns_none: verifies dispersed indices → no majority cluster → None
+  - test_disagreement_factor_in_healthy_baseline: verifies confidence = weighted_avg × disagree_factor
+  - All 128 tests passing (was 121 before, +7 new tests)
+  - ONSET-7 ALL ACCEPTANCE CRITERIA NOW COMPLETE

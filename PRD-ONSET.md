@@ -192,7 +192,7 @@ Implement multiple onset detection algorithms to identify the point where bearin
 - [x] `majority` voting requires >50% of detectors to agree on onset region
 - [x] `earliest` returns first detected onset across all detectors
 - [x] Ensemble confidence is weighted average of individual confidences
-- [ ] Handles case where detectors disagree significantly (return low confidence)
+- [x] Handles case where detectors disagree significantly (return low confidence)
 
 **Files**:
 - `src/onset/detectors.py`
