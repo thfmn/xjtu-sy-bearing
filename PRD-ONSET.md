@@ -325,7 +325,7 @@ Create visualization tools for onset detection validation and analysis.
 **Acceptance**:
 - [x] Plots clearly show onset point with vertical line annotation
 - [x] Region shading makes healthy/degraded phases visually distinct
-- [ ] Grid plot fits 15 subplots in readable layout (5x3 or 3x5)
+- [x] Grid plot fits 15 subplots in readable layout (5x3 or 3x5)
 - [ ] Plots are publication-quality (labeled axes, legend, appropriate DPI)
 
 **Files**:

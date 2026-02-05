@@ -529,3 +529,14 @@
   - Data line remains easily readable at this alpha level
   - Visually verified with rendered test plot: regions are immediately distinguishable
   - All 186 onset tests still passing
+
+2026-02-06 01:36:48 START: ONSET-12 Acceptance - Grid plot fits 15 subplots in readable layout (5x3 or 3x5)
+2026-02-06 01:37:26 VERIFIED: Grid plot already satisfies 5x3 layout requirement:
+  - plot_all_bearings_onset creates 5 rows x 3 columns grid (line 179: plt.subplots(n_rows, n_cols))
+  - n_rows = max(5,5,5) = 5 (each condition has exactly 5 bearings)
+  - n_cols = 3 (one per condition: 35Hz12kN, 37.5Hz11kN, 40Hz10kN)
+  - Verified with synthetic data: 15 total axes, all 15 visible, grid shape (5,3)
+  - Column headers annotated with condition labels
+  - Each subplot has title (bearing ID), tick labels (fontsize=7), and axis labels
+  - Saved image is 760KB PNG at DPI=150 — readable at full resolution
+2026-02-06 01:37:26 DONE: ONSET-12 Acceptance - Grid plot fits 15 subplots in readable layout (5x3 or 3x5)
