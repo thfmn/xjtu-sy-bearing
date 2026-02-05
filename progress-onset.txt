@@ -327,3 +327,19 @@
   - Updated src/onset/__init__.py to export all new symbols
   - Tested all 3 functions manually - all work correctly
   - All 154 existing onset tests still passing
+
+2026-02-05 16:41:56 START: Implement load_onset_labels(yaml_path) function (ONSET-9 second checkbox)
+2026-02-05 16:41:56 VERIFIED: load_onset_labels already fully implemented in src/onset/labels.py (lines 46-108):
+  - Parses configs/onset_labels.yaml
+  - Returns dict[str, OnsetLabelEntry] mapping bearing_id -> typed label entry
+  - Tested: loads all 15 bearings, Bearing1_1.onset_file_idx=69, confidence='high'
+2026-02-05 16:41:56 DONE: Implement load_onset_labels(yaml_path) function (ONSET-9 second checkbox)
+
+2026-02-05 16:42:44 START: Implement get_onset_label(bearing_id, file_idx, onset_labels) function (ONSET-9 third checkbox)
+2026-02-05 16:42:44 VERIFIED: get_onset_label already fully implemented in src/onset/labels.py (lines 111-141):
+  - Takes bearing_id, file_idx, onset_labels dictionary as args
+  - Returns 0 (healthy) if file_idx < onset_file_idx, else 1 (degraded)
+  - Raises KeyError if bearing_id not found in onset_labels
+  - Tested: Bearing1_1 at idx 68→0, 69→1; Bearing2_1 at idx 451→0, 452→1
+  - KeyError raised correctly for missing bearing
+2026-02-05 16:42:44 DONE: Implement get_onset_label(bearing_id, file_idx, onset_labels) function (ONSET-9 third checkbox)
