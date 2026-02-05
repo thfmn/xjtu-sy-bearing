@@ -52,3 +52,51 @@ class TestModelCompilesWithoutErrors:
         history = model.fit(x, y, epochs=1, verbose=0)
         assert "loss" in history.history
         assert len(history.history["loss"]) == 1
+
+
+class TestInputOutputShape:
+    """ONSET-15 Acceptance: Input shape: (None, window_size, 4), output: (None, 1)."""
+
+    def test_default_input_shape(self):
+        from src.onset.models import build_onset_classifier
+
+        model = build_onset_classifier()
+        # input_shape includes batch dim as None
+        assert model.input_shape == (None, 10, 4)
+
+    def test_default_output_shape(self):
+        from src.onset.models import build_onset_classifier
+
+        model = build_onset_classifier()
+        assert model.output_shape == (None, 1)
+
+    def test_custom_window_size_input_shape(self):
+        from src.onset.models import OnsetClassifierConfig, build_onset_classifier
+
+        config = OnsetClassifierConfig(window_size=20)
+        model = build_onset_classifier(config)
+        assert model.input_shape == (None, 20, 4)
+        assert model.output_shape == (None, 1)
+
+    def test_create_onset_classifier_shapes(self):
+        from src.onset.models import create_onset_classifier
+
+        model = create_onset_classifier(input_dim=4, window_size=10)
+        assert model.input_shape == (None, 10, 4)
+        assert model.output_shape == (None, 1)
+
+    def test_forward_pass_shapes(self):
+        from src.onset.models import build_onset_classifier
+
+        model = build_onset_classifier()
+        x = np.random.randn(5, 10, 4).astype(np.float32)
+        y = model.predict(x, verbose=0)
+        assert y.shape == (5, 1)
+
+    def test_custom_features_input_shape(self):
+        from src.onset.models import OnsetClassifierConfig, build_onset_classifier
+
+        config = OnsetClassifierConfig(n_features=6, window_size=15)
+        model = build_onset_classifier(config)
+        assert model.input_shape == (None, 15, 6)
+        assert model.output_shape == (None, 1)

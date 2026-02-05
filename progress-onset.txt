@@ -730,3 +730,14 @@
   - test_create_onset_classifier_factory: verifies factory function works
   - test_compiled_model_can_train_one_step: verifies training loop executes without errors
   - All 4 tests passing
+
+2026-02-06 02:24:56 START: ONSET-15 Acceptance - Input shape: (None, window_size, 4), output: (None, 1)
+2026-02-06 02:25:36 DONE: ONSET-15 Acceptance - Input shape: (None, window_size, 4), output: (None, 1)
+  - Added TestInputOutputShape class to tests/onset/test_models.py (6 tests)
+  - test_default_input_shape: verifies model.input_shape == (None, 10, 4)
+  - test_default_output_shape: verifies model.output_shape == (None, 1)
+  - test_custom_window_size_input_shape: verifies window_size=20 → (None, 20, 4)
+  - test_create_onset_classifier_shapes: verifies factory function produces correct shapes
+  - test_forward_pass_shapes: verifies predict output shape (5, 1) for batch of 5
+  - test_custom_features_input_shape: verifies n_features=6, window_size=15 → (None, 15, 6)
+  - All 10 tests passing (was 4 before, +6 new shape tests)
