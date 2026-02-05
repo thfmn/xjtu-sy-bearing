@@ -750,3 +750,19 @@
   - test_factory_function_under_10k: verifies factory function also produces <10K params
   - test_no_trainable_vs_total_discrepancy: verifies all params are trainable (no frozen layers)
   - All 14 tests passing (was 10 before, +4 new param count tests)
+
+2026-02-06 02:27:29 START: ONSET-15 Acceptance - Model supports model.predict_proba() equivalent via sigmoid output
+2026-02-06 02:28:43 DONE: ONSET-15 Acceptance - Model supports model.predict_proba() equivalent via sigmoid output
+  - Added predict_proba(model, x) function to src/onset/models.py
+  - Returns (n_samples, 2) array with [P(healthy), P(degraded)] matching sklearn convention
+  - Column 1 matches raw model.predict() sigmoid output; column 0 is complement
+  - Added TestPredictProba class to tests/onset/test_models.py (6 tests):
+    - test_returns_two_columns: shape (n, 2)
+    - test_columns_sum_to_one: row sums == 1.0
+    - test_probabilities_in_zero_one_range: all values in [0, 1]
+    - test_class1_matches_model_predict: col 1 == model.predict()
+    - test_class0_is_complement_of_class1: col 0 == 1 - col 1
+    - test_single_sample: works for single sample input
+  - Updated src/onset/__init__.py to export predict_proba
+  - All 20 tests passing (was 14 before, +6 new predict_proba tests)
+  - ONSET-15 ALL ACCEPTANCE CRITERIA NOW COMPLETE

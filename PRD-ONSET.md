@@ -403,7 +403,7 @@ Implement a neural network classifier for onset detection to improve upon rule-b
 - [x] Model compiles without errors
 - [x] Input shape: (None, window_size, 4), output: (None, 1)
 - [x] Total parameters under 10K (lightweight)
-- [ ] Model supports `model.predict_proba()` equivalent via sigmoid output
+- [x] Model supports `model.predict_proba()` equivalent via sigmoid output
 
 **Files**:
 - `src/onset/models.py`

@@ -145,3 +145,60 @@ class TestTotalParametersUnder10K:
         total = model.count_params()
         # All params should be trainable (no frozen layers)
         assert trainable == total
+
+
+class TestPredictProba:
+    """ONSET-15 Acceptance: Model supports predict_proba() equivalent via sigmoid output."""
+
+    def test_returns_two_columns(self):
+        from src.onset.models import build_onset_classifier, predict_proba
+
+        model = build_onset_classifier()
+        x = np.random.randn(8, 10, 4).astype(np.float32)
+        proba = predict_proba(model, x, verbose=0)
+        assert proba.shape == (8, 2)
+
+    def test_columns_sum_to_one(self):
+        from src.onset.models import build_onset_classifier, predict_proba
+
+        model = build_onset_classifier()
+        x = np.random.randn(10, 10, 4).astype(np.float32)
+        proba = predict_proba(model, x, verbose=0)
+        row_sums = proba.sum(axis=1)
+        np.testing.assert_allclose(row_sums, 1.0, atol=1e-6)
+
+    def test_probabilities_in_zero_one_range(self):
+        from src.onset.models import build_onset_classifier, predict_proba
+
+        model = build_onset_classifier()
+        x = np.random.randn(10, 10, 4).astype(np.float32)
+        proba = predict_proba(model, x, verbose=0)
+        assert np.all(proba >= 0.0)
+        assert np.all(proba <= 1.0)
+
+    def test_class1_matches_model_predict(self):
+        """Column 1 (P(degraded)) should match raw model.predict() output."""
+        from src.onset.models import build_onset_classifier, predict_proba
+
+        model = build_onset_classifier()
+        x = np.random.randn(5, 10, 4).astype(np.float32)
+        raw = model.predict(x, verbose=0).flatten()
+        proba = predict_proba(model, x, verbose=0)
+        np.testing.assert_allclose(proba[:, 1], raw, atol=1e-6)
+
+    def test_class0_is_complement_of_class1(self):
+        from src.onset.models import build_onset_classifier, predict_proba
+
+        model = build_onset_classifier()
+        x = np.random.randn(5, 10, 4).astype(np.float32)
+        proba = predict_proba(model, x, verbose=0)
+        np.testing.assert_allclose(proba[:, 0], 1.0 - proba[:, 1], atol=1e-6)
+
+    def test_single_sample(self):
+        from src.onset.models import build_onset_classifier, predict_proba
+
+        model = build_onset_classifier()
+        x = np.random.randn(1, 10, 4).astype(np.float32)
+        proba = predict_proba(model, x, verbose=0)
+        assert proba.shape == (1, 2)
+        np.testing.assert_allclose(proba.sum(axis=1), 1.0, atol=1e-6)

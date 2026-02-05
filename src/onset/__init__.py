@@ -39,6 +39,7 @@ from src.onset.models import (
     build_onset_classifier,
     compile_onset_classifier,
     create_onset_classifier,
+    predict_proba,
 )
 from src.onset.labels import (
     OnsetLabelEntry,
@@ -78,6 +79,7 @@ __all__: list[str] = [
     "build_onset_classifier",
     "compile_onset_classifier",
     "create_onset_classifier",
+    "predict_proba",
     # Labels
     "OnsetLabelEntry",
     "add_onset_column",

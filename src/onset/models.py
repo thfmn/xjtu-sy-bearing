@@ -128,6 +128,30 @@ def compile_onset_classifier(
     return model
 
 
+def predict_proba(model, x, **kwargs):
+    """Return class probabilities from the onset classifier.
+
+    Equivalent to scikit-learn's ``predict_proba()`` interface.  The model
+    uses a sigmoid output, so ``model.predict(x)`` already returns P(degraded).
+    This helper returns a two-column array ``[P(healthy), P(degraded)]``
+    matching the sklearn convention.
+
+    Args:
+        model: Compiled onset classifier (sigmoid output).
+        x: Input array with shape ``(n_samples, window_size, n_features)``.
+        **kwargs: Extra keyword arguments forwarded to ``model.predict()``.
+
+    Returns:
+        numpy.ndarray of shape ``(n_samples, 2)`` with columns
+        ``[P(class=0), P(class=1)]``.
+    """
+    import numpy as np
+
+    p1 = model.predict(x, **kwargs)  # (n_samples, 1)
+    p1 = np.asarray(p1).reshape(-1, 1)
+    return np.hstack([1.0 - p1, p1])
+
+
 def create_onset_classifier(
     input_dim: int = N_FEATURES,
     window_size: int = 10,
