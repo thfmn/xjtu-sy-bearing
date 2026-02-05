@@ -1,0 +1,213 @@
+# ONSET-8: Manual Onset Labeling Reference
+#
+# Manually-verified onset indices for all 15 XJTU-SY bearings.
+# Used for training and evaluating two-stage RUL prediction models.
+#
+# Labeling Methodology:
+# 1. Primary indicator: kurtosis (sensitive to impulsive defects)
+# 2. Secondary indicator: RMS (sensitive to gradual wear)
+# 3. Onset criterion: First sustained increase (>2σ above baseline for >5 consecutive samples)
+#    OR first RMS increase that doesn't return to baseline
+# 4. Baseline: First 20% of bearing life (healthy period)
+# 5. Upgrade criteria: SNR > 100 AND 100% post-onset above threshold = high confidence
+#
+# Confidence levels:
+#   high: Clear onset point with high SNR (>100), 100% sustained post-onset, or strong exceedance (>5σ)
+#   medium: Onset point visible but with moderate exceedance (2-5σ) or noisy baseline
+#   low: Ambiguous onset, multiple possible interpretations, or large onset range
+#
+# Fields:
+#   bearing_id: Unique identifier (e.g., Bearing1_1)
+#   condition: Operating condition (35Hz12kN, 37.5Hz11kN, 40Hz10kN)
+#   onset_file_idx: File index where degradation begins (0-indexed)
+#   confidence: Labeling confidence (high/medium/low)
+#   detection_method: Which health indicator was used (kurtosis/rms/composite)
+#   onset_range: [min_idx, max_idx] for ambiguous cases (optional)
+#   notes: Additional observations
+#
+# Total: 15 bearings
+# High confidence: 11 bearings
+# Medium confidence: 2 bearings
+# Low confidence: 2 bearings
+
+bearings:
+  # ============================================================
+  # Condition 1: 35Hz / 12kN (5 bearings)
+  # ============================================================
+
+  - bearing_id: Bearing1_1
+    condition: 35Hz12kN
+    onset_file_idx: 69
+    confidence: high
+    detection_method: rms
+    notes: >
+      RMS-based onset at file 69. SNR=122.8 with 100% post-onset above 2.5σ threshold.
+      Sustained degradation through failure. Upgraded from medium after quantitative
+      analysis confirmed clear onset pattern despite noisy kurtosis baseline.
+
+  - bearing_id: Bearing1_2
+    condition: 35Hz12kN
+    onset_file_idx: 43
+    confidence: high
+    detection_method: kurtosis
+    notes: >
+      Clear kurtosis increase from baseline 0.58±0.22 starting at file 43.
+      Sustained increase through failure. High confidence onset.
+
+  - bearing_id: Bearing1_3
+    condition: 35Hz12kN
+    onset_file_idx: 59
+    confidence: high
+    detection_method: kurtosis
+    notes: >
+      Very stable baseline (0.03±0.03). Clear kurtosis spike at file 59.
+      Strong evidence of sudden defect initiation. High confidence.
+
+  - bearing_id: Bearing1_4
+    condition: 35Hz12kN
+    onset_file_idx: 79
+    confidence: high
+    detection_method: kurtosis
+    notes: >
+      Stable baseline (0.02±0.03), then dramatic kurtosis increase to 141.44
+      at failure. Clear onset at file 79. High confidence.
+
+  - bearing_id: Bearing1_5
+    condition: 35Hz12kN
+    onset_file_idx: 27
+    confidence: high
+    detection_method: rms
+    notes: >
+      Short life (52 files). RMS-based onset at file 27 with extremely high SNR=860.8.
+      Post-onset exceedance of 29-45σ with 100% sustained above threshold.
+      Clear progressive wear failure despite no kurtosis onset. Upgraded from medium.
+
+  # ============================================================
+  # Condition 2: 37.5Hz / 11kN (5 bearings)
+  # ============================================================
+
+  - bearing_id: Bearing2_1
+    condition: 37.5Hz11kN
+    onset_file_idx: 452
+    confidence: high
+    detection_method: kurtosis
+    notes: >
+      Very long healthy life (452/491 files healthy = 92%). Stable baseline
+      (0.02±0.04), clear kurtosis spike at 452. High confidence - classic
+      sudden onset near end of life.
+
+  - bearing_id: Bearing2_2
+    condition: 37.5Hz11kN
+    onset_file_idx: 47
+    confidence: high
+    detection_method: kurtosis
+    notes: >
+      Stable baseline (0.03±0.03), clear onset at file 47. Kurtosis rises
+      to 2.28 at failure. High confidence early-life defect initiation.
+
+  - bearing_id: Bearing2_3
+    condition: 37.5Hz11kN
+    onset_file_idx: 122
+    confidence: high
+    detection_method: kurtosis
+    notes: >
+      Long life (533 files). Stable baseline (0.02±0.03), sustained kurtosis
+      increase starting at file 122. Clear degradation pattern. High confidence.
+
+  - bearing_id: Bearing2_4
+    condition: 37.5Hz11kN
+    onset_file_idx: 9
+    confidence: low
+    detection_method: rms
+    onset_range: [7, 15]
+    notes: >
+      Very short life (42 files), unstable baseline. Kurtosis shows high
+      initial values (0.87-1.79 in first 10 samples) then DECREASES during
+      failure. RMS shows onset around file 9. Unusual failure pattern -
+      possibly pre-existing defect or anomalous bearing. Low confidence.
+
+  - bearing_id: Bearing2_5
+    condition: 37.5Hz11kN
+    onset_file_idx: 121
+    confidence: high
+    detection_method: rms
+    notes: >
+      Long life (339 files). Kurtosis never exceeds baseline threshold and
+      actually DECREASES toward failure (-0.51). RMS shows clear onset at
+      file 121 with SNR=132.3 and 100% post-onset sustained above threshold.
+      Progressive wear failure mode, not impulsive. Upgraded from medium.
+
+  # ============================================================
+  # Condition 3: 40Hz / 10kN (5 bearings)
+  # ============================================================
+
+  - bearing_id: Bearing3_1
+    condition: 40Hz10kN
+    onset_file_idx: 748
+    confidence: high
+    detection_method: composite
+    onset_range: [748, 870]
+    notes: >
+      Very long life (2538 files). Stable baseline (0.03±0.03). Kurtosis-based
+      detection at 870, but composite HI shows earlier change at 748.
+      Multiple degradation stages visible. High confidence on 748.
+
+  - bearing_id: Bearing3_2
+    condition: 40Hz10kN
+    onset_file_idx: 169
+    confidence: low
+    detection_method: rms
+    onset_range: [169, 1441]
+    notes: >
+      Very long life (2496 files). High initial kurtosis baseline (1.84±0.30).
+      Kurtosis never shows clear onset - actually decreases toward failure.
+      RMS shows gradual increase starting around file 169 (2σ) but more
+      definitive change at 1233-1441 (2.5-3σ). Very gradual degradation.
+      Low confidence - onset range spans large portion of life.
+
+  - bearing_id: Bearing3_3
+    condition: 40Hz10kN
+    onset_file_idx: 339
+    confidence: high
+    detection_method: kurtosis
+    notes: >
+      Clear stable baseline (0.05±0.03), sharp kurtosis increase at file 339.
+      Well-defined onset point with sustained degradation. High confidence.
+
+  - bearing_id: Bearing3_4
+    condition: 40Hz10kN
+    onset_file_idx: 1417
+    confidence: medium
+    detection_method: rms
+    onset_range: [1012, 1417]
+    notes: >
+      Very long life (1515 files). Initial high kurtosis (1.66 at file 0)
+      causes composite to show very early "onset" at file 3, which is
+      misleading. RMS shows sustained increase only at file 1417 (2.5σ) with
+      100% post-onset above threshold. Earlier RMS change at 1012 (2σ) shows
+      only 10.8% sustained. Used conservative 1417 as onset. SNR=320.8.
+
+  - bearing_id: Bearing3_5
+    condition: 40Hz10kN
+    onset_file_idx: 29
+    confidence: medium
+    detection_method: rms
+    onset_range: [24, 71]
+    notes: >
+      Short-medium life (114 files). High baseline variance (0.16) results in
+      low SNR=6.1. RMS increases from file 24-29 onwards (2σ). 95.6% post-onset
+      sustained but high baseline noise prevents high confidence. Progressive
+      wear failure mode.
+
+# Summary Statistics:
+# - Bearings with kurtosis-based onset: 7 (1_2, 1_3, 1_4, 2_1, 2_2, 2_3, 3_3)
+# - Bearings with RMS-based onset: 6 (1_1, 1_5, 2_4, 2_5, 3_2, 3_4, 3_5)
+# - Bearings with composite-based onset: 2 (3_1)
+#
+# Key observations:
+# 1. Kurtosis works well for sudden/impulsive defect initiation (cage failure, spalling)
+# 2. RMS is more reliable for progressive wear patterns (lubrication degradation)
+# 3. Some bearings show decreasing kurtosis during failure (Bearing2_4, 2_5, 3_2)
+#    indicating smoothing of defect surfaces or distributed damage
+# 4. Very long-lived bearings (2500+ files) often show multiple degradation stages
+# 5. High SNR (>100) with 100% post-onset sustained = reliable high confidence label

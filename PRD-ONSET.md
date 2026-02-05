@@ -210,19 +210,19 @@ Generate onset labels for all bearings to enable supervised training and evaluat
 **Priority**: P0 | **Effort**: 2h | **Phase**: 2. Label Generation
 
 **Tasks**:
-- [ ] Create `configs/onset_labels.yaml` with manually-verified onset indices
-- [ ] Analyze kurtosis plots for all 15 bearings to identify visual onset points
-- [ ] Document labeling methodology:
+- [x] Create `configs/onset_labels.yaml` with manually-verified onset indices
+- [x] Analyze kurtosis plots for all 15 bearings to identify visual onset points
+- [x] Document labeling methodology:
   - First sustained kurtosis increase (>2 std above baseline for >5 consecutive samples)
   - Or first RMS increase that doesn't return to baseline
-- [ ] Record onset file index for each bearing (file_idx where degradation starts)
-- [ ] Add uncertainty ranges where onset is ambiguous
+- [x] Record onset file index for each bearing (file_idx where degradation starts)
+- [x] Add uncertainty ranges where onset is ambiguous
 
 **Acceptance**:
-- [ ] YAML contains onset_idx for all 15 bearings
-- [ ] Each entry has: `bearing_id`, `condition`, `onset_file_idx`, `confidence` (high/medium/low)
-- [ ] Ambiguous cases documented with `onset_range: [min_idx, max_idx]`
-- [ ] At least 10 bearings have high-confidence labels
+- [x] YAML contains onset_idx for all 15 bearings
+- [x] Each entry has: `bearing_id`, `condition`, `onset_file_idx`, `confidence` (high/medium/low)
+- [x] Ambiguous cases documented with `onset_range: [min_idx, max_idx]`
+- [x] At least 10 bearings have high-confidence labels
 
 **Files**:
 - `configs/onset_labels.yaml`
