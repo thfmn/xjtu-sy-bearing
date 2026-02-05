@@ -278,3 +278,70 @@ class TestNoDataLeakage:
 
         np.testing.assert_array_equal(split.val.windows, expected_val_windows)
         np.testing.assert_array_equal(split.val.labels, expected_val_labels)
+
+
+# ---------------------------------------------------------------------------
+# ONSET-14 Acceptance: Window size is configurable (default 10)
+# ---------------------------------------------------------------------------
+
+
+class TestWindowSizeConfigurable:
+    """Verify that window_size parameter is configurable with default=10."""
+
+    def test_default_window_size_is_10(
+        self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """When window_size is not specified, it defaults to 10."""
+        import inspect
+
+        sig = inspect.signature(create_onset_dataset)
+        assert sig.parameters["window_size"].default == 10
+
+    def test_different_window_sizes_produce_different_shapes(
+        self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """Window dimension of output matches the requested window_size."""
+        for ws in [1, 3, 5, 8, 12]:
+            result = create_onset_dataset(synthetic_df, onset_labels, window_size=ws)
+            if len(result.windows) > 0:
+                assert result.windows.shape[1] == ws, (
+                    f"Expected window dim={ws}, got {result.windows.shape[1]}"
+                )
+
+    def test_larger_window_produces_fewer_windows(
+        self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """Increasing window_size reduces the number of windows (fewer fit)."""
+        r_small = create_onset_dataset(synthetic_df, onset_labels, window_size=3)
+        r_large = create_onset_dataset(synthetic_df, onset_labels, window_size=10)
+        assert len(r_large.labels) < len(r_small.labels), (
+            f"window=10 should give fewer windows than window=3: "
+            f"{len(r_large.labels)} vs {len(r_small.labels)}"
+        )
+
+    def test_window_size_1_edge_case(
+        self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """window_size=1 should work and produce one window per sample."""
+        result = create_onset_dataset(synthetic_df, onset_labels, window_size=1)
+        # B1=20 + B2=15 + B3=25 = 60 total samples, window=1 -> 60 windows
+        assert len(result.labels) == 60
+        assert result.windows.shape == (60, 1, 4)
+
+    def test_window_size_0_raises_value_error(self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]) -> None:
+        with pytest.raises(ValueError, match="window_size must be >= 1"):
+            create_onset_dataset(synthetic_df, onset_labels, window_size=0)
+
+    def test_window_size_negative_raises_value_error(self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]) -> None:
+        with pytest.raises(ValueError, match="window_size must be >= 1"):
+            create_onset_dataset(synthetic_df, onset_labels, window_size=-5)
+
+    def test_window_size_exceeds_bearing_length_skips_bearing(
+        self, synthetic_df: pd.DataFrame, onset_labels: dict[str, OnsetLabelEntry]
+    ) -> None:
+        """If window_size > bearing sample count, that bearing is skipped."""
+        # B2 has 15 samples. window_size=16 should skip B2.
+        result = create_onset_dataset(synthetic_df, onset_labels, window_size=16)
+        assert "B2" not in set(result.bearing_ids)
+        # B1=20, B3=25 still produce windows
+        assert len(result.labels) > 0

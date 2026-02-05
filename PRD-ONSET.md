@@ -379,7 +379,7 @@ Implement a neural network classifier for onset detection to improve upon rule-b
 - [x] Dataset yields `(window_features, binary_label)` tuples
 - [x] Class weights computed for imbalanced binary classification
 - [x] No data leakage: bearings in train set not in val set
-- [ ] Window size is configurable (default 10 = ~10 seconds at 1 sample/sec)
+- [x] Window size is configurable (default 10 = ~10 seconds at 1 sample/sec)
 
 **Files**:
 - `src/onset/dataset.py`

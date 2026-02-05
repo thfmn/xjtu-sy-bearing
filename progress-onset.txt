@@ -667,3 +667,16 @@
   - test_multiple_val_bearings_no_leakage: 2 val bearings, train only has remaining
   - test_windows_content_matches_original: window content identical to original (no corruption)
   - All 20 tests passing (was 13 before, +7 new no-leakage tests)
+
+2026-02-06 02:07:47 START: ONSET-14 Acceptance - Window size is configurable (default 10 = ~10 seconds at 1 sample/sec)
+2026-02-06 02:08:44 DONE: ONSET-14 Acceptance - Window size is configurable (default 10 = ~10 seconds at 1 sample/sec)
+  - Added TestWindowSizeConfigurable class to tests/onset/test_dataset.py (7 tests)
+  - test_default_window_size_is_10: verifies function signature has default=10
+  - test_different_window_sizes_produce_different_shapes: ws in [1,3,5,8,12] all produce correct shape
+  - test_larger_window_produces_fewer_windows: window=10 gives fewer windows than window=3
+  - test_window_size_1_edge_case: window=1 → 60 windows (one per sample), shape (60,1,4)
+  - test_window_size_0_raises_value_error: ValueError for window_size=0
+  - test_window_size_negative_raises_value_error: ValueError for window_size=-5
+  - test_window_size_exceeds_bearing_length_skips_bearing: B2 (15 samples) skipped with window=16
+  - All 27 tests passing (was 20 before, +7 new window size tests)
+  - ONSET-14 ALL ACCEPTANCE CRITERIA NOW COMPLETE
