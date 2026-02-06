@@ -904,3 +904,14 @@
   - All 237 onset tests still passing
 2026-02-06 03:00:38 DONE: Handle edge cases: no onset detected (predict max_rul), onset at start (ONSET-18 fourth checkbox)
   - ONSET-18 ALL TASK CHECKBOXES NOW COMPLETE
+
+2026-02-06 15:32:50 START: ONSET-18 Acceptance - Pipeline correctly chains onset detection and RUL prediction (first unchecked acceptance checkbox)
+2026-02-06 15:34:11 DONE: ONSET-18 Acceptance - Pipeline correctly chains onset detection and RUL prediction
+  - Created tests/onset/test_pipeline.py with TestPipelineChainsOnsetAndRul class (6 tests)
+  - test_predict_calls_detect_onset_then_predict_rul: verifies predict() calls both stages
+  - test_detect_onset_result_feeds_into_predict_rul: verifies predict() == manual detect_onset + predict_rul
+  - test_predict_returns_correct_length: verifies output length matches input length
+  - test_predict_with_separate_rul_signals: verifies rul_signals param used for Stage 2
+  - test_predict_with_ml_classifier_chains_correctly: verifies ML classifier path chains correctly
+  - test_pipeline_output_is_float32: verifies output dtype
+  - All 243 onset tests passing (237 existing + 6 new)

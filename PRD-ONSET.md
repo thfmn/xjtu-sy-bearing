@@ -480,7 +480,7 @@ Integrate onset detection with existing RUL models to create complete two-stage 
 - [x] Handle edge cases: no onset detected (predict max_rul), onset at start
 
 **Acceptance**:
-- [ ] Pipeline correctly chains onset detection and RUL prediction
+- [x] Pipeline correctly chains onset detection and RUL prediction
 - [ ] Pre-onset samples receive `max_rul` (125) prediction
 - [ ] Post-onset samples receive model predictions
 - [ ] Supports swapping onset detector without changing RUL model
