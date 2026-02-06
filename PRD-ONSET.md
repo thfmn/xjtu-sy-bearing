@@ -568,19 +568,19 @@ Integrate onset detection with existing RUL models to create complete two-stage 
 **Priority**: P0 | **Effort**: 2h | **Phase**: 4. Integration
 
 **Tasks**:
-- [ ] Create `tests/onset/test_pipeline.py`
-- [ ] Test `TwoStagePipeline.detect_onset()` with rule-based detector
-- [ ] Test `TwoStagePipeline.detect_onset()` with ML classifier
-- [ ] Test `TwoStagePipeline.predict()` produces correct RUL shape
-- [ ] Test pre-onset samples receive max_rul
-- [ ] Test post-onset samples receive model predictions
-- [ ] Test edge case: onset at index 0
+- [x] Create `tests/onset/test_pipeline.py`
+- [x] Test `TwoStagePipeline.detect_onset()` with rule-based detector
+- [x] Test `TwoStagePipeline.detect_onset()` with ML classifier
+- [x] Test `TwoStagePipeline.predict()` produces correct RUL shape
+- [x] Test pre-onset samples receive max_rul
+- [x] Test post-onset samples receive model predictions
+- [x] Test edge case: onset at index 0
 
 **Acceptance**:
-- [ ] All tests pass with `pytest tests/onset/test_pipeline.py`
-- [ ] Tests cover both detector types (rule-based and ML)
-- [ ] Edge cases handled correctly
-- [ ] Coverage >90% for `pipeline.py`
+- [x] All tests pass with `pytest tests/onset/test_pipeline.py`
+- [x] Tests cover both detector types (rule-based and ML)
+- [x] Edge cases handled correctly
+- [x] Coverage >90% for `pipeline.py`
 
 **Files**:
 - `tests/onset/test_pipeline.py`

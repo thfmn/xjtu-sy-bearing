@@ -1040,3 +1040,21 @@
   - test_generate_rul_for_bearing_onset_idx_ignored_for_default_strategy: onset_idx ignored for piecewise_linear
   - All 46 tests passing in test_twostage_rul.py (was 24 before, +22 new)
   - Full suite: 402 passed, 3 skipped, 0 failures
+
+2026-02-06 16:02:09 START: ONSET-22 Two-Stage Pipeline Unit Tests - Verify all checkboxes
+2026-02-06 16:02:09 VERIFIED: ONSET-22 ALL task and acceptance checkboxes already satisfied by existing tests/onset/test_pipeline.py
+  - File tests/onset/test_pipeline.py already exists with 21 tests (created during ONSET-18 acceptance)
+  - Task checkbox mapping to existing tests:
+    1. Create tests/onset/test_pipeline.py → file exists (21 tests)
+    2. Test detect_onset() with rule-based detector → TestPipelineChainsOnsetAndRul.test_detect_onset_result_feeds_into_predict_rul
+    3. Test detect_onset() with ML classifier → TestPipelineChainsOnsetAndRul.test_predict_with_ml_classifier_chains_correctly
+    4. Test predict() produces correct RUL shape → TestPipelineChainsOnsetAndRul.test_predict_returns_correct_length (shape==(100,))
+    5. Test pre-onset samples receive max_rul → TestPreOnsetSamplesReceiveMaxRul class (5 tests)
+    6. Test post-onset samples receive model predictions → TestPostOnsetSamplesReceiveModelPredictions class (5 tests)
+    7. Test edge case: onset at index 0 → TestPostOnsetSamplesReceiveModelPredictions.test_onset_at_zero_all_samples_go_to_rul_model
+  - Acceptance verification:
+    - All 21 tests pass: `uv run pytest tests/onset/test_pipeline.py -x -q` → 21 passed
+    - Both detector types covered: rule-based (ThresholdOnsetDetector, CUSUMOnsetDetector, EWMAOnsetDetector) + ML classifier (MockOnsetClassifier)
+    - Edge cases: onset_idx=0, onset_idx=None (no onset), custom max_rul, separate rul_signals
+    - Coverage 93% for pipeline.py (>90% threshold met): missing only TypeError/ValueError guards + empty ML degraded branch
+2026-02-06 16:03:46 DONE: ONSET-22 Two-Stage Pipeline Unit Tests - ALL checkboxes verified and checked off
