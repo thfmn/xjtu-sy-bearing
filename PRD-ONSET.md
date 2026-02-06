@@ -627,13 +627,13 @@ Evaluate two-stage pipeline against single-stage baseline and document results.
 - [x] Generate comparison table: single-stage vs. two-stage MAE/RMSE/PHM08
 - [x] Plot RUL predictions for sample bearings (both approaches)
 - [x] Analyze onset detection accuracy impact on final RUL metrics
-- [ ] Document when two-stage helps vs. when it doesn't
+- [x] Document when two-stage helps vs. when it doesn't
 
 **Acceptance**:
-- [ ] Notebook executes end-to-end without errors
-- [ ] Comparison table includes all relevant metrics
-- [ ] Plots clearly show improvement (or lack thereof) from two-stage
-- [ ] Analysis identifies bearing types where two-stage excels
+- [x] Notebook executes end-to-end without errors
+- [x] Comparison table includes all relevant metrics
+- [x] Plots clearly show improvement (or lack thereof) from two-stage
+- [x] Analysis identifies bearing types where two-stage excels
 
 **Files**:
 - `notebooks/41_twostage_evaluation.ipynb`

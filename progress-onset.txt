@@ -735,3 +735,22 @@
   - Missed detections (5/15 bearings) cause the most damage: detector outputs max_rul everywhere → large errors
   - Just need to check off the PRD checkbox (implementation already complete from notebook creation)
 2026-02-06 16:57:16 DONE: Analyze onset detection accuracy impact on final RUL metrics (ONSET-24 fifth checkbox)
+
+2026-02-06 16:58:45 START: Document when two-stage helps vs. when it doesn't (ONSET-24 sixth checkbox)
+  - Need to add a structured markdown documentation cell to notebooks/41_twostage_evaluation.ipynb
+  - Existing code cells already compute all the data; need a conclusion/documentation cell
+  - Will also verify notebook executes end-to-end and check off the 4 acceptance criteria
+2026-02-06 17:00:23 DONE: Document when two-stage helps vs. when it doesn't (ONSET-24 sixth checkbox)
+  - Added structured markdown documentation cell after final-summary cell in notebooks/41_twostage_evaluation.ipynb
+  - Documents: when two-stage helps (7/15 bearings, all with accurate onset detection + late onset timing)
+  - Documents: when two-stage hurts (3/15 bearings, all due to missed onset detection)
+  - Documents: by operating condition (Condition 1: +72.7%, Condition 2: -30.8%, Condition 3: -147.1%)
+  - Documents: 4 recommendations (detector is bottleneck, bidirectional needed, fallback strategy, late-onset value)
+  - Tables with per-bearing data for both helped and hurt cases
+  - Verified notebook executes end-to-end without errors (nbconvert --execute succeeded, 854KB output)
+  - ONSET-24 Acceptance criteria also verified and checked off:
+    [x] Notebook executes end-to-end without errors: YES (nbconvert --execute succeeds)
+    [x] Comparison table includes all relevant metrics: YES (per-bearing + aggregate MAE/RMSE/PHM08)
+    [x] Plots clearly show improvement (or lack thereof): YES (6 sample plots + 15-bearing grid + bar chart)
+    [x] Analysis identifies bearing types where two-stage excels: YES (late-onset + accurate detection)
+  - ONSET-24 ALL TASK CHECKBOXES AND ACCEPTANCE CRITERIA NOW COMPLETE
