@@ -1176,3 +1176,14 @@
   - All 16 integration tests pass in 3.36s
   - Verified: loads real features_v2.csv → computes health indicators → detects onset → predicts RUL → computes metrics (onset_detection_metrics, conditional_rul_metrics, twostage_combined_score)
 2026-02-06 16:30:23 DONE: ONSET-25 second checkbox - Test full pipeline (verified and checked off)
+
+2026-02-06 16:31:47 START: ONSET-25 third checkbox - Test with real features_v2.csv data (subset for speed)
+  - Already implemented in TestRealDataSubset class (5 tests):
+    - test_features_have_expected_columns: verifies required columns exist
+    - test_test_bearings_present: all 3 test bearings in loaded data
+    - test_bearings_have_multiple_samples: each bearing has >=50 samples
+    - test_onset_labels_exist_for_test_bearings: manual onset labels available
+    - test_health_indicators_computed_from_real_data: non-constant real values, composite in [0,1]
+  - Uses real features_v2.csv (3 bearings: Bearing1_3, Bearing2_1, Bearing3_3) with pytestmark skip if absent
+  - All 5 tests pass in 3.46s
+2026-02-06 16:31:47 DONE: ONSET-25 third checkbox - Test with real features_v2.csv data (verified and checked off)
