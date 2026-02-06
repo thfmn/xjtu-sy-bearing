@@ -915,3 +915,13 @@
   - test_predict_with_ml_classifier_chains_correctly: verifies ML classifier path chains correctly
   - test_pipeline_output_is_float32: verifies output dtype
   - All 243 onset tests passing (237 existing + 6 new)
+
+2026-02-06 15:34:44 START: ONSET-18 Acceptance - Pre-onset samples receive max_rul (125) prediction
+2026-02-06 15:35:49 DONE: ONSET-18 Acceptance - Pre-onset samples receive max_rul (125) prediction
+  - Added TestPreOnsetSamplesReceiveMaxRul class to tests/onset/test_pipeline.py (5 tests)
+  - test_pre_onset_samples_are_exactly_max_rul: verifies result[:onset_idx] == 125.0 with rule-based detector
+  - test_no_onset_all_samples_are_max_rul: verifies all 100 samples == 125.0 when onset_idx is None, RUL model NOT called
+  - test_predict_rul_with_none_onset_returns_max_rul: verifies predict_rul(signals, None) returns all 125.0
+  - test_custom_max_rul_value_applied_to_pre_onset: verifies max_rul=200 applies custom value to pre-onset
+  - test_pre_onset_max_rul_with_ml_classifier: verifies pre-onset == 125.0 when using ML classifier Stage 1
+  - All 248 onset tests passing (243 existing + 5 new)

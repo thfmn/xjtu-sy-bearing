@@ -201,3 +201,118 @@ class TestPipelineChainsOnsetAndRul:
         )
         result = pipeline.predict(healthy_then_degraded_series)
         assert result.dtype == np.float32
+
+
+# ============================================================================
+# ONSET-18 Acceptance: Pre-onset samples receive max_rul (125) prediction
+# ============================================================================
+
+
+class TestPreOnsetSamplesReceiveMaxRul:
+    """Verify that all pre-onset samples receive max_rul (125) prediction."""
+
+    def test_pre_onset_samples_are_exactly_max_rul(
+        self, fitted_threshold_detector, mock_rul_model, healthy_then_degraded_series
+    ):
+        """Samples before onset_idx must be exactly max_rul=125."""
+        pipeline = TwoStagePipeline(
+            onset_detector=fitted_threshold_detector,
+            rul_model=mock_rul_model,
+        )
+
+        onset_result = pipeline.detect_onset(healthy_then_degraded_series)
+        assert onset_result.onset_idx is not None
+        onset_idx = onset_result.onset_idx
+
+        result = pipeline.predict(healthy_then_degraded_series)
+
+        # Every sample before onset_idx must be exactly 125.0
+        pre_onset = result[:onset_idx]
+        assert len(pre_onset) > 0, "Need at least one pre-onset sample"
+        np.testing.assert_array_equal(pre_onset, 125.0)
+
+    def test_no_onset_all_samples_are_max_rul(self, mock_rul_model):
+        """When no onset is detected, ALL samples should be max_rul=125."""
+        # Healthy-only signal: low variance, no degradation
+        healthy_only = np.random.RandomState(42).normal(0.0, 0.1, 100)
+
+        detector = ThresholdOnsetDetector(threshold_sigma=3.0, min_consecutive=3)
+        detector.fit(healthy_only[:50])
+
+        pipeline = TwoStagePipeline(
+            onset_detector=detector,
+            rul_model=mock_rul_model,
+        )
+
+        # Verify no onset detected
+        onset_result = pipeline.detect_onset(healthy_only)
+        assert onset_result.onset_idx is None
+
+        result = pipeline.predict(healthy_only)
+
+        # All 100 samples should be exactly 125.0
+        np.testing.assert_array_equal(result, 125.0)
+        # RUL model should NOT have been called
+        assert not mock_rul_model.predict_called
+
+    def test_predict_rul_with_none_onset_returns_max_rul(self, mock_rul_model):
+        """predict_rul(signals, onset_idx=None) returns all max_rul."""
+        pipeline = TwoStagePipeline(
+            onset_detector=ThresholdOnsetDetector(),
+            rul_model=mock_rul_model,
+        )
+
+        signals = np.random.rand(80)
+        result = pipeline.predict_rul(signals, onset_idx=None)
+
+        np.testing.assert_array_equal(result, 125.0)
+        assert result.shape == (80,)
+        assert not mock_rul_model.predict_called
+
+    def test_custom_max_rul_value_applied_to_pre_onset(
+        self, fitted_threshold_detector, healthy_then_degraded_series
+    ):
+        """Custom max_rul value should be used for pre-onset samples."""
+        custom_max = 200
+        rul_model = MockRulModel(start_rul=50.0)
+
+        pipeline = TwoStagePipeline(
+            onset_detector=fitted_threshold_detector,
+            rul_model=rul_model,
+            max_rul=custom_max,
+        )
+
+        onset_result = pipeline.detect_onset(healthy_then_degraded_series)
+        assert onset_result.onset_idx is not None
+
+        result = pipeline.predict(healthy_then_degraded_series)
+        pre_onset = result[: onset_result.onset_idx]
+
+        # Pre-onset samples use the custom max_rul, not default 125
+        np.testing.assert_array_equal(pre_onset, float(custom_max))
+
+    def test_pre_onset_max_rul_with_ml_classifier(self, mock_rul_model):
+        """Pre-onset samples get max_rul when using ML classifier for Stage 1."""
+        # ML classifier: first 30 healthy, last 70 degraded
+        probs = np.concatenate([
+            np.full(30, 0.1),  # healthy
+            np.full(70, 0.9),  # degraded
+        ])
+        onset_classifier = MockOnsetClassifier(probs)
+
+        detector = ThresholdOnsetDetector()
+        detector.fit(np.zeros(10))
+
+        pipeline = TwoStagePipeline(
+            onset_detector=detector,
+            rul_model=mock_rul_model,
+            onset_model=onset_classifier,
+        )
+
+        onset_signals = np.random.rand(100, 10, 4)
+        rul_signals = np.random.rand(100, 5)
+
+        result = pipeline.predict(onset_signals, rul_signals=rul_signals)
+
+        # First 30 samples (pre-onset) must be exactly 125.0
+        np.testing.assert_array_equal(result[:30], 125.0)
