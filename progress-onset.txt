@@ -935,3 +935,14 @@
   - test_onset_at_zero_all_samples_go_to_rul_model: verifies onset_idx=0 sends all 50 samples to RUL model
   - test_post_onset_with_ml_classifier: verifies post-onset model predictions when using ML classifier Stage 1
   - All 253 onset tests passing (248 existing + 5 new)
+
+2026-02-06 15:38:20 START: ONSET-18 Acceptance - Supports swapping onset detector without changing RUL model
+2026-02-06 15:39:53 DONE: ONSET-18 Acceptance - Supports swapping onset detector without changing RUL model
+  - Added TestSwapOnsetDetectorWithoutChangingRulModel class to tests/onset/test_pipeline.py (5 tests)
+  - test_threshold_then_cusum_same_rul_model: swaps Threshold→CUSUM, verifies same rul_model instance
+  - test_threshold_then_ewma_same_rul_model: swaps Threshold→EWMA, verifies same rul_model instance
+  - test_all_three_detectors_share_one_rul_model: all 3 detector types produce valid results with same RUL model
+  - test_swapped_detector_does_not_affect_rul_model_state: verifies RUL model state unchanged after swap, re-run yields identical result
+  - test_reassign_detector_attribute_directly: verifies direct attribute reassignment of onset_detector works
+  - All 258 onset tests passing (253 existing + 5 new)
+  - ONSET-18 ALL ACCEPTANCE CRITERIA NOW COMPLETE

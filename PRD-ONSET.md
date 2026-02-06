@@ -483,7 +483,7 @@ Integrate onset detection with existing RUL models to create complete two-stage 
 - [x] Pipeline correctly chains onset detection and RUL prediction
 - [x] Pre-onset samples receive `max_rul` (125) prediction
 - [x] Post-onset samples receive model predictions
-- [ ] Supports swapping onset detector without changing RUL model
+- [x] Supports swapping onset detector without changing RUL model
 
 **Files**:
 - `src/onset/pipeline.py`
