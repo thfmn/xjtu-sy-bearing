@@ -500,7 +500,7 @@ Integrate onset detection with existing RUL models to create complete two-stage 
   - Pre-onset: RUL = max_rul (constant, not decaying)
   - Post-onset: RUL = piecewise_linear from onset to failure
 - [x] Add `onset_idx` parameter to existing RUL functions
-- [ ] Update `scripts/03_extract_features.py` to optionally add two-stage RUL column
+- [x] Update `scripts/03_extract_features.py` to optionally add two-stage RUL column
 
 **Acceptance**:
 - [ ] Two-stage RUL shows flat line (max_rul) before onset, then decay after

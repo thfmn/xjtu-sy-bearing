@@ -38,8 +38,9 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.data.loader import XJTUBearingLoader, BEARINGS_PER_CONDITION
-from src.data.rul_labels import piecewise_linear_rul
+from src.data.rul_labels import compute_twostage_rul, piecewise_linear_rul
 from src.features.fusion import FeatureExtractor
+from src.onset.labels import load_onset_labels
 
 
 # Configuration
@@ -114,6 +115,7 @@ def extract_features_for_bearing(
     bearing_id: str,
     processed: set[str],
     logger: logging.Logger,
+    onset_labels: dict | None = None,
 ) -> tuple[list[dict], list[str]]:
     """Extract features for all files in a bearing.
 
@@ -124,6 +126,7 @@ def extract_features_for_bearing(
         bearing_id: Bearing identifier.
         processed: Set of already processed file IDs.
         logger: Logger instance.
+        onset_labels: Optional onset labels dict for two-stage RUL computation.
 
     Returns:
         Tuple of (list of feature records, list of newly processed IDs).
@@ -135,6 +138,17 @@ def extract_features_for_bearing(
     # Get total files for RUL calculation
     bearing_path = loader.data_root / condition / bearing_id
     total_files = len(list(bearing_path.glob("*.csv")))
+
+    # Pre-compute RUL arrays (once per bearing, not per file)
+    rul_array = piecewise_linear_rul(total_files, max_rul=125.0)
+
+    twostage_rul_array = None
+    if onset_labels is not None:
+        onset_idx = onset_labels[bearing_id].onset_file_idx if bearing_id in onset_labels else None
+        if onset_idx is not None:
+            twostage_rul_array = compute_twostage_rul(total_files, onset_idx=onset_idx, max_rul=125.0)
+        else:
+            logger.warning(f"No onset label for {bearing_id}, skipping rul_twostage")
 
     for signal, filename, file_idx in loader.iter_bearing(condition, bearing_id):
         file_id = f"{condition}/{bearing_id}/{filename}"
@@ -149,7 +163,6 @@ def extract_features_for_bearing(
             feature_dict = dict(zip(extractor.feature_names, features))
 
             # Calculate RUL - get the value at file_idx from the RUL array
-            rul_array = piecewise_linear_rul(total_files, max_rul=125.0)
             rul = float(rul_array[file_idx])
 
             # Build record with metadata
@@ -162,6 +175,11 @@ def extract_features_for_bearing(
                 "rul": rul,
                 **feature_dict,
             }
+
+            # Add two-stage RUL if available
+            if twostage_rul_array is not None:
+                record["rul_twostage"] = float(twostage_rul_array[file_idx])
+
             records.append(record)
             newly_processed.append(file_id)
 
@@ -200,6 +218,17 @@ def main():
         default=500,
         help="Save checkpoint every N files (default: 500)",
     )
+    parser.add_argument(
+        "--twostage-rul",
+        action="store_true",
+        help="Add rul_twostage column using onset labels from YAML",
+    )
+    parser.add_argument(
+        "--onset-labels",
+        type=str,
+        default=None,
+        help="Path to onset_labels.yaml (default: configs/onset_labels.yaml)",
+    )
     args = parser.parse_args()
 
     # Setup
@@ -217,6 +246,12 @@ def main():
     except FileNotFoundError as e:
         logger.error(f"Dataset not found: {e}")
         sys.exit(1)
+
+    # Load onset labels if two-stage RUL requested
+    onset_labels = None
+    if args.twostage_rul:
+        onset_labels = load_onset_labels(args.onset_labels)
+        logger.info(f"Two-stage RUL enabled: loaded onset labels for {len(onset_labels)} bearings")
 
     # Get total file count
     metadata = loader.get_metadata()
@@ -270,6 +305,7 @@ def main():
                 bearing_id=bearing_id,
                 processed=processed,
                 logger=logger,
+                onset_labels=onset_labels,
             )
 
             all_records.extend(records)

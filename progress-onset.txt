@@ -979,3 +979,14 @@
   - Verified: two-stage works via generate_rul_for_bearing(200, strategy='twostage', onset_idx=100)
   - Verified: backward compatible - onset_idx ignored for non-twostage strategies
   - All 356 tests passing (0 regressions), 3 skipped (audio)
+
+2026-02-06 15:49:12 START: Update scripts/03_extract_features.py to optionally add two-stage RUL column (ONSET-19 fourth checkbox)
+2026-02-06 15:52:15 DONE: Update scripts/03_extract_features.py to optionally add two-stage RUL column (ONSET-19 fourth checkbox)
+  - Added --twostage-rul CLI flag and --onset-labels path to scripts/03_extract_features.py
+  - When --twostage-rul is set: loads onset labels from YAML, computes rul_twostage column for each bearing
+  - rul_twostage: pre-onset samples get constant 125 (max_rul), post-onset get linear decay to 0
+  - Existing rul column (piecewise_linear) always computed (backward compatible)
+  - Also optimized: moved piecewise_linear_rul() call outside per-file loop (pre-compute per bearing)
+  - Added imports: compute_twostage_rul from src.data.rul_labels, load_onset_labels from src.onset.labels
+  - Missing bearing in onset_labels: logs warning and skips rul_twostage for that bearing
+  - All 356 tests passing (0 regressions), 3 skipped (audio)
