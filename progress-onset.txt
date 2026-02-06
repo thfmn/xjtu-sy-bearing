@@ -990,3 +990,16 @@
   - Added imports: compute_twostage_rul from src.data.rul_labels, load_onset_labels from src.onset.labels
   - Missing bearing in onset_labels: logs warning and skips rul_twostage for that bearing
   - All 356 tests passing (0 regressions), 3 skipped (audio)
+
+2026-02-06 15:53:06 START: ONSET-19 Acceptance - Two-stage RUL shows flat line (max_rul) before onset, then decay after
+2026-02-06 15:54:19 DONE: ONSET-19 Acceptance - Two-stage RUL shows flat line (max_rul) before onset, then decay after
+  - Created tests/test_twostage_rul.py with TestTwostageRulFlatBeforeOnsetDecayAfter class (8 tests)
+  - test_pre_onset_is_constant_max_rul: verifies all samples before onset_idx == 125.0
+  - test_post_onset_decays_monotonically: verifies non-increasing post-onset
+  - test_post_onset_ends_at_zero: verifies rul[-1] == 0.0
+  - test_flat_then_decay_shape: verifies std(pre)==0 (flat) and std(post)>0 (decaying)
+  - test_transition_at_onset_idx: verifies rul[99]==125.0 and rul[100]==99.0
+  - test_post_onset_capped_at_max_rul: verifies cap when post-onset > max_rul+1
+  - test_short_post_onset_uncapped: verifies uncapped when post-onset < max_rul+1
+  - test_all_15_bearings_shape: verifies flat+decay shape for all 15 XJTU-SY bearings with real onset indices
+  - All 8 tests passing
