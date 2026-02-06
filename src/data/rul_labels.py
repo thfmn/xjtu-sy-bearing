@@ -236,6 +236,7 @@ def generate_rul_for_bearing(
     strategy: RULStrategy = "piecewise_linear",
     max_rul: float = 125.0,
     normalize: bool = False,
+    onset_idx: int | None = None,
 ) -> np.ndarray:
     """Generate RUL labels for a complete bearing lifecycle.
 
@@ -244,8 +245,10 @@ def generate_rul_for_bearing(
     Args:
         bearing_file_count: Number of files in the bearing's lifecycle.
         strategy: RUL labeling strategy to use.
-        max_rul: Maximum RUL value (for piecewise linear).
+        max_rul: Maximum RUL value (for piecewise linear and twostage).
         normalize: If True, normalize RUL to [0, 1] range.
+        onset_idx: File index where degradation begins. Only used when
+            strategy="twostage". Defaults to None.
 
     Returns:
         Array of RUL values for each file in the bearing lifecycle.
@@ -253,7 +256,9 @@ def generate_rul_for_bearing(
     if bearing_file_count <= 0:
         raise ValueError(f"bearing_file_count must be positive, got {bearing_file_count}")
 
-    rul = generate_rul_labels(bearing_file_count, strategy=strategy, max_rul=max_rul)
+    rul = generate_rul_labels(
+        bearing_file_count, strategy=strategy, max_rul=max_rul, onset_idx=onset_idx
+    )
 
     if normalize:
         rul_max = rul.max()

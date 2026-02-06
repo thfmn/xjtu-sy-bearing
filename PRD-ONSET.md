@@ -496,10 +496,10 @@ Integrate onset detection with existing RUL models to create complete two-stage 
 
 **Tasks**:
 - [x] Modify `src/data/rul_labels.py` to add two-stage RUL option
-- [ ] Implement `compute_twostage_rul(file_indices, onset_idx, max_rul=125)`:
+- [x] Implement `compute_twostage_rul(file_indices, onset_idx, max_rul=125)`:
   - Pre-onset: RUL = max_rul (constant, not decaying)
   - Post-onset: RUL = piecewise_linear from onset to failure
-- [ ] Add `onset_idx` parameter to existing RUL functions
+- [x] Add `onset_idx` parameter to existing RUL functions
 - [ ] Update `scripts/03_extract_features.py` to optionally add two-stage RUL column
 
 **Acceptance**:

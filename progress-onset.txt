@@ -958,3 +958,24 @@
   - Updated src/data/__init__.py to export compute_twostage_rul
   - Backward compatible: existing calls to generate_rul_labels() unaffected (onset_idx defaults to None)
   - All 356 tests passing (0 regressions), 3 skipped (audio)
+
+2026-02-06 15:44:04 START: ONSET-19 second checkbox - Implement compute_twostage_rul(file_indices, onset_idx, max_rul=125)
+  - Note: Already implemented during ONSET-19 first checkbox session. Verifying implementation and checking off.
+2026-02-06 15:45:48 VERIFIED: compute_twostage_rul(num_files, onset_idx, max_rul=125) already implemented in src/data/rul_labels.py (lines 133-191):
+  - Signature: compute_twostage_rul(num_files: int, onset_idx: int | None, max_rul: float = 125.0)
+  - Pre-onset (idx < onset_idx): constant max_rul (flat line) ✓
+  - Post-onset (idx >= onset_idx): linear decay from min(max_rul, files_remaining-1) to 0 ✓
+  - Edge cases: onset_idx=None (all max_rul), onset_idx=0 (all to RUL model), onset_idx<0 (ValueError) ✓
+  - Also integrated into generate_rul_labels() unified interface with strategy="twostage" + onset_idx param
+  - Also exported via src/data/__init__.py
+  - All 356 tests passing (0 regressions), 3 skipped (audio)
+2026-02-06 15:45:48 DONE: ONSET-19 second checkbox - Implement compute_twostage_rul (verified and checked off)
+
+2026-02-06 15:46:24 START: ONSET-19 third checkbox - Add onset_idx parameter to existing RUL functions
+2026-02-06 15:48:27 DONE: ONSET-19 third checkbox - Add onset_idx parameter to existing RUL functions
+  - Added onset_idx parameter to generate_rul_for_bearing() (the public convenience function)
+  - Parameter defaults to None (backward compatible), passed through to generate_rul_labels()
+  - generate_rul_labels() already supports onset_idx (routed to compute_twostage_rul for strategy="twostage")
+  - Verified: two-stage works via generate_rul_for_bearing(200, strategy='twostage', onset_idx=100)
+  - Verified: backward compatible - onset_idx ignored for non-twostage strategies
+  - All 356 tests passing (0 regressions), 3 skipped (audio)
