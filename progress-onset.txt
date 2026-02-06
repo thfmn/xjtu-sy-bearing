@@ -1141,3 +1141,16 @@
   - All 23 two-stage metrics tests passing
   - Just need to check off the PRD checkbox
 2026-02-06 16:24:25 DONE: ONSET-23 third checkbox - Implement conditional_rul_metrics (PRD checkbox updated)
+
+2026-02-06 16:25:05 START: ONSET-23 fourth checkbox + 4 acceptance checkboxes - Add combined score + verify acceptance
+  - twostage_combined_score() already implemented in src/training/metrics.py (line 384)
+  - 5 tests in TestTwoStageCombinedScore already passing (test_twostage_metrics.py)
+  - All 23 two-stage metrics tests pass
+  - Verifying acceptance criteria:
+    [x] Onset timing MAE in consistent units: onset_timing_mae() returns both samples and minutes (line 326-328)
+    [x] Post-onset RUL metrics exclude pre-onset: conditional_rul_metrics() filters via onset_mask (line 371)
+    [x] Combined score provides single number: twostage_combined_score() returns float (line 418)
+    [x] Edge cases handled: empty arrays, NaN indices, no post-onset samples all handled
+  - Just need to check off PRD checkboxes (implementation already complete from prior session)
+2026-02-06 16:26:07 DONE: ONSET-23 fourth checkbox + 4 acceptance checkboxes - ALL checked off
+  - ONSET-23 ALL TASK CHECKBOXES AND ACCEPTANCE CRITERIA NOW COMPLETE

@@ -604,13 +604,13 @@ Evaluate two-stage pipeline against single-stage baseline and document results.
   - Mean Absolute Error of onset timing (in samples/minutes)
 - [x] Implement `conditional_rul_metrics(y_true_rul, y_pred_rul, onset_mask)`:
   - MAE/RMSE computed only on post-onset samples
-- [ ] Add combined score: weighted combination of onset + RUL metrics
+- [x] Add combined score: weighted combination of onset + RUL metrics
 
 **Acceptance**:
-- [ ] Onset timing MAE is computed in consistent units (samples or minutes)
-- [ ] Post-onset RUL metrics exclude pre-onset samples
-- [ ] Combined score provides single number for model comparison
-- [ ] All metrics handle edge cases (no onset detected)
+- [x] Onset timing MAE is computed in consistent units (samples or minutes)
+- [x] Post-onset RUL metrics exclude pre-onset samples
+- [x] Combined score provides single number for model comparison
+- [x] All metrics handle edge cases (no onset detected)
 
 **Files**:
 - `src/training/metrics.py` (modified)
