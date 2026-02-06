@@ -645,7 +645,7 @@ Evaluate two-stage pipeline against single-stage baseline and document results.
 **Priority**: P0 | **Effort**: 2h | **Phase**: 5. Evaluation
 
 **Tasks**:
-- [ ] Create `tests/integration/test_twostage_pipeline.py`
+- [x] Create `tests/integration/test_twostage_pipeline.py`
 - [ ] Test full pipeline: load data -> detect onset -> predict RUL -> compute metrics
 - [ ] Test with real features_v2.csv data (subset for speed)
 - [ ] Test pipeline serialization: save and load complete pipeline

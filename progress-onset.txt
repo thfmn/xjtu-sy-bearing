@@ -1154,3 +1154,15 @@
   - Just need to check off PRD checkboxes (implementation already complete from prior session)
 2026-02-06 16:26:07 DONE: ONSET-23 fourth checkbox + 4 acceptance checkboxes - ALL checked off
   - ONSET-23 ALL TASK CHECKBOXES AND ACCEPTANCE CRITERIA NOW COMPLETE
+
+2026-02-06 16:26:57 START: ONSET-25 first checkbox - Create tests/integration/test_twostage_pipeline.py
+  - Created tests/integration/__init__.py and tests/integration/test_twostage_pipeline.py
+  - 16 integration tests across 5 test classes:
+    - TestFullPipelineEndToEnd: 3 tests (full pipeline, all bearings, CUSUM detector)
+    - TestRealDataSubset: 5 tests (columns, bearings present, samples, labels, real data)
+    - TestPipelineSerialization: 3 tests (pickle round-trip, detector state, JSON metadata)
+    - TestMetricsExpectedRanges: 4 tests (F1 range, timing MAE, conditional RUL MAE, combined score)
+    - TestPerformance: 1 test (under 60 seconds)
+  - Uses real features_v2.csv data (3 bearings: Bearing1_3, Bearing2_1, Bearing3_3)
+  - All 16 tests pass in 3.02s, all 281 onset tests still pass
+2026-02-06 16:29:32 DONE: ONSET-25 first checkbox - Create tests/integration/test_twostage_pipeline.py
