@@ -602,7 +602,7 @@ Evaluate two-stage pipeline against single-stage baseline and document results.
 - [x] Implement `onset_detection_metrics(y_true_onset, y_pred_onset)`:
   - Precision, Recall, F1 for onset classification
   - Mean Absolute Error of onset timing (in samples/minutes)
-- [ ] Implement `conditional_rul_metrics(y_true_rul, y_pred_rul, onset_mask)`:
+- [x] Implement `conditional_rul_metrics(y_true_rul, y_pred_rul, onset_mask)`:
   - MAE/RMSE computed only on post-onset samples
 - [ ] Add combined score: weighted combination of onset + RUL metrics
 

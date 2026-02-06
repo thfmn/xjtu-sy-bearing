@@ -1134,3 +1134,10 @@
   - All 425 tests pass (23 new + 402 existing), 3 skipped, 0 failures
   - onset_detection_metrics: precision/recall/F1/accuracy/tp/fp/fn/tn ✓
   - onset_timing_mae: MAE in samples + minutes with NaN/-1 handling ✓
+
+2026-02-06 16:24:25 START: ONSET-23 third checkbox - Implement conditional_rul_metrics (PRD checkbox update only)
+  - Function already implemented in src/training/metrics.py (lines 333-381) during prior session
+  - Tests already exist in tests/onset/test_twostage_metrics.py (TestConditionalRULMetrics: 5 tests)
+  - All 23 two-stage metrics tests passing
+  - Just need to check off the PRD checkbox
+2026-02-06 16:24:25 DONE: ONSET-23 third checkbox - Implement conditional_rul_metrics (PRD checkbox updated)
