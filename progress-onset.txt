@@ -1187,3 +1187,12 @@
   - Uses real features_v2.csv (3 bearings: Bearing1_3, Bearing2_1, Bearing3_3) with pytestmark skip if absent
   - All 5 tests pass in 3.46s
 2026-02-06 16:31:47 DONE: ONSET-25 third checkbox - Test with real features_v2.csv data (verified and checked off)
+
+2026-02-06 16:33:14 START: ONSET-25 fourth checkbox - Test pipeline serialization: save and load complete pipeline
+  - Already implemented in TestPipelineSerialization class (3 tests):
+    - test_pickle_round_trip_produces_identical_results: pickles pipeline, reloads, verifies identical predictions
+    - test_detector_state_survives_serialization: verifies fitted state (mean, std, n_samples) preserved through pickle
+    - test_pipeline_components_json_metadata: verifies pipeline config can be saved/loaded as JSON
+  - All 16 integration tests pass in 3.51s
+  - Just need to check off the PRD checkbox
+2026-02-06 16:34:26 DONE: ONSET-25 fourth checkbox - Test pipeline serialization (verified existing tests and checked off)
