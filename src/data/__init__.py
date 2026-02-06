@@ -11,6 +11,7 @@ from src.data.loader import (
 )
 from src.data.rul_labels import (
     RULStrategy,
+    compute_twostage_rul,
     exponential_rul,
     generate_rul_for_bearing,
     generate_rul_labels,
@@ -47,6 +48,7 @@ __all__ = [
     "XJTUBearingLoader",
     # RUL utilities
     "RULStrategy",
+    "compute_twostage_rul",
     "exponential_rul",
     "generate_rul_for_bearing",
     "generate_rul_labels",

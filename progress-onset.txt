@@ -946,3 +946,15 @@
   - test_reassign_detector_attribute_directly: verifies direct attribute reassignment of onset_detector works
   - All 258 onset tests passing (253 existing + 5 new)
   - ONSET-18 ALL ACCEPTANCE CRITERIA NOW COMPLETE
+
+2026-02-06 15:40:29 START: Modify src/data/rul_labels.py to add two-stage RUL option (ONSET-19 first checkbox)
+2026-02-06 15:43:23 DONE: Modify src/data/rul_labels.py to add two-stage RUL option (ONSET-19 first checkbox)
+  - Added compute_twostage_rul(num_files, onset_idx, max_rul=125) function to src/data/rul_labels.py
+  - Pre-onset: constant max_rul (flat line)
+  - Post-onset: linear decay from min(max_rul, files_remaining-1) to 0 at failure, capped at max_rul
+  - Handles edge cases: onset_idx=None (all max_rul), onset_idx=0, onset_idx<0 (ValueError)
+  - Added "twostage" to RULStrategy Literal type
+  - Integrated into generate_rul_labels() unified interface via onset_idx parameter (defaults to None)
+  - Updated src/data/__init__.py to export compute_twostage_rul
+  - Backward compatible: existing calls to generate_rul_labels() unaffected (onset_idx defaults to None)
+  - All 356 tests passing (0 regressions), 3 skipped (audio)

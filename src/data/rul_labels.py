@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from matplotlib.axes import Axes
 
 
-RULStrategy = Literal["piecewise_linear", "linear", "exponential"]
+RULStrategy = Literal["piecewise_linear", "linear", "exponential", "twostage"]
 
 
 def piecewise_linear_rul(
@@ -130,11 +130,73 @@ def exponential_rul(
     return rul.astype(np.float32)
 
 
+def compute_twostage_rul(
+    num_files: int,
+    onset_idx: int | None,
+    max_rul: float = 125.0,
+) -> np.ndarray:
+    """Generate two-stage RUL labels using onset detection.
+
+    Pre-onset samples receive a constant max_rul value (bearing is healthy,
+    RUL is not decaying yet). Post-onset samples receive piecewise-linear
+    decay from onset to failure.
+
+    Args:
+        num_files: Total number of files (samples) for the bearing.
+        onset_idx: File index where degradation begins. If None, all samples
+            receive max_rul (no onset detected).
+        max_rul: Maximum RUL value (default: 125).
+
+    Returns:
+        Array of shape (num_files,) with RUL values.
+        Pre-onset: constant max_rul.
+        Post-onset: linear decay from min(max_rul, files_remaining) to 0.
+
+    Example:
+        >>> rul = compute_twostage_rul(200, onset_idx=100, max_rul=125)
+        >>> rul[0]  # Pre-onset: constant max_rul
+        125.0
+        >>> rul[99]  # Just before onset: still max_rul
+        125.0
+        >>> rul[100]  # At onset: min(125, 100) = 100
+        100.0
+        >>> rul[-1]  # Failure
+        0.0
+    """
+    if num_files <= 0:
+        raise ValueError(f"num_files must be positive, got {num_files}")
+
+    if onset_idx is None:
+        # No onset detected: all samples get max_rul
+        return np.full(num_files, max_rul, dtype=np.float32)
+
+    if onset_idx < 0:
+        raise ValueError(f"onset_idx must be non-negative, got {onset_idx}")
+
+    rul = np.empty(num_files, dtype=np.float32)
+
+    # Pre-onset: constant max_rul
+    rul[:onset_idx] = max_rul
+
+    # Post-onset: linear decay from (num_files - 1 - onset_idx) down to 0
+    post_onset_count = num_files - onset_idx
+    if post_onset_count > 0:
+        post_onset_rul = np.arange(
+            post_onset_count - 1, -1, -1, dtype=np.float32
+        )
+        # Cap at max_rul (in case post_onset_count - 1 > max_rul)
+        np.minimum(post_onset_rul, max_rul, out=post_onset_rul)
+        rul[onset_idx:] = post_onset_rul
+
+    return rul
+
+
 def generate_rul_labels(
     num_files: int,
     strategy: RULStrategy = "piecewise_linear",
     max_rul: float = 125.0,
     decay_rate: float = 3.0,
+    onset_idx: int | None = None,
 ) -> np.ndarray:
     """Generate RUL labels using specified strategy.
 
@@ -142,9 +204,11 @@ def generate_rul_labels(
 
     Args:
         num_files: Total number of files for the bearing.
-        strategy: One of "piecewise_linear", "linear", "exponential".
-        max_rul: Maximum RUL for piecewise linear (ignored for other strategies).
+        strategy: One of "piecewise_linear", "linear", "exponential", "twostage".
+        max_rul: Maximum RUL for piecewise linear and twostage strategies.
         decay_rate: Decay rate for exponential (ignored for other strategies).
+        onset_idx: File index where degradation begins. Required for "twostage"
+            strategy; ignored for other strategies.
 
     Returns:
         Array of shape (num_files,) with RUL values.
@@ -158,10 +222,12 @@ def generate_rul_labels(
         return linear_rul(num_files)
     elif strategy == "exponential":
         return exponential_rul(num_files, decay_rate=decay_rate)
+    elif strategy == "twostage":
+        return compute_twostage_rul(num_files, onset_idx=onset_idx, max_rul=max_rul)
     else:
         raise ValueError(
             f"Unknown RUL strategy: {strategy}. "
-            f"Must be one of: piecewise_linear, linear, exponential"
+            f"Must be one of: piecewise_linear, linear, exponential, twostage"
         )
 
 
