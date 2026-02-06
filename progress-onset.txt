@@ -1109,3 +1109,16 @@
   [x] Dataset size reduced when filtering pre-onset samples: 9216 -> 5486 (3730 pre-onset removed)
   [x] MLflow logs both onset and RUL metrics: lines 388-398 log onset_method, filter_pre_onset, max_rul alongside RUL params
   [x] Training script works with all existing model architectures: --model all --dry-run builds cnn1d_baseline, cnn2d_lstm, cnn2d_simple, tcn_transformer_lstm successfully
+
+2026-02-06 16:16:18 START: Modify src/training/metrics.py to add two-stage metrics (ONSET-23 first checkbox)
+  - Will add onset_detection_metrics() function: Precision, Recall, F1, onset timing MAE
+2026-02-06 16:19:20 DONE: Modify src/training/metrics.py to add two-stage metrics (ONSET-23 first checkbox)
+  - Added 4 new functions to src/training/metrics.py:
+    1. onset_detection_metrics(y_true_onset, y_pred_onset) → precision, recall, f1, accuracy, tp/fp/fn/tn
+    2. onset_timing_mae(true_onset_indices, pred_onset_indices, samples_per_minute) → MAE in samples/minutes
+    3. conditional_rul_metrics(y_true_rul, y_pred_rul, onset_mask) → post-onset MAE/RMSE/PHM08
+    4. twostage_combined_score(onset_metrics, rul_metrics, onset_weight, rul_weight) → single score (lower=better)
+  - Pure numpy implementation (no sklearn dependency needed), consistent with existing metrics.py style
+  - All functions handle edge cases: empty arrays, no post-onset samples, NaN onset indices
+  - Combined score formula: 0.7 * post_onset_mae + 0.3 * (1-F1) * 125 (scales onset error to RUL units)
+  - All 402 existing tests passing (0 regressions), 3 skipped
