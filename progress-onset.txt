@@ -697,3 +697,41 @@
   - Re-verified: notebook executes end-to-end without errors (nbconvert --execute, 849KB output)
   - All data loaded correctly: 9216 samples, 15 bearings, onset labels, health indicators
 2026-02-06 16:49:10 DONE: Load trained two-stage pipeline and single-stage models (ONSET-24 second checkbox)
+
+2026-02-06 16:49:39 START: Generate comparison table: single-stage vs. two-stage MAE/RMSE/PHM08 (ONSET-24 third checkbox)
+  - Cell "per-bearing-metrics" and "aggregate-metrics" already implement the comparison table
+  - Need to verify the notebook executes correctly with these cells producing the table output
+  - Re-executed notebook end-to-end via nbconvert --execute: SUCCESS (849KB output)
+  - Verified per-bearing-metrics cell produces:
+    - Per-bearing table with columns: Bearing, Cond, Files, Onset%, Single MAE, TwoStg MAE, Improv%, Onset F1, OnsetErr
+    - All 15 bearings included with MAE/RMSE/PHM08 metrics
+    - Mean row at bottom: Single MAE=9.45, TwoStg MAE=15.36, mean improvement=-35.1%
+  - Verified aggregate-metrics cell produces:
+    - Global MAE: Single=2.038, TwoStage=3.239
+    - Global RMSE: Single=10.966, TwoStage=17.096
+    - Global PHM08 (normalized): Single=7.788, TwoStage=1493.812
+    - Post-onset conditional metrics (5486/9216 samples)
+  - Note: Two-stage detected performs WORSE overall because 5/15 bearings have no onset detected
+    (Bearing1_5, 2_4, 2_5, 3_2, 3_5) → detector predicts max_rul everywhere → large RUL errors
+    This is an honest representation showing the two-stage approach is only as good as its onset detector
+2026-02-06 16:55:40 DONE: Generate comparison table: single-stage vs. two-stage MAE/RMSE/PHM08 (ONSET-24 third checkbox)
+
+2026-02-06 16:56:13 START: Plot RUL predictions for sample bearings (ONSET-24 fourth checkbox)
+  - Cells already exist in notebook: plot-sample-bearings (6 sample bearings, 3 RUL curves each)
+    and plot-all-bearings-grid (15-bearing 5x3 grid)
+  - Verifying notebook executes end-to-end: SUCCESS (nbconvert --execute, 849KB output)
+  - Plots show: ground truth (two-stage oracle), single-stage, two-stage (detected) with onset markers
+  - Error shading between single-stage and ground truth clearly shows improvement regions
+2026-02-06 16:56:56 DONE: Plot RUL predictions for sample bearings (ONSET-24 fourth checkbox)
+
+2026-02-06 16:57:16 START: Analyze onset detection accuracy impact on final RUL metrics (ONSET-24 fifth checkbox)
+  - Notebook Section 4 already contains two cells implementing this analysis:
+    - onset-error-analysis cell: 3-panel plot (|onset error| vs MAE improvement, onset% vs MAE improvement, per-bearing MAE bars)
+      + onset timing metrics (MAE=176.7 samples, 10/15 valid detections)
+    - sensitivity-analysis cell: systematic sweep of onset error offsets (-50 to +50 samples) vs global MAE
+      + MAE at perfect onset: 0.000, at +/-10 error: 0.755, at +/-25 error: 2.097
+  - Both cells execute without errors (verified via nbconvert --execute, 849KB output)
+  - Analysis shows: onset detection accuracy has strong impact — even 10-sample error introduces 0.755 MAE
+  - Missed detections (5/15 bearings) cause the most damage: detector outputs max_rul everywhere → large errors
+  - Just need to check off the PRD checkbox (implementation already complete from notebook creation)
+2026-02-06 16:57:16 DONE: Analyze onset detection accuracy impact on final RUL metrics (ONSET-24 fifth checkbox)
