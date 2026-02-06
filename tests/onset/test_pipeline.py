@@ -316,3 +316,127 @@ class TestPreOnsetSamplesReceiveMaxRul:
 
         # First 30 samples (pre-onset) must be exactly 125.0
         np.testing.assert_array_equal(result[:30], 125.0)
+
+
+# ============================================================================
+# ONSET-18 Acceptance: Post-onset samples receive model predictions
+# ============================================================================
+
+
+class TestPostOnsetSamplesReceiveModelPredictions:
+    """Verify that post-onset samples receive actual RUL model predictions."""
+
+    def test_post_onset_samples_are_model_predictions(
+        self, fitted_threshold_detector, mock_rul_model, healthy_then_degraded_series
+    ):
+        """Samples at and after onset_idx must come from the RUL model."""
+        pipeline = TwoStagePipeline(
+            onset_detector=fitted_threshold_detector,
+            rul_model=mock_rul_model,
+        )
+
+        onset_result = pipeline.detect_onset(healthy_then_degraded_series)
+        assert onset_result.onset_idx is not None
+        onset_idx = onset_result.onset_idx
+
+        result = pipeline.predict(healthy_then_degraded_series)
+
+        # Post-onset samples should NOT be max_rul (they should be model preds)
+        post_onset = result[onset_idx:]
+        assert len(post_onset) > 0, "Need at least one post-onset sample"
+        assert not np.all(post_onset == 125.0), (
+            "Post-onset samples should be model predictions, not max_rul"
+        )
+
+    def test_post_onset_values_match_direct_model_call(
+        self, fitted_threshold_detector, healthy_then_degraded_series
+    ):
+        """Post-onset values must exactly match calling rul_model.predict() on post-onset slice."""
+        rul_model = MockRulModel(start_rul=80.0)
+
+        pipeline = TwoStagePipeline(
+            onset_detector=fitted_threshold_detector,
+            rul_model=rul_model,
+        )
+
+        onset_result = pipeline.detect_onset(healthy_then_degraded_series)
+        onset_idx = onset_result.onset_idx
+        assert onset_idx is not None
+
+        result = pipeline.predict(healthy_then_degraded_series)
+
+        # Directly call the RUL model on the same post-onset slice
+        post_onset_slice = healthy_then_degraded_series[onset_idx:]
+        expected = np.asarray(rul_model.predict(post_onset_slice)).ravel()
+
+        # Use allclose to tolerate float64->float32 rounding in pipeline
+        np.testing.assert_allclose(result[onset_idx:], expected, rtol=1e-5)
+
+    def test_rul_model_receives_correct_post_onset_slice(
+        self, fitted_threshold_detector, healthy_then_degraded_series
+    ):
+        """RUL model predict() should be called with exactly the post-onset samples."""
+        rul_model = MockRulModel(start_rul=50.0)
+        pipeline = TwoStagePipeline(
+            onset_detector=fitted_threshold_detector,
+            rul_model=rul_model,
+        )
+
+        onset_result = pipeline.detect_onset(healthy_then_degraded_series)
+        onset_idx = onset_result.onset_idx
+        n_total = len(healthy_then_degraded_series)
+
+        pipeline.predict_rul(healthy_then_degraded_series, onset_idx)
+
+        # The model should have been given exactly (n_total - onset_idx) samples
+        assert rul_model.predict_called
+        assert rul_model.predict_input_shape[0] == n_total - onset_idx
+
+    def test_onset_at_zero_all_samples_go_to_rul_model(self):
+        """When onset_idx=0, all samples should be model predictions."""
+        rul_model = MockRulModel(start_rul=100.0)
+        pipeline = TwoStagePipeline(
+            onset_detector=ThresholdOnsetDetector(),
+            rul_model=rul_model,
+        )
+
+        signals = np.random.rand(50)
+        result = pipeline.predict_rul(signals, onset_idx=0)
+
+        assert rul_model.predict_called
+        assert rul_model.predict_input_shape[0] == 50
+        # All 50 values are model predictions (linspace from 100 to 0)
+        expected = np.linspace(100.0, 0.0, 50).astype(np.float32)
+        np.testing.assert_array_almost_equal(result, expected)
+
+    def test_post_onset_with_ml_classifier(self):
+        """Post-onset samples get model predictions when using ML classifier."""
+        # ML classifier: onset at index 20
+        probs = np.concatenate([
+            np.full(20, 0.1),  # healthy
+            np.full(80, 0.9),  # degraded
+        ])
+        onset_classifier = MockOnsetClassifier(probs)
+
+        rul_model = MockRulModel(start_rul=60.0)
+        detector = ThresholdOnsetDetector()
+        detector.fit(np.zeros(10))
+
+        pipeline = TwoStagePipeline(
+            onset_detector=detector,
+            rul_model=rul_model,
+            onset_model=onset_classifier,
+        )
+
+        onset_signals = np.random.rand(100, 10, 4)
+        rul_signals = np.random.rand(100, 5)
+
+        result = pipeline.predict(onset_signals, rul_signals=rul_signals)
+
+        # Post-onset (indices 20-99): should be model predictions, not max_rul
+        post_onset = result[20:]
+        assert len(post_onset) == 80
+        assert not np.all(post_onset == 125.0)
+        # Model returns linspace(60, 0, 80) for 80 samples
+        expected = np.linspace(60.0, 0.0, 80).astype(np.float32)
+        np.testing.assert_array_almost_equal(post_onset, expected)
