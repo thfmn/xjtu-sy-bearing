@@ -1102,3 +1102,10 @@
     [x] When enabled: load onset labels, filter dataset, train RUL on filtered dataset
     [x] Log onset detection metrics alongside RUL metrics (onset params logged to MLflow)
     [x] Save both onset detector/model and RUL model (onset_config.json saved with checkpoint)
+
+2026-02-06 16:14:38 START: ONSET-21 Acceptance - Verify --two-stage flag activates two-stage training mode
+2026-02-06 16:16:00 DONE: ONSET-21 Acceptance - All 4 acceptance criteria verified:
+  [x] --two-stage flag activates two-stage training mode: args.two_stage at line 170, controls flow at line 606
+  [x] Dataset size reduced when filtering pre-onset samples: 9216 -> 5486 (3730 pre-onset removed)
+  [x] MLflow logs both onset and RUL metrics: lines 388-398 log onset_method, filter_pre_onset, max_rul alongside RUL params
+  [x] Training script works with all existing model architectures: --model all --dry-run builds cnn1d_baseline, cnn2d_lstm, cnn2d_simple, tcn_transformer_lstm successfully

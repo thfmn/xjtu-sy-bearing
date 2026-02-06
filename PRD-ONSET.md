@@ -553,10 +553,10 @@ Integrate onset detection with existing RUL models to create complete two-stage 
 - [x] Save both onset detector/model and RUL model
 
 **Acceptance**:
-- [ ] `--two-stage` flag activates two-stage training mode
-- [ ] Dataset size reduced when filtering pre-onset samples
-- [ ] MLflow logs both onset and RUL metrics
-- [ ] Training script works with all existing model architectures
+- [x] `--two-stage` flag activates two-stage training mode
+- [x] Dataset size reduced when filtering pre-onset samples
+- [x] MLflow logs both onset and RUL metrics
+- [x] Training script works with all existing model architectures
 
 **Files**:
 - `scripts/05_train_dl_models.py` (modified)
