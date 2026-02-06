@@ -599,7 +599,7 @@ Evaluate two-stage pipeline against single-stage baseline and document results.
 
 **Tasks**:
 - [x] Modify `src/training/metrics.py` to add two-stage metrics
-- [ ] Implement `onset_detection_metrics(y_true_onset, y_pred_onset)`:
+- [x] Implement `onset_detection_metrics(y_true_onset, y_pred_onset)`:
   - Precision, Recall, F1 for onset classification
   - Mean Absolute Error of onset timing (in samples/minutes)
 - [ ] Implement `conditional_rul_metrics(y_true_rul, y_pred_rul, onset_mask)`:

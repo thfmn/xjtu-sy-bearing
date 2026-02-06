@@ -1122,3 +1122,15 @@
   - All functions handle edge cases: empty arrays, no post-onset samples, NaN onset indices
   - Combined score formula: 0.7 * post_onset_mae + 0.3 * (1-F1) * 125 (scales onset error to RUL units)
   - All 402 existing tests passing (0 regressions), 3 skipped
+
+2026-02-06 16:20:09 START: Verify onset_detection_metrics + onset_timing_mae implementation (ONSET-23 second checkbox)
+  - Functions already implemented in prior session, need verification tests + checkbox tick
+2026-02-06 16:22:54 DONE: Verify onset_detection_metrics + onset_timing_mae implementation (ONSET-23 second checkbox)
+  - Created tests/onset/test_twostage_metrics.py with 23 tests covering all 4 two-stage metric functions
+  - TestOnsetDetectionMetrics: 6 tests (perfect, all FP, all FN, mixed, empty, keys)
+  - TestOnsetTimingMAE: 7 tests (perfect, known errors, unit conversion, NaN handling, -1 handling, consistent units)
+  - TestConditionalRULMetrics: 5 tests (post-onset only, pre-onset exclusion, no post-onset, all post-onset, keys)
+  - TestTwoStageCombinedScore: 5 tests (perfect, worst onset, single number, NaN, custom weights)
+  - All 425 tests pass (23 new + 402 existing), 3 skipped, 0 failures
+  - onset_detection_metrics: precision/recall/F1/accuracy/tp/fp/fn/tn ✓
+  - onset_timing_mae: MAE in samples + minutes with NaN/-1 handling ✓
