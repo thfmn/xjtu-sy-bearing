@@ -623,7 +623,7 @@ Evaluate two-stage pipeline against single-stage baseline and document results.
 
 **Tasks**:
 - [x] Create `notebooks/41_twostage_evaluation.ipynb`
-- [ ] Load trained two-stage pipeline and single-stage models
+- [x] Load trained two-stage pipeline and single-stage models
 - [ ] Generate comparison table: single-stage vs. two-stage MAE/RMSE/PHM08
 - [ ] Plot RUL predictions for sample bearings (both approaches)
 - [ ] Analyze onset detection accuracy impact on final RUL metrics

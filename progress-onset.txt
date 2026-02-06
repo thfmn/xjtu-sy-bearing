@@ -687,3 +687,13 @@
     - Early-onset bearings (<30% life) see little/negative benefit (-141.4%)
     - When onset IS detected accurately (8/15 within 5 samples), two-stage consistently improves
     - Overall: 7/15 bearings improved, 5 unchanged (perfect detection), 3 hurt
+
+2026-02-06 16:48:29 START: Load trained two-stage pipeline and single-stage models (ONSET-24 second checkbox)
+  - Notebook already contains this implementation from initial creation:
+    - Cell "load-data": loads features_v2.csv, onset labels, health indicators
+    - Cell "compute-rul-labels": computes single-stage (piecewise_linear) and two-stage RUL for all 15 bearings
+    - Cell "run-detectors": runs ThresholdOnsetDetector to get predicted onset indices
+    - Cell "compute-predicted-rul": computes predicted RUL using detected onset for comparison
+  - Re-verified: notebook executes end-to-end without errors (nbconvert --execute, 849KB output)
+  - All data loaded correctly: 9216 samples, 15 bearings, onset labels, health indicators
+2026-02-06 16:49:10 DONE: Load trained two-stage pipeline and single-stage models (ONSET-24 second checkbox)
