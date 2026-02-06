@@ -543,14 +543,14 @@ Integrate onset detection with existing RUL models to create complete two-stage 
 **Priority**: P1 | **Effort**: 3h | **Phase**: 4. Integration
 
 **Tasks**:
-- [ ] Modify `scripts/05_train_dl_models.py` to support two-stage mode
-- [ ] Add `--two-stage` CLI flag to enable two-stage training
-- [ ] When enabled:
+- [x] Modify `scripts/05_train_dl_models.py` to support two-stage mode
+- [x] Add `--two-stage` CLI flag to enable two-stage training
+- [x] When enabled:
   - Load onset labels from config
   - Filter dataset to post-onset samples only (if `filter_pre_onset=true`)
   - Train RUL model on filtered dataset
-- [ ] Log onset detection metrics alongside RUL metrics
-- [ ] Save both onset detector/model and RUL model
+- [x] Log onset detection metrics alongside RUL metrics
+- [x] Save both onset detector/model and RUL model
 
 **Acceptance**:
 - [ ] `--two-stage` flag activates two-stage training mode

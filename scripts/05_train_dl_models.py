@@ -4,11 +4,15 @@
 Trains any registered DL model with leave-one-bearing-out cross-validation
 and MLflow experiment tracking.
 
+Supports two-stage mode where RUL model trains only on post-onset samples
+with onset-relative RUL labels.
+
 Usage:
     python scripts/05_train_dl_models.py --model cnn1d_baseline --config configs/cnn1d_baseline.yaml
     python scripts/05_train_dl_models.py --model all
     python scripts/05_train_dl_models.py --model cnn1d_baseline --folds 0,1,2
     python scripts/05_train_dl_models.py --model cnn1d_baseline --dry-run
+    python scripts/05_train_dl_models.py --model cnn1d_baseline --config configs/twostage_pipeline.yaml --two-stage
 """
 
 from __future__ import annotations
@@ -24,7 +28,9 @@ from tensorflow import keras
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.data.datasets import build_dataset_for_model
+from src.data.rul_labels import compute_twostage_rul
 from src.models.registry import build_model, get_model_info, list_models
+from src.onset.labels import load_onset_labels
 from src.training.config import MLflowCallback, TrainingConfig, build_callbacks, compile_model
 from src.training.cv import CVFold, leave_one_bearing_out
 from src.training.metrics import evaluate_predictions
@@ -148,13 +154,111 @@ def parse_args() -> argparse.Namespace:
         help="Directory for saving results, predictions, and history.",
     )
     parser.add_argument(
+        "--features-csv",
+        type=str,
+        default="outputs/features/features_v2.csv",
+        help="Path to features CSV file. Use GCS fuse path for Vertex AI jobs.",
+    )
+    parser.add_argument(
         "--tracking",
         type=str,
         choices=["mlflow", "vertex", "both", "none"],
         default="mlflow",
         help="Experiment tracking backend(s). 'mlflow' (default), 'vertex', 'both', or 'none' (no tracking).",
     )
+    parser.add_argument(
+        "--two-stage",
+        action="store_true",
+        help="Enable two-stage training mode: load onset labels, filter pre-onset "
+        "samples (if config has training.filter_pre_onset=true), and use "
+        "onset-relative RUL labels. Requires onset section in config YAML.",
+    )
     return parser.parse_args()
+
+
+def prepare_twostage_data(
+    metadata_df: pd.DataFrame,
+    training_config: TrainingConfig,
+) -> pd.DataFrame:
+    """Prepare metadata for two-stage training: recompute RUL and optionally filter pre-onset samples.
+
+    Loads onset labels from the config, computes two-stage RUL labels
+    (constant max_rul pre-onset, linear decay post-onset), and optionally
+    removes pre-onset samples from the dataset.
+
+    Args:
+        metadata_df: Full metadata DataFrame (features_v2.csv) with at least
+            columns: bearing_id, file_idx, rul.
+        training_config: TrainingConfig with onset and training sections.
+
+    Returns:
+        Modified copy of metadata_df with:
+        - 'rul' column replaced by two-stage RUL
+        - 'rul_original' column preserving the original piecewise-linear RUL
+        - Pre-onset rows removed if filter_pre_onset=true
+        - 'is_post_onset' column (1 if post-onset, 0 otherwise)
+    """
+    onset_config = training_config.get_onset_config()
+    if onset_config is None:
+        raise ValueError(
+            "Two-stage mode requires an 'onset' section in the config YAML. "
+            "See configs/twostage_pipeline.yaml for an example."
+        )
+
+    twostage_config = training_config.get_twostage_training_config()
+    max_rul = twostage_config.max_rul
+
+    # Load onset labels
+    labels_path = onset_config.labels_path
+    print(f"  Loading onset labels from {labels_path} ...")
+    onset_labels = load_onset_labels(labels_path)
+    print(f"  Loaded onset labels for {len(onset_labels)} bearings")
+
+    # Work on a copy
+    df = metadata_df.copy()
+
+    # Preserve original RUL
+    df["rul_original"] = df["rul"].copy()
+
+    # Compute two-stage RUL and add is_post_onset flag per bearing
+    df["is_post_onset"] = 0
+    bearings_processed = 0
+    bearings_missing = []
+
+    for bearing_id in df["bearing_id"].unique():
+        if bearing_id not in onset_labels:
+            bearings_missing.append(bearing_id)
+            continue
+
+        mask = df["bearing_id"] == bearing_id
+        onset_idx = onset_labels[bearing_id].onset_file_idx
+        num_files = mask.sum()
+
+        # Compute two-stage RUL for this bearing
+        twostage_rul = compute_twostage_rul(num_files, onset_idx, max_rul=max_rul)
+        df.loc[mask, "rul"] = twostage_rul
+
+        # Mark post-onset samples
+        df.loc[mask, "is_post_onset"] = (df.loc[mask, "file_idx"] >= onset_idx).astype(int)
+        bearings_processed += 1
+
+    if bearings_missing:
+        print(f"  WARNING: {len(bearings_missing)} bearings not in onset labels: {bearings_missing}")
+
+    # Report onset split
+    n_pre = (df["is_post_onset"] == 0).sum()
+    n_post = (df["is_post_onset"] == 1).sum()
+    print(f"  Onset split: {n_pre} pre-onset, {n_post} post-onset samples")
+
+    # Filter pre-onset samples if configured
+    if twostage_config.filter_pre_onset:
+        original_count = len(df)
+        df = df[df["is_post_onset"] == 1].reset_index(drop=True)
+        print(f"  Filtered pre-onset: {original_count} -> {len(df)} samples ({original_count - len(df)} removed)")
+    else:
+        print("  filter_pre_onset=false: keeping all samples (with two-stage RUL labels)")
+
+    return df
 
 
 def train_single_fold(
@@ -167,6 +271,7 @@ def train_single_fold(
     output_dir: Path,
     config_path: Path | None = None,
     tracking_mode: str = "mlflow",
+    two_stage: bool = False,
 ) -> dict:
     """Train a model on one CV fold. Returns dict with metrics and predictions.
 
@@ -185,6 +290,7 @@ def train_single_fold(
         output_dir: Directory for saving checkpoints and results.
         config_path: Path to the YAML config file (for artifact logging).
         tracking_mode: Experiment tracking backend(s): "mlflow", "vertex", "both", or "none".
+        two_stage: Whether two-stage mode is active (for logging).
 
     Returns:
         Dict with keys: fold_id, model_name, metrics, y_true, y_pred, history.
@@ -202,7 +308,7 @@ def train_single_fold(
     # 2. Compile
     compile_model(model, training_config)
 
-    # 3. Build train/val datasets
+    # 3. Build train/val datasets (augmentation on training only)
     train_ds = build_dataset_for_model(
         model_name=model_name,
         metadata_df=metadata_df,
@@ -211,6 +317,7 @@ def train_single_fold(
         shuffle=True,
         data_root=str(data_root),
         spectrogram_dir=str(spectrogram_dir),
+        augment=True,
     )
     val_ds = build_dataset_for_model(
         model_name=model_name,
@@ -220,6 +327,7 @@ def train_single_fold(
         shuffle=False,
         data_root=str(data_root),
         spectrogram_dir=str(spectrogram_dir),
+        augment=False,
     )
 
     # 4. Build callbacks — checkpoint path includes model name and fold ID
@@ -262,19 +370,32 @@ def train_single_fold(
     else:
         print("  Vertex AI Experiments: disabled")
 
-    run_name = f"{model_name}_fold{fold_id}"
+    model_version = training_config.get_extra("model_version", "v0")
+    run_name = f"{model_name}_{model_version}_fold{fold_id}"
     training_params = {
         "model_name": model_name,
+        "model_version": model_version,
         "fold_id": fold_id,
         "batch_size": training_config.batch_size,
         "learning_rate": training_config.optimizer.learning_rate,
+        "weight_decay": training_config.optimizer.weight_decay,
         "epochs": training_config.epochs,
         "optimizer": training_config.optimizer.name,
         "loss": training_config.loss.name,
         "val_bearings": ", ".join(fold.val_bearings),
         "train_samples": len(fold.train_indices),
         "val_samples": len(fold.val_indices),
+        "two_stage": two_stage,
     }
+    if two_stage:
+        onset_config = training_config.get_onset_config()
+        twostage_config = training_config.get_twostage_training_config()
+        training_params.update({
+            "onset_method": onset_config.method if onset_config else "none",
+            "onset_labels_path": onset_config.labels_path if onset_config else "",
+            "filter_pre_onset": twostage_config.filter_pre_onset,
+            "max_rul": twostage_config.max_rul,
+        })
 
     # --- Training and evaluation (with optional MLflow run context) ---
     def _run_training(run=None):
@@ -285,6 +406,11 @@ def train_single_fold(
         """
         if run is not None:
             run.log_params(training_params)
+            # Set MLflow tags for UI filtering (tags are separate from params)
+            if tracker is not None and tracker.backend_name == "mlflow":
+                import mlflow
+                mlflow.set_tag("model_version", model_version)
+                mlflow.set_tag("model_name", model_name)
             if config_path is not None and config_path.exists():
                 run.log_artifact(str(config_path), artifact_path="config")
 
@@ -331,6 +457,33 @@ def train_single_fold(
             if best_checkpoint.exists():
                 run.log_artifact(str(best_checkpoint), artifact_path="model")
                 print(f"  Logged model artifact → {best_checkpoint}")
+
+                # Register in MLflow Model Registry for lineage tracking
+                if tracker is not None and tracker.backend_name == "mlflow":
+                    try:
+                        import mlflow
+                        registry_name = f"bearing-rul-{model_name}"
+                        run_id = mlflow.active_run().info.run_id
+                        model_uri = f"runs:/{run_id}/model"
+                        rv = mlflow.register_model(model_uri, registry_name)
+                        print(f"  Registered model → {registry_name} version {rv.version}")
+                    except Exception as e:
+                        print(f"  Model registry skipped ({e})")
+
+            # Save onset config alongside RUL model in two-stage mode
+            if two_stage:
+                onset_cfg = training_config.get_onset_config()
+                if onset_cfg is not None:
+                    import json as _json
+                    from dataclasses import asdict as _asdict
+                    onset_cfg_path = (
+                        Path(training_config.callbacks.checkpoint_dir)
+                        / f"{model_name}_fold{fold_id}_onset_config.json"
+                    )
+                    with open(onset_cfg_path, "w") as _f:
+                        _json.dump(_asdict(onset_cfg), _f, indent=2)
+                    run.log_artifact(str(onset_cfg_path), artifact_path="onset")
+                    print(f"  Saved onset config → {onset_cfg_path}")
 
         return metrics, final_metrics, y_true, y_pred, history
 
@@ -394,8 +547,39 @@ def train_single_fold(
     }
 
 
+def _resolve_tracking_mode(cli_tracking: str, config: TrainingConfig) -> str:
+    """Resolve effective tracking mode from CLI flag and YAML vertex.enabled.
+
+    Logic:
+    - If the user explicitly passes ``--tracking vertex`` or ``--tracking both``,
+      that takes priority (they know what they want).
+    - If ``--tracking`` is left at the default (``mlflow``) **and** the YAML
+      config has ``vertex.enabled: true``, upgrade to ``both`` so that Vertex
+      logging activates automatically from the config alone.
+    - ``--tracking none`` always wins (disables everything).
+
+    Args:
+        cli_tracking: The value of ``--tracking`` from argparse.
+        config: TrainingConfig loaded from the YAML file.
+
+    Returns:
+        One of ``"mlflow"``, ``"vertex"``, ``"both"``, or ``"none"``.
+    """
+    if cli_tracking in ("vertex", "both", "none"):
+        return cli_tracking
+
+    # cli_tracking == "mlflow" (the default) — check YAML override
+    vertex_config = config.get_extra("vertex", {})
+    if isinstance(vertex_config, dict) and vertex_config.get("enabled", False):
+        return "both"
+
+    return cli_tracking
+
+
 def main() -> None:
     args = parse_args()
+
+    two_stage = args.two_stage
 
     print("=" * 60)
     print("DL Model Training Script")
@@ -404,17 +588,29 @@ def main() -> None:
     print(f"  Config:          {args.config or '(auto-resolve)'}")
     print(f"  Folds:           {args.folds or 'all'}")
     print(f"  Dry run:         {args.dry_run}")
+    print(f"  Two-stage:       {two_stage}")
     print(f"  Data root:       {args.data_root}")
     print(f"  Spectrogram dir: {args.spectrogram_dir}")
     print(f"  Output dir:      {args.output_dir}")
+    print(f"  Features CSV:    {args.features_csv}")
     print(f"  Tracking:        {args.tracking}")
     print("=" * 60)
 
     # --- TRAIN-2: Load metadata and generate CV folds ---
-    features_csv = Path("outputs/features/features_v2.csv")
+    features_csv = Path(args.features_csv)
     print(f"\nLoading metadata from {features_csv} ...")
     metadata_df = pd.read_csv(features_csv)
     print(f"  Loaded {len(metadata_df)} rows, {len(metadata_df.columns)} columns")
+
+    # --- Two-stage: prepare data before CV split (filtered indices must align) ---
+    if two_stage:
+        # Need a config to read onset/training sections — use the first model's config
+        # (two-stage params are shared, not per-model)
+        model_names_for_config = resolve_model_names(args.model)
+        twostage_config_path = resolve_config_path(model_names_for_config[0], args.config)
+        twostage_training_config = TrainingConfig.from_yaml(twostage_config_path)
+        print(f"\n  Two-stage mode enabled (config: {twostage_config_path})")
+        metadata_df = prepare_twostage_data(metadata_df, twostage_training_config)
 
     cv_split = leave_one_bearing_out(metadata_df)
     print(f"  Generated {len(cv_split)} CV folds ({cv_split.strategy})")
@@ -482,9 +678,15 @@ def main() -> None:
     for model_name in model_names:
         config_path = model_configs[model_name]
         training_config = TrainingConfig.from_yaml(config_path)
+
+        # Resolve tracking mode: YAML vertex.enabled can upgrade the CLI default,
+        # but an explicit CLI flag always wins.
+        tracking_mode = _resolve_tracking_mode(args.tracking, training_config)
+
         print(f"\n{'=' * 60}")
         print(f"  MODEL: {model_name}")
         print(f"  Config: {config_path}")
+        print(f"  Tracking: {tracking_mode}")
         print(f"  Folds: {len(folds)}")
         print(f"{'=' * 60}")
 
@@ -502,7 +704,8 @@ def main() -> None:
                 spectrogram_dir=spectrogram_dir,
                 output_dir=output_dir,
                 config_path=config_path,
-                tracking_mode=args.tracking,
+                tracking_mode=tracking_mode,
+                two_stage=two_stage,
             )
             model_results.append(result)
             all_results.append(result)

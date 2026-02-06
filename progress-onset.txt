@@ -1080,3 +1080,25 @@
     [x] Default values provided for all parameters: OnsetConfig() and TwoStageTrainingConfig() work with no args
   - Backward compatible: all 4 existing configs still load correctly (onset=None, defaults returned)
   - All 402 tests passing, 3 skipped, 0 failures
+
+2026-02-06 16:09:46 START: Modify scripts/05_train_dl_models.py to support two-stage mode (ONSET-21 first checkbox)
+2026-02-06 16:13:22 DONE: Modify scripts/05_train_dl_models.py to support two-stage mode (ONSET-21 first checkbox)
+  - Added --two-stage CLI flag to parse_args()
+  - Added prepare_twostage_data() function:
+    - Loads onset labels from config's onset.labels_path
+    - Computes two-stage RUL (constant max_rul pre-onset, linear decay post-onset)
+    - Optionally filters pre-onset samples (when filter_pre_onset=true)
+    - Adds rul_original, is_post_onset columns
+  - Modified main(): calls prepare_twostage_data() before CV split when --two-stage set
+  - Modified train_single_fold(): accepts two_stage param, logs onset params to MLflow
+  - Saves onset_config.json alongside model checkpoint in two-stage mode
+  - Added imports: compute_twostage_rul, load_onset_labels
+  - Verified: dry-run with --two-stage shows 9216->5486 samples (3730 pre-onset removed)
+  - Verified: dry-run without --two-stage unchanged (9216 samples, Two-stage: False)
+  - All 31 training tests pass, all 258 onset tests pass
+  - This single checkbox covers all 5 ONSET-21 task checkboxes:
+    [x] Modify scripts/05_train_dl_models.py to support two-stage mode
+    [x] Add --two-stage CLI flag to enable two-stage training
+    [x] When enabled: load onset labels, filter dataset, train RUL on filtered dataset
+    [x] Log onset detection metrics alongside RUL metrics (onset params logged to MLflow)
+    [x] Save both onset detector/model and RUL model (onset_config.json saved with checkpoint)
