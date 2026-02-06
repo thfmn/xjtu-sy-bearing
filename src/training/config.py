@@ -97,6 +97,29 @@ class CallbackConfig:
 
 
 @dataclass
+class OnsetConfig:
+    """Onset detection configuration for two-stage pipeline."""
+
+    method: Literal["threshold", "cusum", "ewma", "classifier"] = "threshold"
+    labels_path: str = "configs/onset_labels.yaml"
+    params: dict[str, Any] = field(default_factory=lambda: {
+        "threshold_sigma": 2.0,
+        "min_consecutive": 5,
+        "drift": 0.5,
+        "threshold": 5.0,
+        "span": 10,
+    })
+
+
+@dataclass
+class TwoStageTrainingConfig:
+    """Two-stage training-specific settings."""
+
+    filter_pre_onset: bool = True
+    max_rul: float = 125.0
+
+
+@dataclass
 class TrainingConfig:
     """Complete training configuration."""
 
@@ -153,6 +176,33 @@ class TrainingConfig:
             The value from the YAML, or default.
         """
         return getattr(self, "_extra", {}).get(key, default)
+
+    def get_onset_config(self) -> OnsetConfig | None:
+        """Get typed onset detection config from extra YAML fields.
+
+        Returns:
+            OnsetConfig if ``onset`` section present, else None.
+        """
+        raw = self.get_extra("onset")
+        if raw is None:
+            return None
+        if isinstance(raw, OnsetConfig):
+            return raw
+        return OnsetConfig(**raw)
+
+    def get_twostage_training_config(self) -> TwoStageTrainingConfig:
+        """Get typed two-stage training config from extra YAML fields.
+
+        Returns:
+            TwoStageTrainingConfig with values from ``training`` section,
+            or defaults if section not present.
+        """
+        raw = self.get_extra("training")
+        if raw is None:
+            return TwoStageTrainingConfig()
+        if isinstance(raw, TwoStageTrainingConfig):
+            return raw
+        return TwoStageTrainingConfig(**raw)
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "TrainingConfig":

@@ -518,19 +518,19 @@ Integrate onset detection with existing RUL models to create complete two-stage 
 **Priority**: P1 | **Effort**: 2h | **Phase**: 4. Integration
 
 **Tasks**:
-- [ ] Create `configs/twostage_pipeline.yaml`
-- [ ] Define onset detector configuration:
+- [x] Create `configs/twostage_pipeline.yaml`
+- [x] Define onset detector configuration:
   - `onset.method`: threshold | cusum | bayesian | classifier
   - `onset.params`: method-specific parameters
-- [ ] Define RUL model configuration (reference existing model configs)
-- [ ] Add `training.filter_pre_onset`: true/false (train RUL model on post-onset only)
-- [ ] Modify `src/training/config.py` to parse two-stage config
+- [x] Define RUL model configuration (reference existing model configs)
+- [x] Add `training.filter_pre_onset`: true/false (train RUL model on post-onset only)
+- [x] Modify `src/training/config.py` to parse two-stage config
 
 **Acceptance**:
-- [ ] Config file is valid YAML with all necessary sections
-- [ ] `TrainingConfig` class can load two-stage config
-- [ ] `filter_pre_onset=true` excludes pre-onset samples from RUL training
-- [ ] Default values provided for all parameters
+- [x] Config file is valid YAML with all necessary sections
+- [x] `TrainingConfig` class can load two-stage config
+- [x] `filter_pre_onset=true` excludes pre-onset samples from RUL training
+- [x] Default values provided for all parameters
 
 **Files**:
 - `configs/twostage_pipeline.yaml`

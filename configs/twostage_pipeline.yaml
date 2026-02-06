@@ -1,0 +1,73 @@
+# Two-Stage Pipeline Configuration for Bearing RUL Prediction
+#
+# Stage 1: Onset detection (binary classification: healthy vs degraded)
+# Stage 2: RUL prediction (regression on post-onset samples only)
+#
+# Usage:
+#   python scripts/05_train_dl_models.py --model cnn1d_baseline --config configs/twostage_pipeline.yaml --two-stage
+
+# --- Standard training parameters (inherited by RUL model) ---
+model_version: "v1"
+batch_size: 32
+epochs: 100
+seed: 9
+
+optimizer:
+  name: adamw
+  learning_rate: 0.001
+  weight_decay: 0.0001
+
+loss:
+  name: huber
+  delta: 10.0
+
+callbacks:
+  checkpoint_dir: outputs/models/checkpoints
+  save_best_only: true
+  monitor: val_loss
+  mode: min
+  lr_reduce_factor: 0.5
+  lr_reduce_patience: 10
+  lr_min: 0.000001
+  early_stop_patience: 20
+  restore_best_weights: true
+  mlflow_tracking: true
+  mlflow_tracking_uri: mlruns
+  mlflow_experiment_name: bearing_rul_twostage
+
+# --- RUL model (Stage 2) ---
+model:
+  name: cnn1d_baseline
+  input_type: raw_signal
+
+# --- Onset detection (Stage 1) ---
+onset:
+  # Detection method: threshold | cusum | ewma | classifier
+  method: threshold
+
+  # Onset labels file (manual reference labels)
+  labels_path: configs/onset_labels.yaml
+
+  # Method-specific parameters
+  params:
+    # ThresholdOnsetDetector
+    threshold_sigma: 2.0
+    min_consecutive: 5
+    # CUSUMOnsetDetector (used when method=cusum)
+    drift: 0.5
+    threshold: 5.0
+    # EWMAOnsetDetector (used when method=ewma)
+    span: 10
+
+# --- Two-stage training settings ---
+training:
+  # When true, RUL model trains only on post-onset samples
+  filter_pre_onset: true
+  # Maximum RUL value (pre-onset samples get this constant value)
+  max_rul: 125
+
+vertex:
+  enabled: false
+  experiment_name: bearing-rul-twostage
+  project_id: xjtu-bearing-failure
+  location: asia-southeast1

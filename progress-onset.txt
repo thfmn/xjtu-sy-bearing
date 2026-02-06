@@ -1058,3 +1058,25 @@
     - Edge cases: onset_idx=0, onset_idx=None (no onset), custom max_rul, separate rul_signals
     - Coverage 93% for pipeline.py (>90% threshold met): missing only TypeError/ValueError guards + empty ML degraded branch
 2026-02-06 16:03:46 DONE: ONSET-22 Two-Stage Pipeline Unit Tests - ALL checkboxes verified and checked off
+
+2026-02-06 16:04:15 START: ONSET-20 - Two-Stage Training Configuration (all 5 task checkboxes + 4 acceptance)
+2026-02-06 16:07:55 DONE: ONSET-20 - Two-Stage Training Configuration - ALL checkboxes and acceptance criteria complete
+  - Created configs/twostage_pipeline.yaml with all required sections:
+    - Standard training params (batch_size, epochs, optimizer, loss, callbacks)
+    - model section: references cnn1d_baseline RUL model
+    - onset section: method (threshold|cusum|ewma|classifier), labels_path, method-specific params
+    - training section: filter_pre_onset=true, max_rul=125
+    - vertex section: GCP deployment config
+  - Modified src/training/config.py:
+    - Added OnsetConfig dataclass: method, labels_path, params (with defaults)
+    - Added TwoStageTrainingConfig dataclass: filter_pre_onset, max_rul (with defaults)
+    - Added TrainingConfig.get_onset_config() -> OnsetConfig | None
+    - Added TrainingConfig.get_twostage_training_config() -> TwoStageTrainingConfig
+    - Both use existing _extra mechanism (no changes to from_yaml/from_json)
+  - Acceptance criteria verified:
+    [x] Config file is valid YAML with all necessary sections: loads correctly via TrainingConfig.from_yaml()
+    [x] TrainingConfig class can load two-stage config: get_onset_config() returns OnsetConfig with method=threshold
+    [x] filter_pre_onset=true excludes pre-onset samples from RUL training: TwoStageTrainingConfig.filter_pre_onset=True
+    [x] Default values provided for all parameters: OnsetConfig() and TwoStageTrainingConfig() work with no args
+  - Backward compatible: all 4 existing configs still load correctly (onset=None, defaults returned)
+  - All 402 tests passing, 3 skipped, 0 failures
