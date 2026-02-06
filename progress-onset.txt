@@ -1003,3 +1003,12 @@
   - test_short_post_onset_uncapped: verifies uncapped when post-onset < max_rul+1
   - test_all_15_bearings_shape: verifies flat+decay shape for all 15 XJTU-SY bearings with real onset indices
   - All 8 tests passing
+
+2026-02-06 15:54:55 START: ONSET-19 Acceptance - Onset-relative RUL at failure is 0 (same as before)
+2026-02-06 15:56:18 DONE: ONSET-19 Acceptance - Onset-relative RUL at failure is 0 (same as before)
+  - Added TestOnsetRelativeRulAtFailureIsZero class to tests/test_twostage_rul.py (4 tests)
+  - test_failure_rul_is_zero: verifies rul[-1]==0.0 for onset_idx in [0, 1, 50, 100, 199]
+  - test_failure_matches_piecewise_linear: verifies twostage[-1] == piecewise_linear[-1] == 0.0
+  - test_all_15_bearings_failure_is_zero: all 15 XJTU-SY bearings have rul[-1]==0 for both strategies
+  - test_single_file_bearing_failure_is_zero: edge case num_files=1, onset_idx=0 → rul[-1]==0.0
+  - All 12 tests passing (was 8 before, +4 new)

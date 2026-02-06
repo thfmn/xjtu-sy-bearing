@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from src.data.rul_labels import compute_twostage_rul
+from src.data.rul_labels import compute_twostage_rul, piecewise_linear_rul
 
 
 class TestTwostageRulFlatBeforeOnsetDecayAfter:
@@ -102,3 +102,52 @@ class TestTwostageRulFlatBeforeOnsetDecayAfter:
             # Post-onset monotonically decreasing
             post = rul[onset_idx:]
             assert np.all(np.diff(post) <= 0), f"{bearing_id}: post-onset not monotonic"
+
+
+class TestOnsetRelativeRulAtFailureIsZero:
+    """ONSET-19 Acceptance: Onset-relative RUL at failure is 0 (same as before)."""
+
+    def test_failure_rul_is_zero(self):
+        """Last sample (failure) must have RUL = 0 regardless of onset position."""
+        for onset_idx in [0, 1, 50, 100, 199]:
+            rul = compute_twostage_rul(num_files=200, onset_idx=onset_idx, max_rul=125)
+            assert rul[-1] == 0.0, f"onset_idx={onset_idx}: last sample should be 0"
+
+    def test_failure_matches_piecewise_linear(self):
+        """Two-stage failure RUL (0) matches standard piecewise_linear failure RUL (0)."""
+        for num_files in [52, 123, 200, 491, 2538]:
+            rul_pw = piecewise_linear_rul(num_files, max_rul=125)
+            rul_ts = compute_twostage_rul(num_files, onset_idx=num_files // 2, max_rul=125)
+            assert rul_pw[-1] == rul_ts[-1] == 0.0, (
+                f"num_files={num_files}: both strategies must end at 0"
+            )
+
+    def test_all_15_bearings_failure_is_zero(self):
+        """All 15 XJTU-SY bearings have RUL=0 at failure, matching piecewise_linear."""
+        bearings = {
+            "Bearing1_1": (123, 69),
+            "Bearing1_2": (161, 43),
+            "Bearing1_3": (158, 59),
+            "Bearing1_4": (122, 79),
+            "Bearing1_5": (52, 27),
+            "Bearing2_1": (491, 452),
+            "Bearing2_2": (161, 47),
+            "Bearing2_3": (533, 122),
+            "Bearing2_4": (42, 9),
+            "Bearing2_5": (339, 121),
+            "Bearing3_1": (2538, 748),
+            "Bearing3_2": (2496, 169),
+            "Bearing3_3": (371, 339),
+            "Bearing3_4": (1515, 1417),
+            "Bearing3_5": (114, 29),
+        }
+        for bearing_id, (num_files, onset_idx) in bearings.items():
+            rul_ts = compute_twostage_rul(num_files, onset_idx, max_rul=125)
+            rul_pw = piecewise_linear_rul(num_files, max_rul=125)
+            assert rul_ts[-1] == 0.0, f"{bearing_id}: twostage failure not 0"
+            assert rul_pw[-1] == 0.0, f"{bearing_id}: piecewise_linear failure not 0"
+
+    def test_single_file_bearing_failure_is_zero(self):
+        """Edge case: single-file bearing with onset at 0 has RUL=0."""
+        rul = compute_twostage_rul(num_files=1, onset_idx=0, max_rul=125)
+        assert rul[-1] == 0.0
