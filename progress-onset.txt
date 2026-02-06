@@ -1196,3 +1196,15 @@
   - All 16 integration tests pass in 3.51s
   - Just need to check off the PRD checkbox
 2026-02-06 16:34:26 DONE: ONSET-25 fourth checkbox - Test pipeline serialization (verified existing tests and checked off)
+
+2026-02-06 16:35:34 START: ONSET-25 Acceptance - Verify end-to-end metrics match expected ranges (+ remaining 4 acceptance checkboxes)
+  - Tests already exist in tests/integration/test_twostage_pipeline.py
+  - Ran: uv run pytest tests/integration/test_twostage_pipeline.py -x -v → 16 passed in 3.57s
+  - Acceptance criteria verification:
+    [x] Verify end-to-end metrics match expected ranges: TestMetricsExpectedRanges (4 tests pass) — F1>=0.5, timing MAE finite, conditional RUL MAE>=0, combined score finite
+    [x] Integration test completes in <60 seconds: TestPerformance passes (3.57s << 60s)
+    [x] Pipeline produces valid predictions for all test bearings: test_pipeline_on_all_test_bearings passes (3 bearings, all finite)
+    [x] Serialized pipeline produces identical results after reload: test_pickle_round_trip_produces_identical_results passes (array_equal)
+    [x] Test uses real data (not just mocks): TestRealDataSubset (5 tests) verifies real features_v2.csv
+2026-02-06 16:36:08 DONE: ONSET-25 Acceptance - All 5 checkboxes verified and checked off
+  - ONSET-25 ALL TASK CHECKBOXES AND ACCEPTANCE CRITERIA NOW COMPLETE

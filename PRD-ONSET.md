@@ -649,13 +649,13 @@ Evaluate two-stage pipeline against single-stage baseline and document results.
 - [x] Test full pipeline: load data -> detect onset -> predict RUL -> compute metrics
 - [x] Test with real features_v2.csv data (subset for speed)
 - [x] Test pipeline serialization: save and load complete pipeline
-- [ ] Verify end-to-end metrics match expected ranges
+- [x] Verify end-to-end metrics match expected ranges
 
 **Acceptance**:
-- [ ] Integration test completes in <60 seconds
-- [ ] Pipeline produces valid predictions for all test bearings
-- [ ] Serialized pipeline produces identical results after reload
-- [ ] Test uses real data (not just mocks)
+- [x] Integration test completes in <60 seconds
+- [x] Pipeline produces valid predictions for all test bearings
+- [x] Serialized pipeline produces identical results after reload
+- [x] Test uses real data (not just mocks)
 
 **Files**:
 - `tests/integration/test_twostage_pipeline.py`
