@@ -1166,3 +1166,13 @@
   - Uses real features_v2.csv data (3 bearings: Bearing1_3, Bearing2_1, Bearing3_3)
   - All 16 tests pass in 3.02s, all 281 onset tests still pass
 2026-02-06 16:29:32 DONE: ONSET-25 first checkbox - Create tests/integration/test_twostage_pipeline.py
+
+2026-02-06 16:30:23 START: ONSET-25 second checkbox - Test full pipeline: load data -> detect onset -> predict RUL -> compute metrics
+  - Already implemented in tests/integration/test_twostage_pipeline.py during first checkbox session
+  - TestFullPipelineEndToEnd class: 3 tests
+    - test_load_data_detect_onset_predict_rul_compute_metrics: full pipeline on Bearing1_3
+    - test_pipeline_on_all_test_bearings: valid predictions for all 3 test bearings
+    - test_cusum_detector_pipeline: CUSUM detector on Bearing2_1
+  - All 16 integration tests pass in 3.36s
+  - Verified: loads real features_v2.csv → computes health indicators → detects onset → predicts RUL → computes metrics (onset_detection_metrics, conditional_rul_metrics, twostage_combined_score)
+2026-02-06 16:30:23 DONE: ONSET-25 second checkbox - Test full pipeline (verified and checked off)
