@@ -622,7 +622,7 @@ Evaluate two-stage pipeline against single-stage baseline and document results.
 **Priority**: P1 | **Effort**: 3h | **Phase**: 5. Evaluation
 
 **Tasks**:
-- [ ] Create `notebooks/41_twostage_evaluation.ipynb`
+- [x] Create `notebooks/41_twostage_evaluation.ipynb`
 - [ ] Load trained two-stage pipeline and single-stage models
 - [ ] Generate comparison table: single-stage vs. two-stage MAE/RMSE/PHM08
 - [ ] Plot RUL predictions for sample bearings (both approaches)
