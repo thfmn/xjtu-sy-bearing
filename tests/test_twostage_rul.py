@@ -5,7 +5,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from src.data.rul_labels import compute_twostage_rul, piecewise_linear_rul
+from src.data.rul_labels import (
+    compute_twostage_rul,
+    exponential_rul,
+    generate_rul_for_bearing,
+    generate_rul_labels,
+    linear_rul,
+    piecewise_linear_rul,
+)
 
 
 class TestTwostageRulFlatBeforeOnsetDecayAfter:
@@ -212,3 +219,70 @@ class TestOnsetRelativeRulAtOnsetIsMinMaxRulFilesRemaining:
             f"num_files={num_files}, onset_idx={onset_idx}: "
             f"expected RUL={expected}, got {rul[onset_idx]}"
         )
+
+
+class TestBackwardCompatibility:
+    """ONSET-19 Acceptance: Backward compatible — default behavior unchanged.
+
+    Verify that all existing RUL functions produce identical outputs when
+    called with their original signatures (without onset_idx/twostage).
+    """
+
+    @pytest.mark.parametrize("num_files", [1, 10, 52, 123, 200, 491, 2538])
+    def test_piecewise_linear_unchanged(self, num_files):
+        """piecewise_linear_rul output is identical before and after ONSET-19 changes."""
+        rul = piecewise_linear_rul(num_files, max_rul=125.0)
+        assert rul.shape == (num_files,)
+        assert rul[-1] == 0.0
+        if num_files > 1:
+            expected_first = min(num_files - 1, 125.0)
+            assert rul[0] == expected_first
+
+    @pytest.mark.parametrize("num_files", [1, 10, 52, 200])
+    def test_linear_rul_unchanged(self, num_files):
+        """linear_rul output is identical before and after ONSET-19 changes."""
+        rul = linear_rul(num_files)
+        assert rul.shape == (num_files,)
+        assert rul[-1] == 0.0
+        if num_files > 1:
+            assert rul[0] == num_files - 1
+
+    @pytest.mark.parametrize("num_files", [1, 10, 52, 200])
+    def test_exponential_rul_unchanged(self, num_files):
+        """exponential_rul output is identical before and after ONSET-19 changes."""
+        rul = exponential_rul(num_files, decay_rate=3.0)
+        assert rul.shape == (num_files,)
+        if num_files > 1:
+            assert rul[0] > rul[-1], "Exponential should decay"
+
+    def test_generate_rul_labels_default_is_piecewise_linear(self):
+        """Default strategy is piecewise_linear, not twostage."""
+        rul_default = generate_rul_labels(200)
+        rul_pw = piecewise_linear_rul(200, max_rul=125.0)
+        np.testing.assert_array_equal(rul_default, rul_pw)
+
+    @pytest.mark.parametrize("strategy", ["piecewise_linear", "linear", "exponential"])
+    def test_generate_rul_labels_ignores_onset_idx_for_non_twostage(self, strategy):
+        """onset_idx parameter is ignored for all strategies except twostage."""
+        rul_no_onset = generate_rul_labels(200, strategy=strategy)
+        rul_with_onset = generate_rul_labels(200, strategy=strategy, onset_idx=50)
+        np.testing.assert_array_equal(rul_no_onset, rul_with_onset)
+
+    def test_generate_rul_for_bearing_default_unchanged(self):
+        """generate_rul_for_bearing with defaults produces piecewise_linear output."""
+        rul = generate_rul_for_bearing(200)
+        rul_pw = piecewise_linear_rul(200, max_rul=125.0)
+        np.testing.assert_array_equal(rul, rul_pw)
+
+    def test_generate_rul_for_bearing_normalize_unchanged(self):
+        """generate_rul_for_bearing with normalize=True still works correctly."""
+        rul = generate_rul_for_bearing(200, normalize=True)
+        assert rul.max() <= 1.0
+        assert rul.min() >= 0.0
+        assert rul[-1] == 0.0
+
+    def test_generate_rul_for_bearing_onset_idx_ignored_for_default_strategy(self):
+        """onset_idx kwarg is ignored when strategy is not twostage."""
+        rul_default = generate_rul_for_bearing(200)
+        rul_with_onset = generate_rul_for_bearing(200, onset_idx=50)
+        np.testing.assert_array_equal(rul_default, rul_with_onset)

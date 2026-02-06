@@ -1026,3 +1026,17 @@
     because standard RUL convention is: RUL at time t = steps until failure (last step has RUL=0).
     This is consistent with piecewise_linear_rul which starts at num_files-1, not num_files.
   - All 24 tests passing (was 12 before, +12 new)
+
+2026-02-06 15:59:09 START: ONSET-19 Acceptance - Backward compatible: default behavior unchanged
+2026-02-06 16:01:34 DONE: ONSET-19 Acceptance - Backward compatible: default behavior unchanged
+  - Added TestBackwardCompatibility class to tests/test_twostage_rul.py (22 new tests)
+  - test_piecewise_linear_unchanged: 7 parametrized cases verify shape, first/last values
+  - test_linear_rul_unchanged: 4 parametrized cases verify shape, first/last values
+  - test_exponential_rul_unchanged: 4 parametrized cases verify decay shape
+  - test_generate_rul_labels_default_is_piecewise_linear: default strategy unchanged
+  - test_generate_rul_labels_ignores_onset_idx_for_non_twostage: 3 strategies × onset_idx=50, output identical to no onset_idx
+  - test_generate_rul_for_bearing_default_unchanged: defaults produce piecewise_linear
+  - test_generate_rul_for_bearing_normalize_unchanged: normalize=True still works
+  - test_generate_rul_for_bearing_onset_idx_ignored_for_default_strategy: onset_idx ignored for piecewise_linear
+  - All 46 tests passing in test_twostage_rul.py (was 24 before, +22 new)
+  - Full suite: 402 passed, 3 skipped, 0 failures

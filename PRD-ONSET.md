@@ -506,7 +506,7 @@ Integrate onset detection with existing RUL models to create complete two-stage 
 - [x] Two-stage RUL shows flat line (max_rul) before onset, then decay after
 - [x] Onset-relative RUL at failure is 0 (same as before)
 - [x] Onset-relative RUL at onset is `min(max_rul, files_remaining)`
-- [ ] Backward compatible: default behavior unchanged
+- [x] Backward compatible: default behavior unchanged
 
 **Files**:
 - `src/data/rul_labels.py`
