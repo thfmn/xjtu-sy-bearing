@@ -505,7 +505,7 @@ Integrate onset detection with existing RUL models to create complete two-stage 
 **Acceptance**:
 - [x] Two-stage RUL shows flat line (max_rul) before onset, then decay after
 - [x] Onset-relative RUL at failure is 0 (same as before)
-- [ ] Onset-relative RUL at onset is `min(max_rul, files_remaining)`
+- [x] Onset-relative RUL at onset is `min(max_rul, files_remaining)`
 - [ ] Backward compatible: default behavior unchanged
 
 **Files**:

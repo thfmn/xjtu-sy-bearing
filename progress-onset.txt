@@ -1012,3 +1012,17 @@
   - test_all_15_bearings_failure_is_zero: all 15 XJTU-SY bearings have rul[-1]==0 for both strategies
   - test_single_file_bearing_failure_is_zero: edge case num_files=1, onset_idx=0 → rul[-1]==0.0
   - All 12 tests passing (was 8 before, +4 new)
+
+2026-02-06 15:56:56 START: ONSET-19 Acceptance - Onset-relative RUL at onset is min(max_rul, files_remaining)
+2026-02-06 15:58:30 DONE: ONSET-19 Acceptance - Onset-relative RUL at onset is min(max_rul, files_remaining)
+  - Added TestOnsetRelativeRulAtOnsetIsMinMaxRulFilesRemaining class to tests/test_twostage_rul.py (12 tests)
+  - test_onset_rul_uncapped: files_remaining-1 < max_rul → RUL = files_remaining-1 (99)
+  - test_onset_rul_capped: files_remaining-1 > max_rul → RUL = max_rul (125)
+  - test_onset_rul_exactly_at_cap: files_remaining-1 == max_rul → RUL = 125
+  - test_onset_at_zero_rul: onset_idx=0 → RUL = min(max_rul, num_files-1)
+  - test_onset_at_last_sample: files_remaining=1 → RUL = 0
+  - test_all_real_bearings_onset_rul: 7 parametrized cases with real XJTU-SY bearing data
+  - Note: PRD says "min(max_rul, files_remaining)" — implementation uses files_remaining-1
+    because standard RUL convention is: RUL at time t = steps until failure (last step has RUL=0).
+    This is consistent with piecewise_linear_rul which starts at num_files-1, not num_files.
+  - All 24 tests passing (was 12 before, +12 new)

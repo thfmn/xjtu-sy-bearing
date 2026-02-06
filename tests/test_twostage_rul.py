@@ -151,3 +151,64 @@ class TestOnsetRelativeRulAtFailureIsZero:
         """Edge case: single-file bearing with onset at 0 has RUL=0."""
         rul = compute_twostage_rul(num_files=1, onset_idx=0, max_rul=125)
         assert rul[-1] == 0.0
+
+
+class TestOnsetRelativeRulAtOnsetIsMinMaxRulFilesRemaining:
+    """ONSET-19 Acceptance: Onset-relative RUL at onset is min(max_rul, files_remaining).
+
+    files_remaining at onset_idx = num_files - onset_idx (count of samples from onset to end).
+    RUL at onset = min(max_rul, files_remaining - 1) because the last sample has RUL=0.
+    This matches the standard RUL convention: RUL = steps until failure.
+    """
+
+    def test_onset_rul_uncapped(self):
+        """When files_remaining - 1 < max_rul, RUL at onset equals files_remaining - 1."""
+        # 200 files, onset at 100 → files_remaining = 100, RUL at onset = 99
+        rul = compute_twostage_rul(num_files=200, onset_idx=100, max_rul=125)
+        files_remaining = 200 - 100
+        expected = files_remaining - 1  # 99
+        assert rul[100] == expected
+
+    def test_onset_rul_capped(self):
+        """When files_remaining - 1 > max_rul, RUL at onset equals max_rul."""
+        # 300 files, onset at 50 → files_remaining = 250, RUL at onset = min(125, 249) = 125
+        rul = compute_twostage_rul(num_files=300, onset_idx=50, max_rul=125)
+        assert rul[50] == 125.0
+
+    def test_onset_rul_exactly_at_cap(self):
+        """When files_remaining - 1 == max_rul, RUL at onset equals max_rul."""
+        # 226 files, onset at 100 → files_remaining = 126, RUL at onset = min(125, 125) = 125
+        rul = compute_twostage_rul(num_files=226, onset_idx=100, max_rul=125)
+        assert rul[100] == 125.0
+
+    def test_onset_at_zero_rul(self):
+        """Onset at index 0: RUL at onset = min(max_rul, num_files - 1)."""
+        rul = compute_twostage_rul(num_files=50, onset_idx=0, max_rul=125)
+        assert rul[0] == 49.0  # min(125, 49) = 49
+
+    def test_onset_at_last_sample(self):
+        """Onset at last sample: files_remaining=1, RUL at onset = 0."""
+        rul = compute_twostage_rul(num_files=200, onset_idx=199, max_rul=125)
+        assert rul[199] == 0.0
+
+    @pytest.mark.parametrize(
+        "num_files,onset_idx,max_rul",
+        [
+            (123, 69, 125),
+            (161, 43, 125),
+            (52, 27, 125),
+            (491, 452, 125),
+            (2538, 748, 125),
+            (2496, 169, 125),
+            (1515, 1417, 125),
+        ],
+    )
+    def test_all_real_bearings_onset_rul(self, num_files, onset_idx, max_rul):
+        """Verify RUL at onset for real XJTU-SY bearing parameters."""
+        rul = compute_twostage_rul(num_files, onset_idx, max_rul=max_rul)
+        files_remaining = num_files - onset_idx
+        expected = min(max_rul, files_remaining - 1)
+        assert rul[onset_idx] == expected, (
+            f"num_files={num_files}, onset_idx={onset_idx}: "
+            f"expected RUL={expected}, got {rul[onset_idx]}"
+        )
