@@ -32,6 +32,7 @@ google-cloud-cli-*
 
 # Jupyter artifacts
 .ipynb_checkpoints/
+*_executed.ipynb
 
 # IDE and tooling
 .python-version
@@ -49,6 +50,7 @@ CLAUDE.md
 # Personal utility scripts
 ralph-*
 scripts/stream_filter.py
+scripts/stream_filter_review.py
 scripts/get_timestamp.py
 
 # Internal project documents (PRD, progress tracking)
