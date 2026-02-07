@@ -45,9 +45,12 @@ from src.data.loader import CONDITIONS, BEARINGS_PER_CONDITION
 DATA: dict = {}
 
 
-# ---------------------------------------------------------------------------
-# App creation
-# ---------------------------------------------------------------------------
+def _update_bearing_dd(condition: str):
+    """Update bearing dropdown choices when operating condition changes."""
+    bearings = BEARINGS_PER_CONDITION.get(condition, [])
+    return gr.Dropdown(choices=bearings, value=bearings[0] if bearings else None)
+
+
 def create_app() -> gr.Blocks:
     """Build the Gradio Blocks application with 5 tabs."""
     with gr.Blocks(title="XJTU-SY Bearing RUL Dashboard") as app:
@@ -59,15 +62,11 @@ def create_app() -> gr.Blocks:
         with gr.Tabs():
             with gr.Tab("EDA"):
                 gr.Markdown("### Exploratory Data Analysis")
-
-                # --- Dataset overview table ---
                 overview_table = gr.Dataframe(
                     value=compute_dataset_overview(),
                     label="Dataset Overview",
                     interactive=False,
                 )
-
-                # --- Cascading dropdowns: condition → bearing ---
                 condition_choices = list(CONDITIONS.keys())
                 default_condition = condition_choices[0]
                 default_bearings = BEARINGS_PER_CONDITION[default_condition]
@@ -84,17 +83,11 @@ def create_app() -> gr.Blocks:
                         label="Bearing",
                     )
 
-                def _update_bearing_choices(condition: str):
-                    bearings = BEARINGS_PER_CONDITION.get(condition, [])
-                    return gr.Dropdown(choices=bearings, value=bearings[0] if bearings else None)
-
                 eda_condition_dd.change(
-                    fn=_update_bearing_choices,
+                    fn=_update_bearing_dd,
                     inputs=eda_condition_dd,
                     outputs=eda_bearing_dd,
                 )
-
-                # --- Degradation trend plot ---
                 trend_plot = gr.Plot(
                     value=plot_degradation_trend(default_condition, default_bearings[0]),
                     label="Degradation Trend",
@@ -105,8 +98,6 @@ def create_app() -> gr.Blocks:
                     inputs=[eda_condition_dd, eda_bearing_dd],
                     outputs=trend_plot,
                 )
-
-                # --- Feature distribution ---
                 gr.Markdown("### Feature Distribution by Condition")
                 feature_dd = gr.Dropdown(
                     choices=DATA.get("feature_cols", []),
@@ -128,7 +119,6 @@ def create_app() -> gr.Blocks:
                     "> *Note: DL models evaluated on Fold 0 only (Bearing1_1, 123 samples). "
                     "Full 15-fold CV pending. LightGBM uses full 15-fold leave-one-bearing-out CV.*"
                 )
-                # --- Model comparison table ---
                 comparison_df = DATA["model_comparison"][
                     ["Model", "Type", "RMSE", "MAE", "PHM08 (norm)"]
                 ].round(2)
@@ -138,13 +128,11 @@ def create_app() -> gr.Blocks:
                     interactive=False,
                 )
 
-                # --- Model comparison bar chart ---
                 gr.Plot(
                     value=plot_model_comparison_bars(),
                     label="Model Comparison Chart",
                 )
 
-                # --- Model architecture summary table ---
                 gr.Markdown("### Model Architectures")
                 gr.Dataframe(
                     value=compute_model_architecture_table(),
@@ -152,7 +140,6 @@ def create_app() -> gr.Blocks:
                     interactive=False,
                 )
 
-                # --- Feature importance chart with slider ---
                 gr.Markdown("### Feature Importance (LightGBM)")
                 fi_slider = gr.Slider(
                     minimum=5,
@@ -171,7 +158,6 @@ def create_app() -> gr.Blocks:
                     outputs=fi_plot,
                 )
 
-                # --- Per-bearing performance table ---
                 gr.Markdown("### Per-Bearing Performance (LightGBM CV)")
                 per_bearing_df = DATA["per_bearing"][
                     ["bearing_id", "n_samples", "rmse", "mae"]
@@ -182,7 +168,6 @@ def create_app() -> gr.Blocks:
                     interactive=False,
                 )
 
-                # --- Training convergence curves ---
                 gr.Markdown("### Training Convergence")
                 dl_history_models = sorted(DATA.get("dl_history", {}).keys())
                 if dl_history_models:
@@ -203,7 +188,6 @@ def create_app() -> gr.Blocks:
                 else:
                     gr.Markdown("*No training history available. Train DL models first.*")
 
-                # --- Per-bearing comparison across models ---
                 if DATA.get("dl_per_bearing"):
                     gr.Markdown("### Per-Bearing Model Comparison")
                     gr.Plot(
@@ -211,7 +195,6 @@ def create_app() -> gr.Blocks:
                         label="Per-Bearing RMSE Comparison",
                     )
 
-                # --- SHAP plot (pre-generated image) ---
                 gr.Markdown("### SHAP Feature Importance")
                 shap_path = MODELS_DIR / "lgbm_shap_bar.png"
                 if shap_path.exists():
@@ -235,7 +218,6 @@ def create_app() -> gr.Blocks:
                     if scatter_png.exists():
                         gr.Image(value=str(scatter_png), label="Predicted vs Actual")
                 else:
-                    # --- Build model choices list ---
                     model_choices = []
                     if DATA.get("has_model", False):
                         model_choices.append("LightGBM")
@@ -243,43 +225,31 @@ def create_app() -> gr.Blocks:
                         model_choices += sorted(DATA["dl_predictions"].keys())
                     default_model = model_choices[0] if model_choices else None
 
-                    def _get_bearings_for_model(model_name: str) -> list[str]:
-                        """Return sorted bearing list for a given model."""
-                        if model_name == "LightGBM":
+                    def _bearings_for_model(name: str) -> list[str]:
+                        if name == "LightGBM":
                             return sorted(DATA.get("predictions", {}).keys())
-                        return sorted(DATA.get("dl_predictions", {}).get(model_name, {}).keys())
+                        return sorted(DATA.get("dl_predictions", {}).get(name, {}).keys())
 
-                    default_bearings_pred = _get_bearings_for_model(default_model) if default_model else []
+                    def _update_pred_bearing_dd(model_name: str):
+                        bearings = _bearings_for_model(model_name)
+                        return gr.Dropdown(choices=bearings, value=bearings[0] if bearings else None)
 
-                    # --- Model metrics summary (reactive) ---
+                    default_bearings_pred = _bearings_for_model(default_model) if default_model else []
+
                     model_metrics_md = gr.Markdown(
                         value=get_model_metrics_summary(default_model) if default_model else "",
                     )
-
-                    # --- Model selector dropdown ---
                     pred_model_dd = gr.Dropdown(
-                        choices=model_choices,
-                        value=default_model,
-                        label="Model",
+                        choices=model_choices, value=default_model, label="Model",
                     )
-
-                    # --- Bearing selector dropdown ---
                     pred_bearing_dd = gr.Dropdown(
                         choices=default_bearings_pred,
                         value=default_bearings_pred[0] if default_bearings_pred else None,
                         label="Select Bearing",
                     )
 
-                    def _update_bearing_choices_for_model(model_name: str):
-                        """Update bearing dropdown when model changes."""
-                        bearings = _get_bearings_for_model(model_name)
-                        return gr.Dropdown(
-                            choices=bearings,
-                            value=bearings[0] if bearings else None,
-                        )
-
                     pred_model_dd.change(
-                        fn=_update_bearing_choices_for_model,
+                        fn=_update_pred_bearing_dd,
                         inputs=pred_model_dd,
                         outputs=pred_bearing_dd,
                     )
@@ -290,7 +260,6 @@ def create_app() -> gr.Blocks:
                         outputs=model_metrics_md,
                     )
 
-                    # --- RUL prediction curve ---
                     rul_curve_plot = gr.Plot(
                         value=plot_rul_curve(
                             default_bearings_pred[0], default_model
@@ -309,7 +278,6 @@ def create_app() -> gr.Blocks:
                         outputs=rul_curve_plot,
                     )
 
-                    # --- Predicted vs Actual scatter (reactive to model selection) ---
                     gr.Markdown("### Predicted vs Actual RUL (all bearings)")
                     scatter_plot = gr.Plot(
                         value=plot_scatter_all_predictions(default_model),
@@ -322,7 +290,6 @@ def create_app() -> gr.Blocks:
                         outputs=scatter_plot,
                     )
 
-                    # --- Residual analysis (replaces broken uncertainty PNGs) ---
                     gr.Markdown("### Residual Analysis")
                     intervals_plot = gr.Plot(
                         value=plot_prediction_intervals(default_model),
@@ -343,7 +310,6 @@ def create_app() -> gr.Blocks:
                         outputs=residuals_plot,
                     )
 
-                    # --- Per-bearing error table (reactive to model selection) ---
                     gr.Markdown("### Per-Bearing Error Breakdown")
                     per_bearing_table = gr.Dataframe(
                         value=get_per_bearing_table(default_model) if default_model else pd.DataFrame(),
@@ -364,7 +330,6 @@ def create_app() -> gr.Blocks:
                     "operation for each bearing."
                 )
 
-                # --- Onset overview table ---
                 gr.Markdown("#### Onset Labels Overview")
                 onset_overview = build_onset_overview_table()
                 if not onset_overview.empty:
@@ -376,7 +341,6 @@ def create_app() -> gr.Blocks:
                 else:
                     gr.Markdown("*No onset labels available.*")
 
-                # --- Interactive health indicator plot ---
                 gr.Markdown("#### Health Indicator Explorer")
                 onset_condition_choices = list(CONDITIONS.keys())
                 onset_default_cond = onset_condition_choices[0]
@@ -394,12 +358,8 @@ def create_app() -> gr.Blocks:
                         label="Bearing",
                     )
 
-                def _update_onset_bearing_choices(condition: str):
-                    bearings = BEARINGS_PER_CONDITION.get(condition, [])
-                    return gr.Dropdown(choices=bearings, value=bearings[0] if bearings else None)
-
                 onset_condition_dd.change(
-                    fn=_update_onset_bearing_choices,
+                    fn=_update_bearing_dd,
                     inputs=onset_condition_dd,
                     outputs=onset_bearing_dd,
                 )
@@ -420,7 +380,6 @@ def create_app() -> gr.Blocks:
                     outputs=hi_plot,
                 )
 
-                # --- Onset classifier performance ---
                 gr.Markdown("#### LSTM Onset Classifier Performance")
                 classifier_df, classifier_summary = build_onset_classifier_table()
                 if classifier_summary:
@@ -431,7 +390,6 @@ def create_app() -> gr.Blocks:
                     interactive=False,
                 )
 
-                # --- Detector comparison ---
                 gr.Markdown("#### Detector Comparison")
                 gr.Markdown(
                     "Onset file index detected by each algorithm. "
@@ -450,7 +408,6 @@ def create_app() -> gr.Blocks:
                     "Compare healthy, degrading, and failed states."
                 )
 
-                # --- Cascading dropdowns (separate from EDA tab) ---
                 audio_condition_choices = list(CONDITIONS.keys())
                 audio_default_cond = audio_condition_choices[0]
                 audio_default_bearings = BEARINGS_PER_CONDITION[audio_default_cond]
@@ -467,20 +424,12 @@ def create_app() -> gr.Blocks:
                         label="Bearing",
                     )
 
-                def _update_audio_bearing_choices(condition: str):
-                    bearings = BEARINGS_PER_CONDITION.get(condition, [])
-                    return gr.Dropdown(
-                        choices=bearings,
-                        value=bearings[0] if bearings else None,
-                    )
-
                 audio_condition_dd.change(
-                    fn=_update_audio_bearing_choices,
+                    fn=_update_bearing_dd,
                     inputs=audio_condition_dd,
                     outputs=audio_bearing_dd,
                 )
 
-                # --- Three-column comparison layout ---
                 stage_labels = list(AUDIO_STAGES.keys())
                 audio_components = []  # collect (audio, plot) pairs
 
