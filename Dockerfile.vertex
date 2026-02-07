@@ -1,0 +1,32 @@
+# Dockerfile.vertex
+# Custom container for Vertex AI training jobs
+#
+# Build and push to Artifact Registry:
+#   gcloud builds submit \
+#     --tag asia-southeast1-docker.pkg.dev/xjtu-bearing-failure/training/bearing-rul:latest \
+#     -f Dockerfile.vertex .
+
+FROM asia-docker.pkg.dev/vertex-ai/training/tf-gpu.2-15.py310:latest
+
+WORKDIR /app
+
+# Copy project source code
+COPY src/ /app/src/
+COPY scripts/ /app/scripts/
+COPY configs/ /app/configs/
+COPY pyproject.toml /app/
+
+# Install additional Python dependencies not in base image
+# Note: TensorFlow, Keras, numpy, pandas are already in the base image
+RUN pip install --no-cache-dir \
+    pywavelets \
+    lightgbm \
+    mlflow \
+    google-cloud-storage \
+    google-cloud-aiplatform
+
+# Set Python path to include project root
+ENV PYTHONPATH=/app:$PYTHONPATH
+
+# Default command (overridden by Vertex AI job spec)
+CMD ["python", "--version"]
