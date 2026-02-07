@@ -1,5 +1,6 @@
 # XJTU-SY Bearing RUL Prediction
 
+[![CI](https://github.com/thfmn/xjtu-sy-bearing/actions/workflows/ci.yml/badge.svg)](https://github.com/thfmn/xjtu-sy-bearing/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Tests](https://img.shields.io/badge/tests-459%20passed-brightgreen)
 ![uv](https://img.shields.io/badge/package%20manager-uv-blueviolet)
