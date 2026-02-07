@@ -1,6 +1,6 @@
-"""Pattern 2: 2D CNN + Temporal architecture for RUL prediction.
+"""CNN2D: 2D CNN + Temporal architecture for RUL prediction.
 
-This package implements the Pattern 2 architecture that processes
+This package implements the 2D CNN architecture that processes
 spectrograms (STFT or CWT) through a 2D CNN backbone followed by
 temporal aggregation for RUL prediction.
 
@@ -22,20 +22,20 @@ Key components:
 - model.py: Full model assembly
 
 Usage:
-    from src.models.pattern2 import (
-        create_pattern2_lstm,
-        create_pattern2_transformer,
-        create_pattern2_with_uncertainty,
+    from src.models.cnn2d import (
+        create_cnn2d_lstm,
+        create_cnn2d_transformer,
+        create_cnn2d_with_uncertainty,
     )
 
     # Create model with LSTM aggregator
-    model = create_pattern2_lstm()
+    model = create_cnn2d_lstm()
 
     # Create model with Transformer aggregator
-    model = create_pattern2_transformer()
+    model = create_cnn2d_transformer()
 
     # Create model with uncertainty output
-    model = create_pattern2_with_uncertainty()
+    model = create_cnn2d_with_uncertainty()
 """
 
 # Frontend
@@ -61,7 +61,7 @@ from .backbone import (
 from .aggregator import (
     SequenceAggregatorConfig,
     SimplePoolingAggregator,
-    Pattern2Aggregator,
+    CNN2DAggregator,
     create_lstm_aggregator,
     create_transformer_aggregator,
     create_simple_aggregator,
@@ -74,14 +74,14 @@ from .aggregator import (
 
 # Model
 from .model import (
-    Pattern2Config,
+    CNN2DConfig,
     LateFusion,
     RULHead,
-    build_pattern2_model,
-    create_pattern2_lstm,
-    create_pattern2_transformer,
-    create_pattern2_with_uncertainty,
-    create_simple_pattern2,
+    build_cnn2d_model,
+    create_cnn2d_lstm,
+    create_cnn2d_transformer,
+    create_cnn2d_with_uncertainty,
+    create_cnn2d_simple,
     get_model_summary,
     print_model_summary,
 )
@@ -103,7 +103,7 @@ __all__ = [
     # Aggregator
     "SequenceAggregatorConfig",
     "SimplePoolingAggregator",
-    "Pattern2Aggregator",
+    "CNN2DAggregator",
     "create_lstm_aggregator",
     "create_transformer_aggregator",
     "create_simple_aggregator",
@@ -112,14 +112,14 @@ __all__ = [
     "TransformerAggregator",
     "TransformerAggregatorConfig",
     # Model
-    "Pattern2Config",
+    "CNN2DConfig",
     "LateFusion",
     "RULHead",
-    "build_pattern2_model",
-    "create_pattern2_lstm",
-    "create_pattern2_transformer",
-    "create_pattern2_with_uncertainty",
-    "create_simple_pattern2",
+    "build_cnn2d_model",
+    "create_cnn2d_lstm",
+    "create_cnn2d_transformer",
+    "create_cnn2d_with_uncertainty",
+    "create_cnn2d_simple",
     "get_model_summary",
     "print_model_summary",
 ]

@@ -1,6 +1,6 @@
-"""2D CNN + Temporal Pattern 2 model assembly for RUL prediction.
+"""2D CNN + Temporal model assembly for RUL prediction.
 
-This module assembles the full Pattern 2 architecture:
+This module assembles the full 2D CNN architecture:
     Input (spectrograms) -> CNN Backbone -> Late Fusion -> Temporal Aggregator -> RUL Head
 
 The model can operate in two modes:
@@ -23,15 +23,15 @@ from tensorflow.keras import layers
 from .backbone import CNN2DBackboneConfig, CNN2DBackbone, DualChannelCNN2DBackbone
 from .aggregator import (
     SequenceAggregatorConfig,
-    Pattern2Aggregator,
+    CNN2DAggregator,
     LSTMAggregatorConfig,
     TransformerAggregatorConfig,
 )
 
 
 @dataclass
-class Pattern2Config:
-    """Configuration for the full Pattern 2 model.
+class CNN2DConfig:
+    """Configuration for the full 2D CNN model.
 
     Attributes:
         input_mode: Input type ('spectrogram' for pre-computed, 'raw' for on-the-fly).
@@ -62,6 +62,10 @@ class Pattern2Config:
     rul_hidden_dim: int = 64
     rul_dropout_rate: float = 0.1
     output_uncertainty: bool = False
+
+
+# Backwards compatibility alias
+Pattern2Config = CNN2DConfig
 
 
 class LateFusion(keras.layers.Layer):
@@ -247,11 +251,11 @@ class RULHead(keras.layers.Layer):
         return config
 
 
-def build_pattern2_model(
-    config: Optional[Pattern2Config] = None,
-    name: str = "pattern2_cnn_temporal"
+def build_cnn2d_model(
+    config: Optional[CNN2DConfig] = None,
+    name: str = "cnn2d_temporal"
 ) -> keras.Model:
-    """Build the full Pattern 2 model for RUL prediction.
+    """Build the full 2D CNN model for RUL prediction.
 
     Architecture:
         Input (batch, height, width, 2) [spectrograms]
@@ -262,7 +266,7 @@ def build_pattern2_model(
             ↓
         [Optional: Expand to sequence for temporal aggregation]
             ↓
-        Pattern2Aggregator → aggregated
+        CNN2DAggregator → aggregated
             ↓
         RULHead → RUL prediction (and optionally variance)
 
@@ -274,7 +278,7 @@ def build_pattern2_model(
         Compiled Keras model.
     """
     if config is None:
-        config = Pattern2Config()
+        config = CNN2DConfig()
 
     # Input layer
     inputs = keras.Input(
@@ -309,7 +313,7 @@ def build_pattern2_model(
             lstm_config=config.lstm_config,
             transformer_config=config.transformer_config,
         )
-        aggregator = Pattern2Aggregator(
+        aggregator = CNN2DAggregator(
             config=agg_config,
             name="temporal_aggregator"
         )
@@ -339,14 +343,18 @@ def build_pattern2_model(
     return model
 
 
-def create_pattern2_lstm(
+# Backwards compatibility alias
+build_pattern2_model = build_cnn2d_model
+
+
+def create_cnn2d_lstm(
     spectrogram_shape: tuple[int, int] = (128, 128),
     num_conv_blocks: int = 4,
     base_filters: int = 32,
     lstm_units: int = 64,
     share_weights: bool = True,
 ) -> keras.Model:
-    """Create Pattern 2 model with LSTM aggregator.
+    """Create 2D CNN model with LSTM aggregator.
 
     This is the v1 aggregator mentioned in PRD.
 
@@ -362,7 +370,7 @@ def create_pattern2_lstm(
     """
     filters = [base_filters * (2 ** i) for i in range(num_conv_blocks)]
 
-    config = Pattern2Config(
+    config = CNN2DConfig(
         spectrogram_height=spectrogram_shape[0],
         spectrogram_width=spectrogram_shape[1],
         backbone_config=CNN2DBackboneConfig(
@@ -380,10 +388,14 @@ def create_pattern2_lstm(
         ),
     )
 
-    return build_pattern2_model(config, name="pattern2_lstm")
+    return build_cnn2d_model(config, name="cnn2d_lstm")
 
 
-def create_pattern2_transformer(
+# Backwards compatibility alias
+create_pattern2_lstm = create_cnn2d_lstm
+
+
+def create_cnn2d_transformer(
     spectrogram_shape: tuple[int, int] = (128, 128),
     num_conv_blocks: int = 4,
     base_filters: int = 32,
@@ -391,7 +403,7 @@ def create_pattern2_transformer(
     num_heads: int = 4,
     share_weights: bool = True,
 ) -> keras.Model:
-    """Create Pattern 2 model with Transformer aggregator.
+    """Create 2D CNN model with Transformer aggregator.
 
     This is the v2 aggregator mentioned in PRD.
 
@@ -408,7 +420,7 @@ def create_pattern2_transformer(
     """
     filters = [base_filters * (2 ** i) for i in range(num_conv_blocks)]
 
-    config = Pattern2Config(
+    config = CNN2DConfig(
         spectrogram_height=spectrogram_shape[0],
         spectrogram_width=spectrogram_shape[1],
         backbone_config=CNN2DBackboneConfig(
@@ -428,16 +440,20 @@ def create_pattern2_transformer(
         ),
     )
 
-    return build_pattern2_model(config, name="pattern2_transformer")
+    return build_cnn2d_model(config, name="cnn2d_transformer")
 
 
-def create_pattern2_with_uncertainty(
+# Backwards compatibility alias
+create_pattern2_transformer = create_cnn2d_transformer
+
+
+def create_cnn2d_with_uncertainty(
     spectrogram_shape: tuple[int, int] = (128, 128),
     num_conv_blocks: int = 4,
     base_filters: int = 32,
     aggregator_type: str = "lstm",
 ) -> keras.Model:
-    """Create Pattern 2 model with uncertainty quantification.
+    """Create 2D CNN model with uncertainty quantification.
 
     Outputs both mean RUL prediction and variance estimate.
 
@@ -452,7 +468,7 @@ def create_pattern2_with_uncertainty(
     """
     filters = [base_filters * (2 ** i) for i in range(num_conv_blocks)]
 
-    config = Pattern2Config(
+    config = CNN2DConfig(
         spectrogram_height=spectrogram_shape[0],
         spectrogram_width=spectrogram_shape[1],
         backbone_config=CNN2DBackboneConfig(
@@ -466,15 +482,19 @@ def create_pattern2_with_uncertainty(
         output_uncertainty=True,
     )
 
-    return build_pattern2_model(config, name="pattern2_uncertainty")
+    return build_cnn2d_model(config, name="cnn2d_uncertainty")
 
 
-def create_simple_pattern2(
+# Backwards compatibility alias
+create_pattern2_with_uncertainty = create_cnn2d_with_uncertainty
+
+
+def create_cnn2d_simple(
     spectrogram_shape: tuple[int, int] = (128, 128),
     num_conv_blocks: int = 4,
     base_filters: int = 32,
 ) -> keras.Model:
-    """Create simple Pattern 2 model without temporal aggregation.
+    """Create simple 2D CNN model without temporal aggregation.
 
     For single-spectrogram mode where no sequence aggregation is needed.
 
@@ -488,7 +508,7 @@ def create_simple_pattern2(
     """
     filters = [base_filters * (2 ** i) for i in range(num_conv_blocks)]
 
-    config = Pattern2Config(
+    config = CNN2DConfig(
         spectrogram_height=spectrogram_shape[0],
         spectrogram_width=spectrogram_shape[1],
         backbone_config=CNN2DBackboneConfig(
@@ -501,7 +521,11 @@ def create_simple_pattern2(
         aggregator_type="none",  # No temporal aggregation
     )
 
-    return build_pattern2_model(config, name="pattern2_simple")
+    return build_cnn2d_model(config, name="cnn2d_simple")
+
+
+# Backwards compatibility alias
+create_simple_pattern2 = create_cnn2d_simple
 
 
 def get_model_summary(model: keras.Model) -> dict:

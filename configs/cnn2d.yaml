@@ -1,4 +1,5 @@
-# Training config for Pattern 2 (2D CNN) models
+# Training config for 2D CNN (spectrogram-based) models
+model_version: "v1"
 batch_size: 32
 epochs: 100
 seed: 9
@@ -24,14 +25,14 @@ callbacks:
   restore_best_weights: true
   mlflow_tracking: true
   mlflow_tracking_uri: mlruns
-  mlflow_experiment_name: bearing_rul_dl
+  mlflow_experiment_name: bearing_rul_prediction
 
 model:
-  name: pattern2_cnn2d
+  name: cnn2d_simple
   input_type: spectrogram
 
 vertex:
   enabled: false          # Set to true when running on GCP
-  experiment_name: bearing-rul-dl
+  experiment_name: bearing-rul-prediction
   project_id: xjtu-bearing-failure
   location: asia-southeast1

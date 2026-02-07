@@ -1,7 +1,7 @@
-"""Temporal aggregation for 2D CNN + Temporal Pattern 2.
+"""Temporal aggregation for 2D CNN models.
 
 This module provides temporal aggregation layers for processing sequences
-of spectrogram embeddings. In the Pattern 2 architecture, the 2D CNN
+of spectrogram embeddings. In the 2D CNN architecture, the CNN backbone
 extracts per-spectrogram embeddings, and the temporal aggregator combines
 them into a single representation for RUL prediction.
 
@@ -35,9 +35,9 @@ from src.models.pattern1.aggregator import (
 
 @dataclass
 class SequenceAggregatorConfig:
-    """Configuration for sequence-level aggregation in Pattern 2.
+    """Configuration for sequence-level aggregation in 2D CNN models.
 
-    In Pattern 2, we can operate on sequences of spectrograms from
+    In 2D CNN models, we can operate on sequences of spectrograms from
     a single bearing (multiple time windows), requiring temporal
     aggregation to produce a single RUL prediction.
 
@@ -121,8 +121,8 @@ class SimplePoolingAggregator(keras.layers.Layer):
         return config
 
 
-class Pattern2Aggregator(keras.layers.Layer):
-    """Unified temporal aggregator for Pattern 2 architecture.
+class CNN2DAggregator(keras.layers.Layer):
+    """Unified temporal aggregator for 2D CNN architecture.
 
     Wraps different aggregation strategies (LSTM, Transformer, simple pooling)
     behind a unified interface.
@@ -182,12 +182,16 @@ class Pattern2Aggregator(keras.layers.Layer):
         return config
 
 
+# Backwards compatibility alias
+Pattern2Aggregator = CNN2DAggregator
+
+
 def create_lstm_aggregator(
     units: int = 64,
     bidirectional: bool = True,
     num_layers: int = 1,
-) -> Pattern2Aggregator:
-    """Create Pattern 2 aggregator with LSTM.
+) -> CNN2DAggregator:
+    """Create 2D CNN aggregator with LSTM.
 
     Args:
         units: Number of LSTM units.
@@ -195,7 +199,7 @@ def create_lstm_aggregator(
         num_layers: Number of stacked LSTM layers.
 
     Returns:
-        Configured Pattern2Aggregator.
+        Configured CNN2DAggregator.
     """
     lstm_config = LSTMAggregatorConfig(
         units=units,
@@ -207,15 +211,15 @@ def create_lstm_aggregator(
         aggregator_type="lstm",
         lstm_config=lstm_config,
     )
-    return Pattern2Aggregator(config=config)
+    return CNN2DAggregator(config=config)
 
 
 def create_transformer_aggregator(
     num_layers: int = 2,
     num_heads: int = 4,
     key_dim: int = 64,
-) -> Pattern2Aggregator:
-    """Create Pattern 2 aggregator with Transformer.
+) -> CNN2DAggregator:
+    """Create 2D CNN aggregator with Transformer.
 
     Args:
         num_layers: Number of Transformer encoder layers.
@@ -223,7 +227,7 @@ def create_transformer_aggregator(
         key_dim: Dimension of attention keys.
 
     Returns:
-        Configured Pattern2Aggregator.
+        Configured CNN2DAggregator.
     """
     transformer_config = TransformerAggregatorConfig(
         num_layers=num_layers,
@@ -236,21 +240,21 @@ def create_transformer_aggregator(
         aggregator_type="transformer",
         transformer_config=transformer_config,
     )
-    return Pattern2Aggregator(config=config)
+    return CNN2DAggregator(config=config)
 
 
 def create_simple_aggregator(
     mode: Literal["mean", "last", "first", "max"] = "mean"
-) -> Pattern2Aggregator:
-    """Create Pattern 2 aggregator with simple pooling.
+) -> CNN2DAggregator:
+    """Create 2D CNN aggregator with simple pooling.
 
     Args:
         mode: Pooling mode ('mean', 'last', 'first', 'max').
 
     Returns:
-        Configured Pattern2Aggregator.
+        Configured CNN2DAggregator.
     """
     config = SequenceAggregatorConfig(
         aggregator_type=mode,
     )
-    return Pattern2Aggregator(config=config)
+    return CNN2DAggregator(config=config)
