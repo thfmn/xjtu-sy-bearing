@@ -6,7 +6,7 @@
 #     --tag asia-southeast1-docker.pkg.dev/xjtu-bearing-failure/training/bearing-rul:latest \
 #     -f Dockerfile.vertex .
 
-FROM asia-docker.pkg.dev/vertex-ai/training/tf-gpu.2-15.py310:latest
+FROM tensorflow/tensorflow:2.20.0-gpu
 
 WORKDIR /app
 
