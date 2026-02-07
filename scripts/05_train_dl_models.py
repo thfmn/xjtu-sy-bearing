@@ -27,7 +27,7 @@ from tensorflow import keras
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.data.datasets import build_dataset_for_model
+from src.data.dataset_builders import build_dataset_for_model
 from src.data.rul_labels import compute_twostage_rul
 from src.models.registry import build_model, get_model_info, list_models
 from src.onset.labels import load_onset_labels
@@ -432,7 +432,7 @@ def train_single_fold(
         for x_batch, y_batch in val_ds:
             preds = model.predict(x_batch, verbose=0)
             y_true_list.append(y_batch.numpy())
-            y_pred_list.append(preds.squeeze())
+            y_pred_list.append(preds.ravel())
 
         y_true = np.concatenate(y_true_list)
         y_pred = np.concatenate(y_pred_list)
