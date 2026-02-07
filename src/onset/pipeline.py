@@ -169,19 +169,35 @@ class TwoStagePipeline:
             rul[onset_idx:] = np.asarray(preds).ravel()
         return rul
 
-    def predict(self, bearing_signals: np.ndarray) -> np.ndarray:
+    def predict(
+        self,
+        onset_signals: np.ndarray,
+        rul_signals: np.ndarray | None = None,
+    ) -> np.ndarray:
         """Full two-stage prediction: detect onset, then predict RUL.
 
         Chains ``detect_onset()`` and ``predict_rul()`` for end-to-end
         inference on a single bearing's data.
 
+        Stage 1 and Stage 2 typically operate on different data
+        representations (e.g. 1-D HI series for rule-based detectors,
+        3-D windowed features for ML classifiers, spectrograms for RUL
+        models).  Use ``rul_signals`` to pass a separate input to the
+        RUL model.
+
         Args:
-            bearing_signals: Input data for a single bearing.  For
+            onset_signals: Input for Stage 1 onset detection.  For
                 rule-based detectors this should be a 1-D composite HI
-                array; for ML classifiers a windowed feature array.
+                array; for ML classifiers a 3-D windowed feature array
+                ``(n_windows, window_size, n_features)``.
+            rul_signals: Input for Stage 2 RUL prediction.  Shape must
+                be compatible with ``rul_model.predict()``.  If ``None``,
+                ``onset_signals`` is reused (useful when both stages
+                accept the same representation).
 
         Returns:
             1-D numpy array of RUL predictions, one per sample.
         """
-        onset_result = self.detect_onset(bearing_signals)
-        return self.predict_rul(bearing_signals, onset_result.onset_idx)
+        onset_result = self.detect_onset(onset_signals)
+        rul_input = rul_signals if rul_signals is not None else onset_signals
+        return self.predict_rul(rul_input, onset_result.onset_idx)

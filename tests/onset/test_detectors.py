@@ -20,6 +20,7 @@ import pytest
 
 from src.onset.detectors import (
     BaseOnsetDetector,
+    BayesianOnsetDetector,
     CUSUMOnsetDetector,
     OnsetResult,
     ThresholdOnsetDetector,
@@ -2890,3 +2891,226 @@ class TestEnsembleSignificantDisagreement:
                     f"Final confidence {result.confidence:.3f} should approximate "
                     f"weighted_avg ({weighted_avg:.3f}) × disagreement ({df:.3f}) = {expected_conf:.3f}"
                 )
+
+
+# ============================================================================
+# BayesianOnsetDetector Tests (ONSET-5 / ONSET-6)
+# ============================================================================
+
+
+class TestBayesianOnsetDetector:
+    """Tests for BayesianOnsetDetector (Adams & MacKay 2007 BOCPD)."""
+
+    def test_returns_onset_result(self):
+        """BayesianOnsetDetector.detect() returns an OnsetResult instance."""
+        np.random.seed(42)
+        series = np.random.normal(0, 1, 50)
+        det = BayesianOnsetDetector(hazard_rate=1 / 50, cp_threshold=0.5)
+        det.fit(series[:10])
+        result = det.detect(series)
+        assert isinstance(result, OnsetResult)
+
+    def test_is_base_onset_detector(self):
+        """BayesianOnsetDetector inherits from BaseOnsetDetector."""
+        det = BayesianOnsetDetector()
+        assert isinstance(det, BaseOnsetDetector)
+
+    def test_sudden_onset_within_tolerance(self):
+        """Detects sudden onset within 5 samples of true changepoint."""
+        np.random.seed(42)
+        healthy = np.random.normal(0, 1, 60)
+        degraded = np.random.normal(4, 1.5, 60)
+        series = np.concatenate([healthy, degraded])
+
+        det = BayesianOnsetDetector(hazard_rate=1 / 50, cp_threshold=0.5)
+        det.fit(healthy[:20])
+        result = det.detect(series)
+
+        assert result.onset_idx is not None, "Should detect onset"
+        assert abs(result.onset_idx - 60) <= 5, (
+            f"Onset at {result.onset_idx}, expected within 5 of 60"
+        )
+
+    def test_no_onset_returns_none(self):
+        """Returns onset_idx=None for healthy-only series."""
+        np.random.seed(42)
+        healthy = np.random.normal(0, 1, 200)
+        det = BayesianOnsetDetector(hazard_rate=1 / 200, cp_threshold=0.5)
+        det.fit(healthy[:30])
+        result = det.detect(healthy)
+
+        assert result.onset_idx is None
+        assert result.onset_time is None
+
+    def test_cp_probs_are_valid_probabilities(self):
+        """cp_probs in healthy_baseline are in [0, 1] range."""
+        np.random.seed(42)
+        healthy = np.random.normal(0, 1, 50)
+        degraded = np.random.normal(3, 1, 50)
+        series = np.concatenate([healthy, degraded])
+
+        det = BayesianOnsetDetector(hazard_rate=1 / 50, cp_threshold=0.5)
+        det.fit(healthy[:20])
+        result = det.detect(series)
+
+        cp_probs = result.healthy_baseline["cp_probs"]
+        assert cp_probs.shape == (100,)
+        assert np.all(cp_probs >= 0.0), "cp_probs must be non-negative"
+        assert np.all(cp_probs <= 1.0), "cp_probs must be <= 1.0"
+
+    def test_confidence_in_zero_one(self):
+        """Confidence is always in [0, 1]."""
+        np.random.seed(42)
+        series = np.concatenate([
+            np.random.normal(0, 1, 50),
+            np.random.normal(5, 1, 50),
+        ])
+        det = BayesianOnsetDetector(hazard_rate=1 / 50, cp_threshold=0.5)
+        det.fit(series[:20])
+        result = det.detect(series)
+        assert 0.0 <= result.confidence <= 1.0
+
+    def test_confidence_reflects_cp_probability(self):
+        """When onset detected, confidence equals cp_probs at onset index."""
+        np.random.seed(42)
+        series = np.concatenate([
+            np.random.normal(0, 1, 60),
+            np.random.normal(5, 1, 60),
+        ])
+        det = BayesianOnsetDetector(hazard_rate=1 / 50, cp_threshold=0.5)
+        det.fit(series[:20])
+        result = det.detect(series)
+
+        if result.onset_idx is not None:
+            cp_probs = result.healthy_baseline["cp_probs"]
+            assert result.confidence == pytest.approx(
+                cp_probs[result.onset_idx], abs=1e-10
+            )
+
+    def test_empty_series(self):
+        """Returns None onset for empty series."""
+        det = BayesianOnsetDetector(hazard_rate=1 / 50, cp_threshold=0.5)
+        det.fit(np.array([1.0, 2.0, 3.0]))
+        result = det.detect(np.array([]))
+
+        assert result.onset_idx is None
+        assert result.confidence == 0.0
+
+    def test_unfitted_raises_error(self):
+        """Raises RuntimeError when detect() called before fit()."""
+        det = BayesianOnsetDetector()
+        with pytest.raises(RuntimeError, match="not fitted"):
+            det.detect(np.array([1.0, 2.0, 3.0]))
+
+    def test_fit_requires_at_least_2_samples(self):
+        """fit() raises ValueError for fewer than 2 samples."""
+        det = BayesianOnsetDetector()
+        with pytest.raises(ValueError, match="at least 2"):
+            det.fit(np.array([1.0]))
+
+    def test_fit_handles_nan_values(self):
+        """fit() ignores NaN values in healthy samples."""
+        det = BayesianOnsetDetector()
+        samples = np.array([1.0, 2.0, np.nan, 3.0, 4.0])
+        det.fit(samples)
+        assert det._healthy_mean == pytest.approx(2.5, abs=0.01)
+
+    def test_hazard_rate_validation(self):
+        """hazard_rate must be in (0, 1)."""
+        with pytest.raises(ValueError, match="hazard_rate"):
+            BayesianOnsetDetector(hazard_rate=0)
+        with pytest.raises(ValueError, match="hazard_rate"):
+            BayesianOnsetDetector(hazard_rate=1.5)
+        with pytest.raises(ValueError, match="hazard_rate"):
+            BayesianOnsetDetector(hazard_rate=-0.1)
+
+    def test_cp_threshold_validation(self):
+        """cp_threshold must be in (0, 1)."""
+        with pytest.raises(ValueError, match="cp_threshold"):
+            BayesianOnsetDetector(cp_threshold=0)
+        with pytest.raises(ValueError, match="cp_threshold"):
+            BayesianOnsetDetector(cp_threshold=1.0)
+
+    def test_custom_prior_parameters(self):
+        """Custom prior_mean and prior_var are used when provided."""
+        det = BayesianOnsetDetector(
+            hazard_rate=1 / 50,
+            cp_threshold=0.5,
+            prior_mean=5.0,
+            prior_var=2.0,
+        )
+        det.fit(np.random.normal(0, 1, 20))
+
+        assert det._mu0 == 5.0, "prior_mean should override sample mean"
+        assert det._beta0 == pytest.approx(2.0, abs=0.01), (
+            "beta0 should be alpha0 * prior_var"
+        )
+
+    def test_fit_detect_convenience_method(self):
+        """fit_detect() works as a convenience method."""
+        np.random.seed(42)
+        series = np.concatenate([
+            np.random.normal(0, 1, 60),
+            np.random.normal(5, 1, 60),
+        ])
+        det = BayesianOnsetDetector(hazard_rate=1 / 50, cp_threshold=0.5)
+        result = det.fit_detect(series)
+
+        assert isinstance(result, OnsetResult)
+        assert det._fitted is True
+
+    def test_healthy_baseline_contains_prior_params(self):
+        """healthy_baseline dict contains NIG prior parameters."""
+        np.random.seed(42)
+        det = BayesianOnsetDetector(hazard_rate=1 / 50, cp_threshold=0.5)
+        det.fit(np.random.normal(0, 1, 20))
+        result = det.detect(np.random.normal(0, 1, 50))
+
+        baseline = result.healthy_baseline
+        assert "mean" in baseline
+        assert "std" in baseline
+        assert "n_samples" in baseline
+        assert "hazard_rate" in baseline
+        assert "cp_threshold" in baseline
+        assert "prior_mu0" in baseline
+        assert "prior_kappa0" in baseline
+        assert "prior_alpha0" in baseline
+        assert "prior_beta0" in baseline
+        assert "cp_probs" in baseline
+
+    def test_detect_handles_nan_in_series(self):
+        """NaN values in series are skipped without error."""
+        np.random.seed(42)
+        series = np.concatenate([
+            np.random.normal(0, 1, 50),
+            np.random.normal(5, 1, 50),
+        ])
+        series[25] = np.nan
+        series[55] = np.nan
+
+        det = BayesianOnsetDetector(hazard_rate=1 / 50, cp_threshold=0.5)
+        det.fit(series[:20])
+        result = det.detect(series)
+
+        assert isinstance(result, OnsetResult)
+        # Should still detect onset near index 50
+        if result.onset_idx is not None:
+            assert abs(result.onset_idx - 50) <= 10
+
+    def test_works_in_ensemble(self):
+        """BayesianOnsetDetector can be used in EnsembleOnsetDetector."""
+        from src.onset.detectors import EnsembleOnsetDetector
+
+        np.random.seed(42)
+        series = np.concatenate([
+            np.random.normal(0, 1, 60),
+            np.random.normal(5, 1, 60),
+        ])
+        td = ThresholdOnsetDetector(threshold_sigma=3.0)
+        bd = BayesianOnsetDetector(hazard_rate=1 / 50, cp_threshold=0.5)
+        ensemble = EnsembleOnsetDetector(detectors=[td, bd], voting="earliest")
+        result = ensemble.fit_detect(series)
+
+        assert isinstance(result, OnsetResult)
+        if result.onset_idx is not None:
+            assert abs(result.onset_idx - 60) <= 10

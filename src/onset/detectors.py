@@ -8,7 +8,7 @@ Algorithms:
 - ThresholdOnsetDetector: Simple threshold-based detection (mean + k*sigma)
 - CUSUMOnsetDetector: Cumulative Sum change-point detection
 - EWMAOnsetDetector: Exponentially Weighted Moving Average change-point detection
-- BayesianOnsetDetector: Bayesian Online Change-Point Detection (planned)
+- BayesianOnsetDetector: Bayesian Online Change-Point Detection (Adams & MacKay, 2007)
 - EnsembleOnsetDetector: Combine multiple detectors with voting
 
 Reference:
@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
+from scipy.special import gammaln
 
 if TYPE_CHECKING:
     pass
@@ -673,6 +674,390 @@ class EWMAOnsetDetector(BaseOnsetDetector):
             confidence=confidence,
             healthy_baseline=healthy_baseline,
         )
+
+
+class BayesianOnsetDetector(BaseOnsetDetector):
+    """Bayesian Online Change-Point Detection (Adams & MacKay, 2007).
+
+    Maintains a posterior distribution over the current run length (time since
+    the last changepoint). At each timestep, computes the probability that a
+    changepoint has occurred by marginalizing over all possible run lengths.
+
+    Uses a Normal-Inverse-Gamma (NIG) conjugate prior for Gaussian observations,
+    allowing exact Bayesian inference. The sufficient statistics are updated
+    incrementally for each possible run length, making the algorithm O(n^2) in
+    total computation and O(n) in memory per timestep.
+
+    The algorithm:
+        1. At each timestep t, observe x_t
+        2. Evaluate predictive probability P(x_t | r_{t-1}) for each run length
+        3. Compute growth probabilities: P(r_t = r_{t-1}+1) ∝ π(x_t|r) × (1 - H(r))
+        4. Compute changepoint probability: P(r_t = 0) ∝ Σ π(x_t|r) × H(r)
+        5. Normalize to get P(r_t | x_{1:t})
+        6. Detect onset where P(r_t = 0) is large (changepoint posterior spike)
+
+    Onset is detected when the posterior run-length distribution shifts
+    dramatically — the MAP (most likely) run length drops, indicating
+    that probability mass has moved from a long established run to a
+    new short run after a changepoint. Specifically, onset is declared
+    when the cumulative probability on "short" run lengths (r < threshold)
+    exceeds `cp_threshold`.
+
+    Attributes:
+        hazard_rate: Prior rate of changepoints (1/expected_run_length).
+            Higher = more changepoints expected. Default 1/200.
+        cp_threshold: Probability mass threshold on short run lengths
+            to declare a changepoint. Default 0.5.
+        prior_mean: Prior mean for the NIG prior. If None, estimated from fit().
+        prior_var: Prior variance scale for the NIG prior. If None, estimated from fit().
+        _mu0: NIG prior: prior mean.
+        _kappa0: NIG prior: prior precision scale (number of pseudo-observations for mean).
+        _alpha0: NIG prior: prior shape (half the pseudo-observations for variance).
+        _beta0: NIG prior: prior rate (half the pseudo sum of squares).
+        _fitted: Whether the detector has been fitted.
+
+    Reference:
+        Adams, R.P. & MacKay, D.J.C. (2007).
+        "Bayesian Online Changepoint Detection". arXiv:0710.3742.
+    """
+
+    def __init__(
+        self,
+        hazard_rate: float = 1 / 200,
+        cp_threshold: float = 0.5,
+        prior_mean: float | None = None,
+        prior_var: float | None = None,
+    ) -> None:
+        """Initialize the Bayesian Online Change-Point Detector.
+
+        Args:
+            hazard_rate: Prior probability of a changepoint at each timestep.
+                Equals 1/expected_run_length. Default 1/200 (expect changepoint
+                every ~200 samples). Must be in (0, 1).
+            cp_threshold: Minimum cumulative probability on short run lengths
+                to declare onset. When probability mass on r < short_window
+                exceeds this threshold, a changepoint is declared. Default 0.5.
+                Must be in (0, 1).
+            prior_mean: Prior mean for observations. If None, estimated from
+                fit() healthy samples.
+            prior_var: Prior variance for observations. If None, estimated from
+                fit() healthy samples.
+
+        Raises:
+            ValueError: If hazard_rate or cp_threshold not in (0, 1).
+        """
+        if not (0 < hazard_rate < 1):
+            raise ValueError("hazard_rate must be in (0, 1)")
+        if not (0 < cp_threshold < 1):
+            raise ValueError("cp_threshold must be in (0, 1)")
+
+        self.hazard_rate = hazard_rate
+        self.cp_threshold = cp_threshold
+        self.prior_mean = prior_mean
+        self.prior_var = prior_var
+
+        # NIG prior hyperparameters (set during fit)
+        self._mu0: float | None = None
+        self._kappa0: float = 1.0
+        self._alpha0: float = 1.0
+        self._beta0: float | None = None
+        self._fitted = False
+
+        # Stored for baseline reporting
+        self._healthy_mean: float | None = None
+        self._healthy_std: float | None = None
+        self._n_samples: int = 0
+
+    def fit(self, healthy_samples: np.ndarray) -> "BayesianOnsetDetector":
+        """Learn NIG prior hyperparameters from healthy samples.
+
+        Sets the prior mean to the sample mean and the prior variance scale
+        based on the sample variance, so the model expects observations
+        similar to the healthy baseline.
+
+        Args:
+            healthy_samples: Array of health indicator values from healthy period.
+                Should be at least 2 samples.
+
+        Returns:
+            Self, for method chaining.
+
+        Raises:
+            ValueError: If healthy_samples has fewer than 2 valid samples.
+        """
+        healthy_samples = np.asarray(healthy_samples)
+        if healthy_samples.size < 2:
+            raise ValueError("Need at least 2 samples to compute baseline statistics")
+
+        valid_samples = healthy_samples[~np.isnan(healthy_samples)]
+        if valid_samples.size < 2:
+            raise ValueError("Need at least 2 non-NaN samples for baseline")
+
+        sample_mean = float(np.mean(valid_samples))
+        sample_var = float(np.var(valid_samples, ddof=1))
+
+        self._healthy_mean = sample_mean
+        self._healthy_std = float(np.sqrt(sample_var)) if sample_var > 0 else 1e-10
+        self._n_samples = int(valid_samples.size)
+
+        # Set NIG prior hyperparameters
+        # mu0: prior mean (use sample mean or user-provided)
+        self._mu0 = self.prior_mean if self.prior_mean is not None else sample_mean
+
+        # kappa0: prior precision scale (number of pseudo-observations for mean)
+        # Small value = weak prior, lets data dominate quickly
+        self._kappa0 = 1.0
+
+        # alpha0: prior shape for variance (half pseudo-observations)
+        # alpha0 = 1 gives a weakly informative prior
+        self._alpha0 = 1.0
+
+        # beta0: prior rate for variance
+        # Set from sample variance or user-provided prior_var
+        prior_variance = self.prior_var if self.prior_var is not None else sample_var
+        if prior_variance < 1e-10:
+            prior_variance = 1e-10
+        # beta0 = alpha0 * prior_variance (so that E[sigma^2] = beta0/alpha0 = prior_var)
+        self._beta0 = self._alpha0 * prior_variance
+
+        self._fitted = True
+        return self
+
+    def detect(self, hi_series: np.ndarray) -> OnsetResult:
+        """Detect onset using Bayesian Online Change-Point Detection.
+
+        Runs the BOCPD algorithm over the entire series, computing the
+        posterior run-length distribution at each timestep. Detects onset
+        when the cumulative probability on short run lengths (indicating
+        a recent changepoint) exceeds cp_threshold.
+
+        Under constant hazard, P(r_t=0) is always equal to the hazard rate.
+        Instead, we detect changepoints by monitoring the cumulative mass
+        on short run lengths: sum P(r_t < short_window). When this exceeds
+        cp_threshold, the model believes a changepoint recently occurred.
+
+        Args:
+            hi_series: Full health indicator time series for a bearing.
+
+        Returns:
+            OnsetResult with:
+            - onset_idx: First changepoint index, or None
+            - onset_time: Same as onset_idx
+            - confidence: Posterior probability mass on short runs at onset
+            - healthy_baseline: Dict with prior params and posterior cp_probs
+
+        Raises:
+            RuntimeError: If detector has not been fitted.
+        """
+        if not self._fitted:
+            raise RuntimeError("Detector not fitted. Call fit() first.")
+
+        hi_series = np.asarray(hi_series, dtype=np.float64)
+        n = len(hi_series)
+
+        if n == 0:
+            return OnsetResult(
+                onset_idx=None,
+                onset_time=None,
+                confidence=0.0,
+                healthy_baseline=self._build_baseline(None),
+            )
+
+        # Constant hazard function: H(r) = hazard_rate for all r
+        H = self.hazard_rate
+
+        # Window for "short" run lengths — if most probability mass is on
+        # run lengths < short_window, a changepoint likely occurred recently
+        short_window = max(3, int(1 / H * 0.1))  # 10% of expected run length
+
+        # Initialize: at t=0 before seeing data, P(r_0=0) = 1
+        msg = np.array([1.0])
+
+        # NIG sufficient statistics arrays (one entry per possible run length)
+        mu = np.array([self._mu0])
+        kappa = np.array([self._kappa0])
+        alpha = np.array([self._alpha0])
+        beta = np.array([self._beta0])
+
+        # Store posterior probability of recent changepoint at each timestep
+        # cp_probs[t] = sum P(r_t < short_window)
+        cp_probs = np.zeros(n)
+
+        for t in range(n):
+            x = hi_series[t]
+
+            # Skip NaN: carry forward unchanged
+            if np.isnan(x):
+                cp_probs[t] = cp_probs[t - 1] if t > 0 else 0.0
+                continue
+
+            # 1. Evaluate predictive probability P(x_t | r_{t-1})
+            # Under NIG, the predictive is Student-t
+            pred_probs = self._student_t_pdf(x, mu, kappa, alpha, beta)
+
+            # 2. Compute growth probabilities
+            growth = pred_probs * (1.0 - H) * msg
+
+            # 3. Compute changepoint probability (mass flowing to r=0)
+            cp = np.sum(pred_probs * H * msg)
+
+            # 4. Assemble new run-length distribution: [cp, growth_0, growth_1, ...]
+            new_msg = np.empty(len(growth) + 1)
+            new_msg[0] = cp
+            new_msg[1:] = growth
+
+            # 5. Normalize
+            evidence = np.sum(new_msg)
+            if evidence > 0:
+                new_msg /= evidence
+
+            # 6. Compute cumulative probability on short run lengths
+            sw = min(short_window, len(new_msg))
+            cp_probs[t] = float(np.sum(new_msg[:sw]))
+
+            # 7. Update NIG sufficient statistics
+            new_mu = np.empty(len(mu) + 1)
+            new_kappa = np.empty(len(kappa) + 1)
+            new_alpha = np.empty(len(alpha) + 1)
+            new_beta = np.empty(len(beta) + 1)
+
+            # Run length 0: reset to prior
+            new_mu[0] = self._mu0
+            new_kappa[0] = self._kappa0
+            new_alpha[0] = self._alpha0
+            new_beta[0] = self._beta0
+
+            # Run lengths 1, 2, ...: update from previous
+            new_kappa[1:] = kappa + 1
+            new_mu[1:] = (kappa * mu + x) / new_kappa[1:]
+            new_alpha[1:] = alpha + 0.5
+            new_beta[1:] = beta + 0.5 * kappa * (x - mu) ** 2 / new_kappa[1:]
+
+            # Pruning: keep only run lengths up to n (can't exceed series length)
+            max_rl = min(len(new_msg), n)
+            if len(new_msg) > max_rl:
+                new_msg = new_msg[:max_rl]
+                new_mu = new_mu[:max_rl]
+                new_kappa = new_kappa[:max_rl]
+                new_alpha = new_alpha[:max_rl]
+                new_beta = new_beta[:max_rl]
+                total = np.sum(new_msg)
+                if total > 0:
+                    new_msg /= total
+
+            msg = new_msg
+            mu = new_mu
+            kappa = new_kappa
+            alpha = new_alpha
+            beta = new_beta
+
+        # Detect onset: first timestep where short-run-length mass exceeds threshold
+        # Must skip the initial transient where all run lengths are naturally short
+        # (the model needs time to establish a stable run before detecting a break)
+        onset_idx = None
+        max_cp_prob = 0.0
+        established = False  # Whether model has established a stable run
+
+        # The model is "established" once cp_probs drops below threshold
+        # (meaning most mass is on longer run lengths, i.e. stable regime)
+        skip = max(short_window + 1, int(0.05 * n))
+
+        for t in range(skip, n):
+            if not established and cp_probs[t] < self.cp_threshold:
+                established = True
+
+            if cp_probs[t] > max_cp_prob:
+                max_cp_prob = cp_probs[t]
+
+            if established and onset_idx is None and cp_probs[t] > self.cp_threshold:
+                onset_idx = t
+
+        # Build result
+        healthy_baseline = self._build_baseline(cp_probs)
+
+        if onset_idx is None:
+            return OnsetResult(
+                onset_idx=None,
+                onset_time=None,
+                confidence=float(max_cp_prob),
+                healthy_baseline=healthy_baseline,
+            )
+
+        confidence = float(cp_probs[onset_idx])
+
+        return OnsetResult(
+            onset_idx=onset_idx,
+            onset_time=float(onset_idx),
+            confidence=confidence,
+            healthy_baseline=healthy_baseline,
+        )
+
+    def _student_t_pdf(
+        self,
+        x: float,
+        mu: np.ndarray,
+        kappa: np.ndarray,
+        alpha: np.ndarray,
+        beta: np.ndarray,
+    ) -> np.ndarray:
+        """Compute Student-t predictive probability under NIG posterior.
+
+        The predictive distribution for a new observation x given NIG
+        parameters (mu, kappa, alpha, beta) is:
+            x ~ t_{2*alpha}(mu, beta*(kappa+1)/(alpha*kappa))
+
+        Args:
+            x: New observation.
+            mu: Array of posterior means (one per run length).
+            kappa: Array of posterior precision scales.
+            alpha: Array of posterior shapes.
+            beta: Array of posterior rates.
+
+        Returns:
+            Array of predictive probabilities P(x | params) for each run length.
+        """
+        # Student-t parameters
+        df = 2 * alpha  # degrees of freedom
+        scale_sq = beta * (kappa + 1) / (alpha * kappa)  # variance scale
+
+        # Guard against numerical issues
+        scale_sq = np.maximum(scale_sq, 1e-30)
+
+        # Student-t pdf: Γ((ν+1)/2) / (Γ(ν/2) √(νπσ²)) × (1 + (x-μ)²/(νσ²))^(-(ν+1)/2)
+        # Use log-space for numerical stability
+        z = (x - mu) ** 2 / (df * scale_sq)
+        log_pdf = (
+            gammaln((df + 1) / 2)
+            - gammaln(df / 2)
+            - 0.5 * np.log(df * np.pi * scale_sq)
+            - ((df + 1) / 2) * np.log1p(z)
+        )
+
+        return np.exp(log_pdf)
+
+    def _build_baseline(self, cp_probs: np.ndarray | None) -> dict:
+        """Build healthy_baseline dictionary for OnsetResult.
+
+        Args:
+            cp_probs: Array of changepoint probabilities, or None.
+
+        Returns:
+            Dictionary with prior parameters and optionally cp_probs summary.
+        """
+        baseline: dict = {
+            "mean": self._healthy_mean,
+            "std": self._healthy_std,
+            "n_samples": self._n_samples,
+            "hazard_rate": self.hazard_rate,
+            "cp_threshold": self.cp_threshold,
+            "prior_mu0": self._mu0,
+            "prior_kappa0": self._kappa0,
+            "prior_alpha0": self._alpha0,
+            "prior_beta0": self._beta0,
+        }
+        if cp_probs is not None:
+            baseline["cp_probs"] = cp_probs
+        return baseline
 
 
 class EnsembleOnsetDetector(BaseOnsetDetector):

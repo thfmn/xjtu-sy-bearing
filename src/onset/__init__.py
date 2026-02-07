@@ -13,6 +13,7 @@ Components:
 
 from src.onset.detectors import (
     BaseOnsetDetector,
+    BayesianOnsetDetector,
     CUSUMOnsetDetector,
     EnsembleOnsetDetector,
     EWMAOnsetDetector,
@@ -66,6 +67,7 @@ __all__: list[str] = [
     "smooth_health_indicator",
     # Detectors
     "BaseOnsetDetector",
+    "BayesianOnsetDetector",
     "CUSUMOnsetDetector",
     "EnsembleOnsetDetector",
     "EWMAOnsetDetector",
