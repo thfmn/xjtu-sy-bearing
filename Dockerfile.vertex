@@ -10,20 +10,20 @@ FROM tensorflow/tensorflow:2.20.0-gpu
 
 WORKDIR /app
 
+# Install uv package manager
+RUN pip install --no-cache-dir uv
+
+# Copy dependency files
+COPY uv.lock pyproject.toml /app/
+
+# Install dependencies using uv
+# Note: TensorFlow, Keras, numpy, pandas are already in the base image
+RUN uv pip install --system -r uv.lock --no-cache-dir
+
 # Copy project source code
 COPY src/ /app/src/
 COPY scripts/ /app/scripts/
 COPY configs/ /app/configs/
-COPY pyproject.toml /app/
-
-# Install additional Python dependencies not in base image
-# Note: TensorFlow, Keras, numpy, pandas are already in the base image
-RUN pip install --no-cache-dir \
-    pywavelets \
-    lightgbm \
-    mlflow \
-    google-cloud-storage \
-    google-cloud-aiplatform
 
 # Set Python path to include project root
 ENV PYTHONPATH=/app:$PYTHONPATH
