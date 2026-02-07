@@ -58,6 +58,27 @@ MODEL_DISPLAY_NAMES: dict[str, str] = {
 
 def load_data() -> dict:
     """Load all pre-computed data at startup. Called once."""
+    # Check required CSV files exist before loading
+    required_files = {
+        FEATURES_CSV: "scripts/03_extract_features.py",
+        MODEL_COMPARISON_CSV: "notebooks/30_evaluation.ipynb",
+        FEATURE_IMPORTANCE_CSV: "notebooks/30_evaluation.ipynb",
+        PER_BEARING_CSV: "notebooks/30_evaluation.ipynb",
+    }
+    missing = {
+        path: script for path, script in required_files.items() if not path.exists()
+    }
+    if missing:
+        msg_lines = [
+            "Required data files are missing. Run the pipeline scripts to generate them:",
+        ]
+        for path, script in missing.items():
+            msg_lines.append(f"  - {path.relative_to(BASE_DIR)}  (generate with: {script})")
+        msg_lines.append(
+            "See the 'Reproducing Results' section in README.md for the full pipeline."
+        )
+        raise FileNotFoundError("\n".join(msg_lines))
+
     data: dict = {}
 
     # 1. Load features CSV (main dataset)
