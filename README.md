@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/thfmn/xjtu-sy-bearing/actions/workflows/ci.yml/badge.svg)](https://github.com/thfmn/xjtu-sy-bearing/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
-![Tests](https://img.shields.io/badge/tests-459%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-480%2B%20passed-brightgreen)
 ![uv](https://img.shields.io/badge/package%20manager-uv-blueviolet)
 
 An MLOps pipeline that predicts the **Remaining Useful Life (RUL)** of rolling element bearings from vibration sensor data. Built on the XJTU-SY benchmark dataset with GCP infrastructure for data processing, model training, and experiment tracking.
@@ -102,7 +102,7 @@ uv run python app.py
 # Install dependencies (requires uv: https://docs.astral.sh/uv/)
 uv sync
 
-# Run tests (459 tests)
+# Run tests (480+ tests)
 uv run pytest tests/
 
 # Launch the interactive dashboard
@@ -158,7 +158,7 @@ bash scripts/mlflow_server.sh
 │   │   └── pipeline.py       #   End-to-end detection pipeline
 │   ├── training/             # Config, cross-validation, metrics
 │   └── utils/                # Experiment tracking, helpers
-├── tests/                    # pytest suite (459 tests)
+├── tests/                    # pytest suite (480+ tests)
 └── pyproject.toml
 ```
 
