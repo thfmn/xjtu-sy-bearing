@@ -18,6 +18,8 @@ from plotly.subplots import make_subplots
 
 from src.data.loader import CONDITIONS, BEARINGS_PER_CONDITION
 from src.models.baselines.lgbm_baseline import train_with_cv, get_feature_columns
+from src.onset.health_indicators import load_bearing_health_series
+from src.onset.labels import load_onset_labels
 
 # ---------------------------------------------------------------------------
 # Path constants
@@ -32,6 +34,9 @@ MODELS_DIR = OUTPUTS / "models"
 AUDIO_DIR = OUTPUTS / "audio"
 PREDICTIONS_DIR = OUTPUTS / "evaluation" / "predictions"
 DL_SUMMARY_CSV = OUTPUTS / "evaluation" / "dl_model_summary.csv"
+ONSET_AUTO_CSV = OUTPUTS / "onset" / "onset_labels_auto.csv"
+ONSET_CV_CSV = OUTPUTS / "models" / "onset_classifier_cv_results.csv"
+ONSET_LABELS_YAML = BASE_DIR / "configs" / "onset_labels.yaml"
 
 # ---------------------------------------------------------------------------
 # Global data store (populated once at startup)
@@ -51,6 +56,34 @@ def load_data() -> dict:
     data["model_comparison"] = pd.read_csv(MODEL_COMPARISON_CSV)
     data["feature_importance"] = pd.read_csv(FEATURE_IMPORTANCE_CSV)
     data["per_bearing"] = pd.read_csv(PER_BEARING_CSV)
+
+    # 2b. Dynamically merge DL fold results into model_comparison
+    eval_dir = OUTPUTS / "evaluation"
+    dl_fold_rows = []
+    for csv_path in sorted(eval_dir.glob("*_fold_results.csv")):
+        if csv_path.name.startswith("all_models"):
+            continue
+        fold_df = pd.read_csv(csv_path)
+        if fold_df.empty:
+            continue
+        model_name = fold_df["model_name"].iloc[0]
+        display = _MODEL_DISPLAY_NAMES.get(model_name, model_name)
+        n_folds = len(fold_df)
+        dl_fold_rows.append({
+            "Model": display,
+            "Type": f"DL - Fold 0 only" if n_folds == 1 else f"DL - {n_folds}-fold CV",
+            "RMSE": fold_df["rmse"].mean(),
+            "MAE": fold_df["mae"].mean(),
+            "MAPE (%)": fold_df["mape"].mean(),
+            "PHM08 Score": fold_df["phm08_score"].mean(),
+            "PHM08 (norm)": fold_df["phm08_score_normalized"].mean(),
+        })
+    if dl_fold_rows:
+        data["model_comparison"] = pd.concat(
+            [data["model_comparison"], pd.DataFrame(dl_fold_rows)],
+            ignore_index=True,
+        )
+        print(f"  Merged {len(dl_fold_rows)} DL model(s) into model comparison")
 
     # 3. Retrain LightGBM with CV for interactive predictions
     data["predictions"] = {}
@@ -86,12 +119,28 @@ def load_data() -> dict:
                         "y_pred": group["y_pred"].values,
                     }
 
-    # 5. Load DL per-bearing metrics (if available)
+    # 5. Build DL per-bearing metrics from prediction CSVs (in-memory)
     data["dl_per_bearing"] = {}  # {model_name: DataFrame}
-    eval_dir = OUTPUTS / "evaluation"
+    for model_name, bearings in data["dl_predictions"].items():
+        rows = []
+        for bearing_id, preds in sorted(bearings.items()):
+            y_true = np.array(preds["y_true"])
+            y_pred = np.array(preds["y_pred"])
+            rmse = float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
+            mae = float(np.mean(np.abs(y_true - y_pred)))
+            rows.append({
+                "bearing_id": bearing_id,
+                "n_samples": len(y_true),
+                "rmse": rmse,
+                "mae": mae,
+            })
+        if rows:
+            data["dl_per_bearing"][model_name] = pd.DataFrame(rows)
+
+    # Also load any pre-existing per-bearing CSVs (excluding lgbm)
     for csv_path in sorted(eval_dir.glob("*_per_bearing.csv")):
         model_name = csv_path.stem.replace("_per_bearing", "")
-        if model_name != "lgbm":  # Skip the existing LightGBM file
+        if model_name != "lgbm" and model_name not in data["dl_per_bearing"]:
             data["dl_per_bearing"][model_name] = pd.read_csv(csv_path)
 
     # 6. Load DL model summary (if available)
@@ -116,6 +165,24 @@ def load_data() -> dict:
         total_folds = sum(len(v) for v in data["dl_history"].values())
         print(f"DL history: {len(data['dl_history'])} models, {total_folds} fold histories loaded")
 
+    # 8. Load onset detection data
+    data["onset_labels_manual"] = {}
+    try:
+        data["onset_labels_manual"] = load_onset_labels(ONSET_LABELS_YAML)
+        print(f"  Onset labels: {len(data['onset_labels_manual'])} bearings loaded from YAML")
+    except Exception as e:
+        print(f"Warning: Could not load onset labels YAML: {e}")
+
+    data["onset_labels_auto"] = None
+    if ONSET_AUTO_CSV.exists():
+        data["onset_labels_auto"] = pd.read_csv(ONSET_AUTO_CSV)
+        print(f"  Onset auto labels: {len(data['onset_labels_auto'])} rows from {ONSET_AUTO_CSV.name}")
+
+    data["onset_cv_results"] = None
+    if ONSET_CV_CSV.exists():
+        data["onset_cv_results"] = pd.read_csv(ONSET_CV_CSV)
+        print(f"  Onset classifier CV: {len(data['onset_cv_results'])} folds from {ONSET_CV_CSV.name}")
+
     return data
 
 
@@ -124,7 +191,11 @@ def load_data() -> dict:
 # ---------------------------------------------------------------------------
 
 def plot_degradation_trend(condition: str, bearing_id: str) -> go.Figure:
-    """Plot RMS and kurtosis over file index for a single bearing (dual Y-axis)."""
+    """Plot RMS and kurtosis over file index for a single bearing (dual Y-axis).
+
+    Includes onset marker and healthy/degraded region shading when onset labels
+    are available.
+    """
     df = DATA["features_df"]
     mask = (df["condition"] == condition) & (df["bearing_id"] == bearing_id)
     bearing_df = df.loc[mask].sort_values("file_idx")
@@ -150,6 +221,29 @@ def plot_degradation_trend(condition: str, bearing_id: str) -> go.Figure:
         ),
         secondary_y=True,
     )
+
+    # Add onset marker if available
+    onset_labels = DATA.get("onset_labels_manual", {})
+    if bearing_id in onset_labels:
+        onset_idx = onset_labels[bearing_id].onset_file_idx
+        max_idx = int(bearing_df["file_idx"].max())
+
+        # Green region (healthy) and red region (degraded)
+        fig.add_vrect(
+            x0=0, x1=onset_idx,
+            fillcolor="green", opacity=0.05, line_width=0,
+        )
+        fig.add_vrect(
+            x0=onset_idx, x1=max_idx,
+            fillcolor="red", opacity=0.05, line_width=0,
+        )
+
+        # Vertical onset line
+        fig.add_vline(
+            x=onset_idx, line_dash="dash", line_color="darkgreen", line_width=2,
+            annotation_text=f"Onset ({onset_idx})",
+            annotation_position="top left",
+        )
 
     fig.update_layout(
         title=f"Degradation Trend — {bearing_id} ({condition})",
@@ -405,13 +499,16 @@ def compute_model_architecture_table() -> pd.DataFrame:
     try:
         from src.models.registry import list_models, get_model_info
         for name in list_models():
-            info = get_model_info(name)
-            rows.append({
-                "Model": name,
-                "Family": "Deep Learning",
-                "Input": info.input_type.replace("_", " ").title(),
-                "Input Shape": str(info.default_input_shape),
-            })
+            try:
+                info = get_model_info(name)
+                rows.append({
+                    "Model": _MODEL_DISPLAY_NAMES.get(name, name),
+                    "Family": "Deep Learning",
+                    "Input": info.input_type.replace("_", " ").title(),
+                    "Input Shape": str(info.default_input_shape),
+                })
+            except Exception:
+                pass
     except ImportError:
         pass
     return pd.DataFrame(rows)
@@ -419,11 +516,12 @@ def compute_model_architecture_table() -> pd.DataFrame:
 
 _MODEL_DISPLAY_NAMES: dict[str, str] = {
     "LightGBM": "LightGBM (CV)",
-    "cnn1d_baseline": "1D CNN (CV)",
-    "tcn_transformer_lstm": "TCN-LSTM (CV)",
-    "tcn_transformer_transformer": "TCN-Transformer (CV)",
-    "pattern2_lstm": "Pattern2 LSTM (CV)",
-    "pattern2_simple": "Pattern2 Simple (CV)",
+    "cnn1d_baseline": "1D CNN (Fold 0)",
+    "tcn_transformer_lstm": "TCN-LSTM (Fold 0)",
+    "tcn_transformer_transformer": "TCN-Transformer (Fold 0)",
+    "pattern2_simple": "CNN2D Simple (Fold 0)",
+    "cnn2d_lstm": "2D CNN LSTM (Fold 0)",
+    "cnn2d_simple": "2D CNN Simple (Fold 0)",
 }
 
 
@@ -498,6 +596,253 @@ def plot_waveform(wav_path: str | None) -> go.Figure | None:
     return fig
 
 
+def plot_prediction_intervals(model_name: str = "LightGBM") -> go.Figure:
+    """Prediction intervals from CV residuals: predicted ± empirical CI, sorted by true RUL."""
+    if model_name == "LightGBM":
+        predictions = DATA.get("predictions", {})
+    else:
+        predictions = DATA.get("dl_predictions", {}).get(model_name, {})
+
+    if not predictions:
+        fig = go.Figure()
+        fig.update_layout(title=f"No predictions available for {model_name}")
+        return fig
+
+    # Pool all predictions
+    all_true, all_pred = [], []
+    for preds in predictions.values():
+        all_true.extend(preds["y_true"])
+        all_pred.extend(preds["y_pred"])
+    all_true = np.array(all_true)
+    all_pred = np.array(all_pred)
+
+    # Sort by true RUL
+    sort_idx = np.argsort(all_true)
+    true_sorted = all_true[sort_idx]
+    pred_sorted = all_pred[sort_idx]
+
+    # Sliding window empirical CI (window = 5% of samples, min 20)
+    n = len(true_sorted)
+    win = max(20, n // 20)
+    pred_mean = np.convolve(pred_sorted, np.ones(win) / win, mode="same")
+    pred_std = np.array([
+        pred_sorted[max(0, i - win // 2):min(n, i + win // 2)].std()
+        for i in range(n)
+    ])
+
+    x = np.arange(n)
+    fig = go.Figure()
+    # 95% CI
+    fig.add_trace(go.Scatter(
+        x=np.concatenate([x, x[::-1]]),
+        y=np.concatenate([pred_mean + 1.96 * pred_std, (pred_mean - 1.96 * pred_std)[::-1]]),
+        fill="toself", fillcolor="rgba(99,110,250,0.1)", line=dict(width=0),
+        name="95% CI (2σ)",
+    ))
+    # 68% CI
+    fig.add_trace(go.Scatter(
+        x=np.concatenate([x, x[::-1]]),
+        y=np.concatenate([pred_mean + pred_std, (pred_mean - pred_std)[::-1]]),
+        fill="toself", fillcolor="rgba(99,110,250,0.25)", line=dict(width=0),
+        name="68% CI (1σ)",
+    ))
+    fig.add_trace(go.Scatter(x=x, y=true_sorted, name="Ground Truth", line=dict(color="black", width=2)))
+    fig.add_trace(go.Scatter(x=x, y=pred_mean, name="Predicted (smoothed)", line=dict(color="#636EFA", width=2)))
+
+    fig.update_layout(
+        title=f"Prediction Intervals — {model_name} (empirical from CV residuals)",
+        xaxis_title="Sample Index (sorted by true RUL)",
+        yaxis_title="RUL", height=450, hovermode="x unified",
+    )
+    return fig
+
+
+def plot_residuals_vs_rul(model_name: str = "LightGBM") -> go.Figure:
+    """Scatter: residual (pred - true) vs true RUL, colored by bearing."""
+    if model_name == "LightGBM":
+        predictions = DATA.get("predictions", {})
+    else:
+        predictions = DATA.get("dl_predictions", {}).get(model_name, {})
+
+    if not predictions:
+        fig = go.Figure()
+        fig.update_layout(title=f"No predictions available for {model_name}")
+        return fig
+
+    fig = go.Figure()
+    all_true, all_resid = [], []
+    for bearing_id, preds in sorted(predictions.items()):
+        y_true = np.array(preds["y_true"])
+        y_pred = np.array(preds["y_pred"])
+        residuals = y_pred - y_true
+        all_true.extend(y_true)
+        all_resid.extend(residuals)
+        fig.add_trace(go.Scatter(
+            x=y_true, y=residuals, mode="markers", name=bearing_id,
+            marker=dict(size=4, opacity=0.5),
+        ))
+
+    # Zero line
+    fig.add_hline(y=0, line_dash="dash", line_color="black", line_width=1)
+
+    # Trend line
+    all_true = np.array(all_true)
+    all_resid = np.array(all_resid)
+    if len(all_true) > 2:
+        z = np.polyfit(all_true, all_resid, 1)
+        x_line = np.linspace(all_true.min(), all_true.max(), 100)
+        fig.add_trace(go.Scatter(
+            x=x_line, y=np.polyval(z, x_line),
+            mode="lines", name=f"Trend (slope={z[0]:.3f})",
+            line=dict(color="red", dash="dash", width=2),
+        ))
+
+    fig.update_layout(
+        title=f"Residuals vs True RUL — {model_name}",
+        xaxis_title="True RUL", yaxis_title="Residual (Predicted − Actual)",
+        height=450,
+    )
+    return fig
+
+
+def build_onset_overview_table() -> pd.DataFrame:
+    """Build overview table merging manual + auto onset labels for all 15 bearings."""
+    manual = DATA.get("onset_labels_manual", {})
+    auto_df = DATA.get("onset_labels_auto")
+
+    rows = []
+    for bearing_id, entry in sorted(manual.items()):
+        row = {
+            "Bearing": bearing_id,
+            "Condition": entry.condition,
+            "Manual Onset": entry.onset_file_idx,
+            "Confidence": entry.confidence,
+            "Method": entry.detection_method,
+        }
+        # Merge auto onset
+        if auto_df is not None:
+            auto_row = auto_df[auto_df["bearing_id"] == bearing_id]
+            if not auto_row.empty:
+                row["Auto Onset"] = int(auto_row["onset_file_idx"].iloc[0])
+                row["Auto Method"] = auto_row["detector_method"].iloc[0]
+            else:
+                row["Auto Onset"] = None
+                row["Auto Method"] = ""
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def plot_health_indicators(condition: str, bearing_id: str) -> go.Figure:
+    """Dual-axis Plotly: kurtosis + RMS with onset markers and region shading."""
+    try:
+        hs = load_bearing_health_series(bearing_id, DATA["features_df"])
+    except ValueError:
+        fig = go.Figure()
+        fig.update_layout(title=f"No data for {bearing_id}")
+        return fig
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    # Average kurtosis across channels
+    kurtosis_avg = (hs.kurtosis_h + hs.kurtosis_v) / 2
+    rms_avg = (hs.rms_h + hs.rms_v) / 2
+
+    fig.add_trace(
+        go.Scatter(
+            x=hs.file_indices, y=kurtosis_avg,
+            name="Kurtosis (H+V avg)", line=dict(color="#d62728"),
+        ),
+        secondary_y=False,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=hs.file_indices, y=rms_avg,
+            name="RMS (H+V avg)", line=dict(color="#1f77b4"),
+        ),
+        secondary_y=True,
+    )
+
+    # Onset markers
+    manual = DATA.get("onset_labels_manual", {})
+    auto_df = DATA.get("onset_labels_auto")
+    max_idx = int(hs.file_indices[-1]) if len(hs.file_indices) > 0 else 100
+
+    if bearing_id in manual:
+        m_idx = manual[bearing_id].onset_file_idx
+        fig.add_vrect(x0=0, x1=m_idx, fillcolor="green", opacity=0.05, line_width=0)
+        fig.add_vrect(x0=m_idx, x1=max_idx, fillcolor="red", opacity=0.05, line_width=0)
+        fig.add_vline(
+            x=m_idx, line_dash="dash", line_color="blue", line_width=2,
+            annotation_text=f"Manual ({m_idx})", annotation_position="top left",
+        )
+
+    if auto_df is not None:
+        auto_row = auto_df[auto_df["bearing_id"] == bearing_id]
+        if not auto_row.empty:
+            a_idx = int(auto_row["onset_file_idx"].iloc[0])
+            fig.add_vline(
+                x=a_idx, line_dash="dashdot", line_color="red", line_width=2,
+                annotation_text=f"Auto ({a_idx})", annotation_position="top right",
+            )
+
+    fig.update_layout(
+        title=f"Health Indicators — {bearing_id} ({condition})",
+        hovermode="x unified", height=500,
+    )
+    fig.update_xaxes(title_text="File Index")
+    fig.update_yaxes(title_text="Kurtosis (avg)", secondary_y=False)
+    fig.update_yaxes(title_text="RMS (avg)", secondary_y=True)
+    return fig
+
+
+def build_onset_classifier_table() -> tuple[pd.DataFrame, str]:
+    """Return onset classifier CV results table and summary markdown."""
+    cv_df = DATA.get("onset_cv_results")
+    if cv_df is None or cv_df.empty:
+        return pd.DataFrame({"Info": ["No onset classifier results available"]}), ""
+
+    display_df = cv_df[["val_bearing", "f1", "auc_roc", "precision", "recall", "accuracy"]].copy()
+    display_df.columns = ["Bearing", "F1", "AUC-ROC", "Precision", "Recall", "Accuracy"]
+    display_df = display_df.round(4)
+
+    mean_f1 = cv_df["f1"].mean()
+    std_f1 = cv_df["f1"].std()
+    mean_auc = cv_df["auc_roc"].dropna().mean()
+    summary = (
+        f"**LSTM Onset Classifier (15-fold LOBO CV):** "
+        f"Mean F1 = {mean_f1:.3f} +/- {std_f1:.3f} | "
+        f"Mean AUC-ROC = {mean_auc:.3f}"
+    )
+    return display_df, summary
+
+
+def build_detector_comparison_table() -> pd.DataFrame:
+    """Table comparing each detector's onset index per bearing."""
+    auto_df = DATA.get("onset_labels_auto")
+    if auto_df is None:
+        return pd.DataFrame({"Info": ["No auto-detector results available"]})
+
+    cols = ["bearing_id", "manual_onset_idx", "kurtosis_threshold_idx",
+            "rms_threshold_idx", "kurtosis_cusum_idx", "rms_cusum_idx",
+            "onset_file_idx", "detector_method"]
+    available = [c for c in cols if c in auto_df.columns]
+    df = auto_df[available].copy()
+
+    # Rename for readability
+    rename_map = {
+        "bearing_id": "Bearing",
+        "manual_onset_idx": "Manual",
+        "onset_file_idx": "Auto (selected)",
+        "detector_method": "Selected Method",
+        "kurtosis_threshold_idx": "Kurt. Threshold",
+        "rms_threshold_idx": "RMS Threshold",
+        "kurtosis_cusum_idx": "Kurt. CUSUM",
+        "rms_cusum_idx": "RMS CUSUM",
+    }
+    df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+    return df
+
+
 AUDIO_STAGES = {
     "Healthy (0%)": "healthy_0pct",
     "Degrading (50%)": "degrading_50pct",
@@ -538,7 +883,7 @@ def plot_feature_distribution(feature_name: str) -> go.Figure:
 # App creation
 # ---------------------------------------------------------------------------
 def create_app() -> gr.Blocks:
-    """Build the Gradio Blocks application with 4 tabs."""
+    """Build the Gradio Blocks application with 5 tabs."""
     with gr.Blocks(title="XJTU-SY Bearing RUL Dashboard") as app:
         gr.Markdown("# XJTU-SY Bearing RUL Prediction Dashboard")
         gr.Markdown(
@@ -613,6 +958,10 @@ def create_app() -> gr.Blocks:
                 )
             with gr.Tab("Model Results"):
                 gr.Markdown("### Model Comparison")
+                gr.Markdown(
+                    "> *Note: DL models evaluated on Fold 0 only (Bearing1_1, 123 samples). "
+                    "Full 15-fold CV pending. LightGBM uses full 15-fold leave-one-bearing-out CV.*"
+                )
                 # --- Model comparison table ---
                 comparison_df = DATA["model_comparison"][
                     ["Model", "Type", "RMSE", "MAE", "PHM08 (norm)"]
@@ -807,25 +1156,26 @@ def create_app() -> gr.Blocks:
                         outputs=scatter_plot,
                     )
 
-                    # --- Uncertainty visualizations (pre-generated PNGs) ---
-                    gr.Markdown("### Uncertainty Quantification")
-                    uncertainty_intervals_path = MODELS_DIR / "uncertainty_prediction_intervals.png"
-                    uncertainty_vs_rul_path = MODELS_DIR / "uncertainty_vs_rul.png"
-                    with gr.Row():
-                        if uncertainty_intervals_path.exists():
-                            gr.Image(
-                                value=str(uncertainty_intervals_path),
-                                label="Prediction Intervals (68% & 95% CI)",
-                            )
-                        else:
-                            gr.Markdown("*Prediction intervals image not found.*")
-                        if uncertainty_vs_rul_path.exists():
-                            gr.Image(
-                                value=str(uncertainty_vs_rul_path),
-                                label="Uncertainty vs RUL",
-                            )
-                        else:
-                            gr.Markdown("*Uncertainty vs RUL image not found.*")
+                    # --- Residual analysis (replaces broken uncertainty PNGs) ---
+                    gr.Markdown("### Residual Analysis")
+                    intervals_plot = gr.Plot(
+                        value=plot_prediction_intervals(default_model),
+                        label="Prediction Intervals (empirical from CV)",
+                    )
+                    residuals_plot = gr.Plot(
+                        value=plot_residuals_vs_rul(default_model),
+                        label="Residuals vs True RUL",
+                    )
+                    pred_model_dd.change(
+                        fn=plot_prediction_intervals,
+                        inputs=pred_model_dd,
+                        outputs=intervals_plot,
+                    )
+                    pred_model_dd.change(
+                        fn=plot_residuals_vs_rul,
+                        inputs=pred_model_dd,
+                        outputs=residuals_plot,
+                    )
 
                     # --- Per-bearing error table (reactive to model selection) ---
                     gr.Markdown("### Per-Bearing Error Breakdown")
@@ -840,6 +1190,93 @@ def create_app() -> gr.Blocks:
                         inputs=pred_model_dd,
                         outputs=per_bearing_table,
                     )
+            with gr.Tab("Onset Detection"):
+                gr.Markdown("### Degradation Onset Detection")
+                gr.Markdown(
+                    "Two-stage onset detection pipeline: 5 statistical detectors + "
+                    "LSTM classifier. Identifies the transition from healthy to degraded "
+                    "operation for each bearing."
+                )
+
+                # --- Onset overview table ---
+                gr.Markdown("#### Onset Labels Overview")
+                onset_overview = build_onset_overview_table()
+                if not onset_overview.empty:
+                    gr.Dataframe(
+                        value=onset_overview,
+                        label="Manual + Auto Onset Labels (15 bearings)",
+                        interactive=False,
+                    )
+                else:
+                    gr.Markdown("*No onset labels available.*")
+
+                # --- Interactive health indicator plot ---
+                gr.Markdown("#### Health Indicator Explorer")
+                onset_condition_choices = list(CONDITIONS.keys())
+                onset_default_cond = onset_condition_choices[0]
+                onset_default_bearings = BEARINGS_PER_CONDITION[onset_default_cond]
+
+                with gr.Row():
+                    onset_condition_dd = gr.Dropdown(
+                        choices=onset_condition_choices,
+                        value=onset_default_cond,
+                        label="Operating Condition",
+                    )
+                    onset_bearing_dd = gr.Dropdown(
+                        choices=onset_default_bearings,
+                        value=onset_default_bearings[0],
+                        label="Bearing",
+                    )
+
+                def _update_onset_bearing_choices(condition: str):
+                    bearings = BEARINGS_PER_CONDITION.get(condition, [])
+                    return gr.Dropdown(choices=bearings, value=bearings[0] if bearings else None)
+
+                onset_condition_dd.change(
+                    fn=_update_onset_bearing_choices,
+                    inputs=onset_condition_dd,
+                    outputs=onset_bearing_dd,
+                )
+
+                hi_plot = gr.Plot(
+                    value=plot_health_indicators(onset_default_cond, onset_default_bearings[0]),
+                    label="Health Indicators with Onset Markers",
+                )
+
+                onset_bearing_dd.change(
+                    fn=plot_health_indicators,
+                    inputs=[onset_condition_dd, onset_bearing_dd],
+                    outputs=hi_plot,
+                )
+                onset_condition_dd.change(
+                    fn=plot_health_indicators,
+                    inputs=[onset_condition_dd, onset_bearing_dd],
+                    outputs=hi_plot,
+                )
+
+                # --- Onset classifier performance ---
+                gr.Markdown("#### LSTM Onset Classifier Performance")
+                classifier_df, classifier_summary = build_onset_classifier_table()
+                if classifier_summary:
+                    gr.Markdown(classifier_summary)
+                gr.Dataframe(
+                    value=classifier_df,
+                    label="15-fold Leave-One-Bearing-Out CV Results",
+                    interactive=False,
+                )
+
+                # --- Detector comparison ---
+                gr.Markdown("#### Detector Comparison")
+                gr.Markdown(
+                    "Onset file index detected by each algorithm. "
+                    "'Auto (selected)' is the best detector chosen per bearing."
+                )
+                gr.Dataframe(
+                    value=build_detector_comparison_table(),
+                    label="Per-Bearing Detector Onset Indices",
+                    interactive=False,
+                )
+
             with gr.Tab("Audio Analysis"):
                 gr.Markdown("### Audio Analysis — Bearing Lifecycle Sonification")
                 gr.Markdown(
