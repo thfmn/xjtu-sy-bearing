@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "MLOps pipeline for bearing Remaining Useful Life (RUL) prediction using the XJTU-SY vibration dataset"
 readme = "README.md"
 license = "MIT"
+authors = [
+    {name = "Tobias Hoffmann", email = "thoffmann-ml@proton.me"},
+]
 requires-python = ">=3.11"
 dependencies = [
     "db-dtypes>=1.4.4",
