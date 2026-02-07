@@ -6,10 +6,10 @@ using leave-one-bearing-out CV. Each fold holds out one bearing for validation
 and trains on the remaining 14.
 
 Usage:
-    python scripts/07_train_onset_classifier.py
-    python scripts/07_train_onset_classifier.py --folds 0,1,2
-    python scripts/07_train_onset_classifier.py --epochs 30 --dry-run
-    python scripts/07_train_onset_classifier.py --tracking none
+    python scripts/09_train_onset_classifier.py
+    python scripts/09_train_onset_classifier.py --folds 0,1,2
+    python scripts/09_train_onset_classifier.py --epochs 30 --dry-run
+    python scripts/09_train_onset_classifier.py --tracking none
 """
 
 from __future__ import annotations

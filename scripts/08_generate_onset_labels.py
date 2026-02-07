@@ -13,9 +13,9 @@ Strategy:
        threshold, then CUSUM as fallback
 
 Usage:
-    python scripts/06_generate_onset_labels.py
-    python scripts/06_generate_onset_labels.py --features outputs/features/features_v2.csv
-    python scripts/06_generate_onset_labels.py --tolerance 5
+    python scripts/08_generate_onset_labels.py
+    python scripts/08_generate_onset_labels.py --features outputs/features/features_v2.csv
+    python scripts/08_generate_onset_labels.py --tolerance 5
 
 Output:
     outputs/onset/onset_labels_auto.csv

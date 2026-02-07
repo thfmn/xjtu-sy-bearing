@@ -133,18 +133,18 @@ Implement multiple onset detection algorithms to identify the point where bearin
 **Priority**: P2 | **Effort**: 3h | **Phase**: 1. Onset Detection
 
 **Tasks**:
-- [ ] Add `BayesianOnsetDetector` class to `src/onset/detectors.py`
-- [ ] Implement Bayesian Online Change-Point Detection (Adams & MacKay, 2007):
+- [x] Add `BayesianOnsetDetector` class to `src/onset/detectors.py`
+- [x] Implement Bayesian Online Change-Point Detection (Adams & MacKay, 2007):
   - `__init__(hazard_rate=1/50, prior_mean=None, prior_var=None)`
   - `detect(hi_series)` - return onset index with highest run-length probability change
-- [ ] Use conjugate prior (Normal-Inverse-Gamma) for Gaussian observations
-- [ ] Output posterior probability of change-point at each timestep
+- [x] Use conjugate prior (Normal-Inverse-Gamma) for Gaussian observations
+- [x] Output posterior probability of change-point at each timestep
 
 **Acceptance**:
-- [ ] Detector provides probability distribution over possible onset points
-- [ ] Confidence reflects posterior probability of change-point
-- [ ] Handles non-stationary healthy phase better than threshold methods
-- [ ] Computational cost is O(n^2) or better for n samples
+- [x] Detector provides probability distribution over possible onset points
+- [x] Confidence reflects posterior probability of change-point
+- [x] Handles non-stationary healthy phase better than threshold methods
+- [x] Computational cost is O(n^2) or better for n samples
 
 **Files**:
 - `src/onset/detectors.py`
@@ -159,7 +159,7 @@ Implement multiple onset detection algorithms to identify the point where bearin
 - [x] Create `tests/onset/test_detectors.py`
 - [x] Test `ThresholdOnsetDetector` on synthetic data with known onset point
 - [x] Test `CUSUMOnsetDetector` on synthetic data with gradual shift
-- [ ] Test `BayesianOnsetDetector` returns valid probabilities
+- [x] Test `BayesianOnsetDetector` returns valid probabilities
 - [x] Test all detectors return `None` for healthy-only series
 - [x] Test `min_consecutive` parameter filters transient spikes
 - [x] Add parametrized tests for different threshold values
@@ -259,7 +259,7 @@ Generate onset labels for all bearings to enable supervised training and evaluat
 **Priority**: P1 | **Effort**: 2h | **Phase**: 2. Label Generation
 
 **Tasks**:
-- [x] Create `scripts/06_generate_onset_labels.py`
+- [x] Create `scripts/08_generate_onset_labels.py`
 - [x] Load features from `outputs/features/features_v2.csv`
 - [x] Apply `ThresholdOnsetDetector` to each bearing's kurtosis series
 - [x] Apply `CUSUMOnsetDetector` as secondary detector
@@ -274,7 +274,7 @@ Generate onset labels for all bearings to enable supervised training and evaluat
 - [x] Disagreements logged for manual review
 
 **Files**:
-- `scripts/06_generate_onset_labels.py`
+- `scripts/08_generate_onset_labels.py`
 - `outputs/onset/onset_labels_auto.csv`
 
 ---
@@ -416,7 +416,7 @@ Implement a neural network classifier for onset detection to improve upon rule-b
 
 **Tasks**:
 - [x] Add onset classifier training to `scripts/05_train_dl_models.py` (new mode)
-- [x] Or create separate `scripts/07_train_onset_classifier.py`
+- [x] Or create separate `scripts/09_train_onset_classifier.py`
 - [x] Implement leave-one-bearing-out cross-validation for onset model
 - [x] Log metrics: accuracy, precision, recall, F1, AUC-ROC
 - [x] Save best model to `outputs/models/onset_classifier.keras`
@@ -429,7 +429,7 @@ Implement a neural network classifier for onset detection to improve upon rule-b
 - [x] Training time <5 minutes on CPU
 
 **Files**:
-- `scripts/07_train_onset_classifier.py` (or modified `scripts/05_train_dl_models.py`)
+- `scripts/09_train_onset_classifier.py` (or modified `scripts/05_train_dl_models.py`)
 - `outputs/models/onset_classifier.keras`
 
 ---

@@ -225,7 +225,7 @@ class TestCLIInterface:
 
     def test_cli_basic(self, tmp_path):
         """Test basic CLI invocation."""
-        # This would test scripts/05_create_audio.py
+        # This would test scripts/07_create_audio.py
         # Placeholder for when script is implemented
         pytest.skip("CLI script not yet implemented")
 

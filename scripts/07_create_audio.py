@@ -11,10 +11,10 @@ Features:
     - Batch generation via CLI arguments
 
 Usage:
-    python scripts/05_create_audio.py
-    python scripts/05_create_audio.py --bearing 35Hz12kN/Bearing1_1
-    python scripts/05_create_audio.py --bearing 35Hz12kN/Bearing1_1 --stages 0 50 100
-    python scripts/05_create_audio.py --all-bearings --stages 0 50 100
+    python scripts/07_create_audio.py
+    python scripts/07_create_audio.py --bearing 35Hz12kN/Bearing1_1
+    python scripts/07_create_audio.py --bearing 35Hz12kN/Bearing1_1 --stages 0 50 100
+    python scripts/07_create_audio.py --all-bearings --stages 0 50 100
 
 Output:
     WAV files in outputs/audio/ organized by bearing.
