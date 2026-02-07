@@ -635,8 +635,11 @@ class ExperimentTracker:
         run_context = self._backend.start_run(run_name=run_name)
         try:
             yield run_context
-        finally:
-            pass  # RunContext.__exit__ handles end_run
+        except BaseException:
+            self._backend.end_run(status="FAILED")
+            raise
+        else:
+            self._backend.end_run(status="FINISHED")
 
     def log_params(self, params: dict[str, Any]) -> None:
         """Log parameters to the current run."""

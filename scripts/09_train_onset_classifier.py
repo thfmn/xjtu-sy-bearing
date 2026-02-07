@@ -251,9 +251,6 @@ def train_single_fold(
                 "auc_roc": metrics["auc_roc"],
                 "train_time_s": train_time,
             })
-        # Ensure MLflow run is ended (ExperimentTracker.start_run's
-        # finally block doesn't call end_run automatically)
-        tracker.end_run()
 
     return {
         "fold_idx": fold_idx,
@@ -453,7 +450,6 @@ def main() -> None:
             if best_model_path.exists():
                 run.log_artifact(str(best_model_path), artifact_path="model")
             run.log_artifact(str(results_csv), artifact_path="results")
-        tracker.end_run()
         print("  Aggregate metrics logged to MLflow")
 
     print(f"\n{'=' * 60}")
