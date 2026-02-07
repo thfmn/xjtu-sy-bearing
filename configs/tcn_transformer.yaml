@@ -1,4 +1,6 @@
 # Training config for TCN-Transformer models (Pattern 1)
+# v2: stronger regularization to combat overfitting (val MAE was stuck at 27+)
+model_version: "v2"  # v1=original (overfit), v2=regularized + reduced capacity + augmentation
 batch_size: 8
 epochs: 100
 seed: 9
@@ -6,7 +8,7 @@ seed: 9
 optimizer:
   name: adamw
   learning_rate: 0.0005
-  weight_decay: 0.0001
+  weight_decay: 0.005  # 50× increase: heavy L2 reg for small dataset
 
 loss:
   name: huber
@@ -24,14 +26,14 @@ callbacks:
   restore_best_weights: true
   mlflow_tracking: true
   mlflow_tracking_uri: mlruns
-  mlflow_experiment_name: bearing_rul_dl
+  mlflow_experiment_name: bearing_rul_prediction
 
 model:
   name: tcn_transformer
   input_type: raw_signal
 
 vertex:
-  enabled: false          # Set to true when running on GCP
-  experiment_name: bearing-rul-dl
+  enabled: true          # Set to true when running on GCP
+  experiment_name: bearing-rul-prediction
   project_id: xjtu-bearing-failure
   location: asia-southeast1

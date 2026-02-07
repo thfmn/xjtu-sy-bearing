@@ -247,7 +247,7 @@ class TestPattern1TCN:
         assert len(history.history["loss"]) == 2
 
 
-class TestPattern2CNN:
+class TestCNN2D:
     """Test Pattern 2 (2D CNN + Temporal) architecture."""
 
     @pytest.fixture
@@ -258,9 +258,9 @@ class TestPattern2CNN:
 
     def test_model_build_lstm(self):
         """Test LSTM aggregator variant builds."""
-        from src.models.pattern2 import create_pattern2_lstm
+        from src.models.cnn2d import create_cnn2d_lstm
 
-        model = create_pattern2_lstm()
+        model = create_cnn2d_lstm()
 
         assert model is not None
         assert model.input_shape == (None, 128, 128, 2)
@@ -268,25 +268,25 @@ class TestPattern2CNN:
 
     def test_model_build_transformer(self):
         """Test Transformer aggregator variant builds."""
-        from src.models.pattern2 import create_pattern2_transformer
+        from src.models.cnn2d import create_cnn2d_transformer
 
-        model = create_pattern2_transformer()
+        model = create_cnn2d_transformer()
 
         assert model is not None
 
     def test_model_build_simple(self):
         """Test simple (no temporal) variant builds."""
-        from src.models.pattern2 import create_simple_pattern2
+        from src.models.cnn2d import create_cnn2d_simple
 
-        model = create_simple_pattern2()
+        model = create_cnn2d_simple()
 
         assert model is not None
 
     def test_model_build_uncertainty(self):
         """Test uncertainty variant builds with 2 outputs (mean and variance)."""
-        from src.models.pattern2 import create_pattern2_with_uncertainty
+        from src.models.cnn2d import create_cnn2d_with_uncertainty
 
-        model = create_pattern2_with_uncertainty()
+        model = create_cnn2d_with_uncertainty()
 
         assert model is not None
         # Uncertainty model outputs (mean, var) as separate outputs
@@ -299,9 +299,9 @@ class TestPattern2CNN:
 
     def test_model_forward_pass(self, sample_spectrograms):
         """Test forward pass."""
-        from src.models.pattern2 import create_simple_pattern2
+        from src.models.cnn2d import create_cnn2d_simple
 
-        model = create_simple_pattern2()
+        model = create_cnn2d_simple()
         predictions = model.predict(sample_spectrograms, verbose=0)
 
         assert predictions.shape == (4, 1)
@@ -309,12 +309,12 @@ class TestPattern2CNN:
 
     def test_model_trains(self, sample_spectrograms):
         """Test model training."""
-        from src.models.pattern2 import create_simple_pattern2
+        from src.models.cnn2d import create_cnn2d_simple
         from src.training.config import TrainingConfig, compile_model
 
         y = np.array([100, 80, 50, 20], dtype=np.float32)
 
-        model = create_simple_pattern2()
+        model = create_cnn2d_simple()
         config = TrainingConfig()
         compile_model(model, config)
 

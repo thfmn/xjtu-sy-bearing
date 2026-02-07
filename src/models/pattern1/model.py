@@ -306,13 +306,15 @@ def build_tcn_transformer_model(
 
 def create_tcn_transformer_lstm(
     input_length: int = 32768,
-    filters: int = 64,
+    filters: int = 32,
     dilations: list[int] = None,
-    lstm_units: int = 64,
+    lstm_units: int = 32,
 ) -> keras.Model:
     """Create TCN-Transformer model with LSTM aggregator.
 
     This is the v1 aggregator mentioned in PRD.
+    v2: reduced capacity (64→32 filters/units, 6→4 dilations) to combat
+    overfitting on the ~9K sample dataset.
 
     Args:
         input_length: Input sequence length.
@@ -324,13 +326,13 @@ def create_tcn_transformer_lstm(
         Configured Keras model.
     """
     if dilations is None:
-        dilations = [1, 2, 4, 8, 16, 32]
+        dilations = [1, 2, 4, 8]
 
     config = TCNTransformerConfig(
         input_length=input_length,
         stem_config=StemConfig(filters=filters),
-        tcn_config=TCNConfig(filters=filters, dilations=dilations),
-        attention_config=AttentionConfig(num_heads=4, key_dim=filters),
+        tcn_config=TCNConfig(filters=filters, dilations=dilations, dropout_rate=0.3),
+        attention_config=AttentionConfig(num_heads=2, key_dim=filters),
         aggregator_type="lstm",
         lstm_config=LSTMAggregatorConfig(
             units=lstm_units,
@@ -338,6 +340,8 @@ def create_tcn_transformer_lstm(
             pooling="last"
         ),
         fusion_mode="concat",
+        hidden_dim=32,
+        dropout_rate=0.3,
         use_downsampling=True,
         downsample_factor=16,
     )

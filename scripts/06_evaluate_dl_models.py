@@ -188,8 +188,8 @@ _DISPLAY_NAMES: dict[str, str] = {
     "cnn1d_baseline": "1D CNN (CV)",
     "tcn_transformer_lstm": "TCN-LSTM (CV)",
     "tcn_transformer_transformer": "TCN-Transformer (CV)",
-    "pattern2_lstm": "Pattern2 LSTM (CV)",
-    "pattern2_simple": "Pattern2 Simple (CV)",
+    "cnn2d_lstm": "2D CNN LSTM (CV)",
+    "cnn2d_simple": "2D CNN Simple (CV)",
 }
 
 # Registry name → Type column value

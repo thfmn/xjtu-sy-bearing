@@ -2,6 +2,8 @@
 # This file contains the standard training hyperparameters.
 # Override specific values by creating a new YAML file or modifying programmatically.
 
+model_version: "v1"
+
 # Basic training parameters
 batch_size: 32
 epochs: 100
@@ -10,7 +12,7 @@ shuffle: true
 verbose: 1
 
 # Random seed for reproducibility
-seed: 42
+seed: 9
 
 # Optimizer configuration
 optimizer:
@@ -50,7 +52,7 @@ callbacks:
   mlflow_experiment_name: bearing_rul_prediction
 
 vertex:
-  enabled: false          # Set to true when running on GCP
+  enabled: true          # Set to true when running on GCP
   experiment_name: bearing-rul-dl
   project_id: xjtu-bearing-failure
-  location: asia-southeast3
+  location: asia-southeast1

@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
+from src.data.augmentation import augment_signal
 from src.models.registry import get_model_info
 
 
@@ -68,6 +69,7 @@ def build_raw_signal_dataset(
     batch_size: int = 32,
     shuffle: bool = True,
     shuffle_buffer_size: int = 5000,
+    augment: bool = False,
 ) -> tf.data.Dataset:
     """Build a tf.data.Dataset of raw vibration signals for given row indices.
 
@@ -85,6 +87,7 @@ def build_raw_signal_dataset(
         batch_size: Number of samples per batch.
         shuffle: Whether to shuffle the dataset.
         shuffle_buffer_size: Buffer size for tf.data.Dataset.shuffle().
+        augment: Whether to apply signal augmentation (training only).
 
     Returns:
         tf.data.Dataset yielding (signal, rul) batches.
@@ -113,6 +116,10 @@ def build_raw_signal_dataset(
         return signal, rul
 
     ds = ds.map(_load_sample, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Apply augmentation after loading, before batching (training only)
+    if augment:
+        ds = ds.map(augment_signal, num_parallel_calls=tf.data.AUTOTUNE)
 
     if shuffle:
         ds = ds.shuffle(buffer_size=shuffle_buffer_size)
@@ -201,6 +208,7 @@ def build_dataset_for_model(
     shuffle: bool = True,
     data_root: str | Path = "assets/Data/XJTU-SY_Bearing_Datasets",
     spectrogram_dir: str | Path = "outputs/spectrograms/stft",
+    augment: bool = False,
 ) -> tf.data.Dataset:
     """Build the appropriate tf.data.Dataset for a model based on its registry input type.
 
@@ -208,13 +216,14 @@ def build_dataset_for_model(
     builder (raw signal or spectrogram).
 
     Args:
-        model_name: Registered model name (e.g., "cnn1d_baseline", "pattern2_simple").
+        model_name: Registered model name (e.g., "cnn1d_baseline", "cnn2d_simple").
         metadata_df: DataFrame with columns: condition, bearing_id, filename, rul.
         indices: Array of row indices into metadata_df.
         batch_size: Number of samples per batch.
         shuffle: Whether to shuffle the dataset.
         data_root: Root directory of the raw bearing CSV files.
         spectrogram_dir: Root directory of the .npy spectrogram files.
+        augment: Whether to apply data augmentation (training only).
 
     Returns:
         tf.data.Dataset yielding (input, rul) batches appropriate for the model.
@@ -232,6 +241,7 @@ def build_dataset_for_model(
             indices=indices,
             batch_size=batch_size,
             shuffle=shuffle,
+            augment=augment,
         )
     elif info.input_type == "spectrogram":
         return build_spectrogram_dataset(
