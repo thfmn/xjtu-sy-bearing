@@ -95,10 +95,10 @@ def parse_args() -> argparse.Namespace:
         "--cv-strategy",
         type=str,
         default="leave_one_bearing_out",
-        choices=["leave_one_bearing_out", "jin_fixed", "li_fixed"],
+        choices=["leave_one_bearing_out", "jin_fixed", "sun_fixed"],
         help="Cross-validation strategy. Default: leave_one_bearing_out (15-fold LOBO). "
         "jin_fixed: Jin et al. 2025 protocol (2 train, 13 test). "
-        "li_fixed: Sun et al. 2024 protocol (4 train, 6 test, Conds 1-2 only).",
+        "sun_fixed: Sun et al. 2024 protocol (4 train, 6 test, Conds 1-2 only).",
     )
     return parser.parse_args()
 

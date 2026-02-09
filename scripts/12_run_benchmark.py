@@ -50,7 +50,7 @@ BENCHMARK_DIR = Path("outputs/benchmark")
 PROTOCOL_MAP = {
     "lobo": "leave_one_bearing_out",
     "jin": "jin_fixed",
-    "li": "li_fixed",
+    "sun": "sun_fixed",
 }
 
 
@@ -267,7 +267,7 @@ Examples:
         "--protocols",
         type=str,
         default="all",
-        help="Comma-separated protocol names or 'all'. Available: lobo, jin, li",
+        help="Comma-separated protocol names or 'all'. Available: lobo, jin, sun",
     )
     parser.add_argument(
         "--dry-run",

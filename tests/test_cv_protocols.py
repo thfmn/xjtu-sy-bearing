@@ -28,7 +28,7 @@ import pytest
 
 from src.training.cv import (
     fixed_split_jin,
-    fixed_split_li,
+    fixed_split_sun,
     generate_cv_folds,
     leave_one_bearing_out,
     validate_no_leakage,
@@ -133,26 +133,26 @@ class TestFixedSplitJin:
             fixed_split_jin(df)
 
 
-class TestFixedSplitLi:
+class TestFixedSplitSun:
     """Tests for Sun et al. 2024 fixed-split protocol."""
 
     def test_returns_single_fold(self, bearing_df):
-        cv = fixed_split_li(bearing_df)
+        cv = fixed_split_sun(bearing_df)
         assert len(cv) == 1
 
     def test_strategy_name(self, bearing_df):
-        cv = fixed_split_li(bearing_df)
-        assert cv.strategy == "li_fixed"
+        cv = fixed_split_sun(bearing_df)
+        assert cv.strategy == "sun_fixed"
 
     def test_train_bearings(self, bearing_df):
-        cv = fixed_split_li(bearing_df)
+        cv = fixed_split_sun(bearing_df)
         fold = cv[0]
         assert sorted(fold.train_bearings) == [
             "Bearing1_1", "Bearing1_2", "Bearing2_1", "Bearing2_2",
         ]
 
     def test_test_bearings(self, bearing_df):
-        cv = fixed_split_li(bearing_df)
+        cv = fixed_split_sun(bearing_df)
         fold = cv[0]
         assert sorted(fold.val_bearings) == [
             "Bearing1_3", "Bearing1_4", "Bearing1_5",
@@ -160,18 +160,18 @@ class TestFixedSplitLi:
         ]
 
     def test_test_bearing_count(self, bearing_df):
-        cv = fixed_split_li(bearing_df)
+        cv = fixed_split_sun(bearing_df)
         fold = cv[0]
         assert len(fold.val_bearings) == 6
 
     def test_train_bearing_count(self, bearing_df):
-        cv = fixed_split_li(bearing_df)
+        cv = fixed_split_sun(bearing_df)
         fold = cv[0]
         assert len(fold.train_bearings) == 4
 
     def test_condition3_excluded(self, bearing_df):
         """Condition 3 bearings should not appear in train or test."""
-        cv = fixed_split_li(bearing_df)
+        cv = fixed_split_sun(bearing_df)
         fold = cv[0]
         cond3_bearings = {f"Bearing3_{i}" for i in range(1, 6)}
 
@@ -182,12 +182,12 @@ class TestFixedSplitLi:
         assert test_bearings & cond3_bearings == set()
 
     def test_no_data_leakage(self, bearing_df):
-        cv = fixed_split_li(bearing_df)
+        cv = fixed_split_sun(bearing_df)
         assert validate_no_leakage(cv[0], bearing_df)
 
     def test_only_cond12_samples(self, bearing_df):
         """All indices should belong to Conditions 1-2 only."""
-        cv = fixed_split_li(bearing_df)
+        cv = fixed_split_sun(bearing_df)
         fold = cv[0]
         all_used = np.concatenate([fold.train_indices, fold.val_indices])
         conditions_used = bearing_df.iloc[all_used]["condition"].unique()
@@ -196,7 +196,7 @@ class TestFixedSplitLi:
 
     def test_n_samples_excludes_cond3(self, bearing_df):
         """CVSplit.n_samples should reflect only Conditions 1-2."""
-        cv = fixed_split_li(bearing_df)
+        cv = fixed_split_sun(bearing_df)
         cond3_count = bearing_df[bearing_df["bearing_id"].str.startswith("Bearing3")].shape[0]
         expected = len(bearing_df) - cond3_count
         assert cv.n_samples == expected
@@ -209,7 +209,7 @@ class TestFixedSplitLi:
             "rul": list(range(10)),
         })
         with pytest.raises(ValueError, match="Expected bearings not found"):
-            fixed_split_li(df)
+            fixed_split_sun(df)
 
 
 class TestGenerateCVFoldsDispatch:
@@ -220,9 +220,9 @@ class TestGenerateCVFoldsDispatch:
         assert cv.strategy == "jin_fixed"
         assert len(cv) == 1
 
-    def test_li_fixed_dispatch(self, bearing_df):
-        cv = generate_cv_folds(bearing_df, strategy="li_fixed")
-        assert cv.strategy == "li_fixed"
+    def test_sun_fixed_dispatch(self, bearing_df):
+        cv = generate_cv_folds(bearing_df, strategy="sun_fixed")
+        assert cv.strategy == "sun_fixed"
         assert len(cv) == 1
 
     def test_lobo_still_works(self, bearing_df):
@@ -240,8 +240,8 @@ class TestGenerateCVFoldsDispatch:
         for fold in cv:
             assert validate_no_leakage(fold, bearing_df)
 
-    def test_no_leakage_validated_li(self, bearing_df):
-        cv = generate_cv_folds(bearing_df, strategy="li_fixed")
+    def test_no_leakage_validated_sun(self, bearing_df):
+        cv = generate_cv_folds(bearing_df, strategy="sun_fixed")
         for fold in cv:
             assert validate_no_leakage(fold, bearing_df)
 

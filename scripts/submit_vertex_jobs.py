@@ -62,14 +62,14 @@ GCS_OUTPUT_BASE = f"/gcs/{STAGING_BUCKET_NAME}/outputs/vertex_training"
 CV_STRATEGY_MAP = {
     "lobo": "leave_one_bearing_out",
     "jin": "jin_fixed",
-    "li": "li_fixed",
+    "sun": "sun_fixed",
 }
 
 # Number of folds per CV strategy
 FOLDS_PER_STRATEGY = {
     "lobo": 15,
     "jin": 1,
-    "li": 1,
+    "sun": 1,
 }
 
 # Benchmark model definitions: maps model key → (config_path, extra_args)
@@ -81,11 +81,21 @@ BENCHMARK_MODELS = {
 }
 
 # Hourly costs (approximate, asia-southeast1)
-HOURLY_COSTS = {
+HOURLY_COSTS_ON_DEMAND = {
     "gpu-t4": 0.54,  # n1-standard-4 + NVIDIA T4
     "gpu-t4-highmem": 0.64,  # n1-standard-8 + NVIDIA T4 (30 GB RAM)
     "cpu-only": 0.19,  # n1-standard-4
 }
+
+# Spot VM costs (~60-70% discount over on-demand)
+HOURLY_COSTS_SPOT = {
+    "gpu-t4": 0.18,  # n1-standard-4 + NVIDIA T4 (Spot)
+    "gpu-t4-highmem": 0.22,  # n1-standard-8 + NVIDIA T4 (Spot)
+    "cpu-only": 0.06,  # n1-standard-4 (Spot)
+}
+
+# Default: use Spot pricing (override with --no-spot)
+HOURLY_COSTS = HOURLY_COSTS_SPOT
 
 # Estimated training time per fold (hours) by model and machine type
 TRAINING_TIME_ESTIMATES = {
@@ -121,32 +131,39 @@ class MachineConfig:
         return self.accelerator_type is not None
 
 
-MACHINE_CONFIGS: dict[str, MachineConfig] = {
-    "gpu-t4": MachineConfig(
-        name="gpu-t4",
-        machine_type="n1-standard-4",
-        accelerator_type="NVIDIA_TESLA_T4",
-        accelerator_count=1,
-        container_uri=CONTAINER_URI,
-        hourly_cost=HOURLY_COSTS["gpu-t4"],
-    ),
-    "gpu-t4-highmem": MachineConfig(
-        name="gpu-t4-highmem",
-        machine_type="n1-standard-8",
-        accelerator_type="NVIDIA_TESLA_T4",
-        accelerator_count=1,
-        container_uri=CONTAINER_URI,
-        hourly_cost=HOURLY_COSTS["gpu-t4-highmem"],
-    ),
-    "cpu-only": MachineConfig(
-        name="cpu-only",
-        machine_type="n1-standard-4",
-        accelerator_type=None,
-        accelerator_count=0,
-        container_uri=CONTAINER_URI,
-        hourly_cost=HOURLY_COSTS["cpu-only"],
-    ),
-}
+def _build_machine_configs(spot: bool = True) -> dict[str, MachineConfig]:
+    """Build machine configs with on-demand or spot pricing."""
+    costs = HOURLY_COSTS_SPOT if spot else HOURLY_COSTS_ON_DEMAND
+    return {
+        "gpu-t4": MachineConfig(
+            name="gpu-t4",
+            machine_type="n1-standard-4",
+            accelerator_type="NVIDIA_TESLA_T4",
+            accelerator_count=1,
+            container_uri=CONTAINER_URI,
+            hourly_cost=costs["gpu-t4"],
+        ),
+        "gpu-t4-highmem": MachineConfig(
+            name="gpu-t4-highmem",
+            machine_type="n1-standard-8",
+            accelerator_type="NVIDIA_TESLA_T4",
+            accelerator_count=1,
+            container_uri=CONTAINER_URI,
+            hourly_cost=costs["gpu-t4-highmem"],
+        ),
+        "cpu-only": MachineConfig(
+            name="cpu-only",
+            machine_type="n1-standard-4",
+            accelerator_type=None,
+            accelerator_count=0,
+            container_uri=CONTAINER_URI,
+            hourly_cost=costs["cpu-only"],
+        ),
+    }
+
+
+# Default configs (spot pricing)
+MACHINE_CONFIGS: dict[str, MachineConfig] = _build_machine_configs(spot=True)
 
 
 # =============================================================================
@@ -213,6 +230,7 @@ def estimate_cost(
     model_name: str,
     num_folds: int,
     machine_type: str,
+    spot: bool = True,
 ) -> dict[str, float]:
     """Estimate training cost.
 
@@ -220,13 +238,15 @@ def estimate_cost(
         model_name: Name of the model to train.
         num_folds: Number of folds to train.
         machine_type: Machine configuration key.
+        spot: If True, use Spot VM pricing.
 
     Returns:
         Dictionary with hours_per_fold, total_hours, hourly_rate, total_cost.
     """
     time_estimates = TRAINING_TIME_ESTIMATES.get(model_name, DEFAULT_TRAINING_TIME)
     hours_per_fold = time_estimates.get(machine_type, DEFAULT_TRAINING_TIME[machine_type])
-    hourly_rate = HOURLY_COSTS.get(machine_type, 0.50)
+    costs = HOURLY_COSTS_SPOT if spot else HOURLY_COSTS_ON_DEMAND
+    hourly_rate = costs.get(machine_type, 0.50)
 
     total_hours = hours_per_fold * num_folds
     total_cost = total_hours * hourly_rate
@@ -243,10 +263,12 @@ def print_cost_estimate(
     model_name: str,
     fold_ids: list[int],
     machine_type: str,
+    spot: bool = True,
 ) -> None:
     """Print formatted cost estimate."""
-    estimate = estimate_cost(model_name, len(fold_ids), machine_type)
-    machine_config = MACHINE_CONFIGS[machine_type]
+    estimate = estimate_cost(model_name, len(fold_ids), machine_type, spot=spot)
+    machine_configs = _build_machine_configs(spot=spot)
+    machine_config = machine_configs[machine_type]
 
     print("\n" + "=" * 60)
     print("Cost Estimation")
@@ -365,6 +387,8 @@ def submit_jobs(
     job_configs: list[dict],
     parallel: bool = True,
     wait: bool = False,
+    spot: bool = True,
+    max_parallel: int | None = None,
 ) -> list:
     """Submit Vertex AI CustomJobs.
 
@@ -372,11 +396,22 @@ def submit_jobs(
         job_configs: List of job configurations from build_job_config().
         parallel: If True, submit all jobs simultaneously. If False, wait for each.
         wait: If True, wait for all jobs to complete.
+        spot: If True, use Spot VMs for ~60-70% cost savings. Jobs are
+            automatically restarted (up to 6 times) if preempted.
+        max_parallel: Maximum concurrent jobs. When set, jobs are submitted in
+            batches of this size, waiting for each batch to complete before
+            starting the next. Implies wait=True between batches.
 
     Returns:
         List of submitted CustomJob objects.
     """
     from google.cloud import aiplatform
+    from google.cloud.aiplatform_v1.types.custom_job import Scheduling
+
+    scheduling_strategy = (
+        Scheduling.Strategy.SPOT if spot else Scheduling.Strategy.ON_DEMAND
+    )
+    vm_type = "Spot" if spot else "On-Demand"
 
     aiplatform.init(
         project=PROJECT_ID,
@@ -384,40 +419,62 @@ def submit_jobs(
         staging_bucket=STAGING_BUCKET,
     )
 
-    jobs = []
-    for config in job_configs:
-        print(f"  Submitting: {config['job_name']}")
+    # Determine batch size
+    if max_parallel and parallel:
+        batch_size = max_parallel
+    else:
+        batch_size = len(job_configs)
 
-        job = aiplatform.CustomJob(
-            display_name=config["job_name"],
-            worker_pool_specs=config["worker_pool_specs"],
-            staging_bucket=STAGING_BUCKET,
+    all_jobs = []
+    total = len(job_configs)
+    for batch_start in range(0, total, batch_size):
+        batch_configs = job_configs[batch_start : batch_start + batch_size]
+        batch_num = batch_start // batch_size + 1
+        num_batches = (total + batch_size - 1) // batch_size
+
+        if num_batches > 1:
+            print(f"\n  --- Batch {batch_num}/{num_batches} ({len(batch_configs)} jobs) ---")
+
+        batch_jobs = []
+        for config in batch_configs:
+            print(f"  Submitting ({vm_type}): {config['job_name']}")
+
+            job = aiplatform.CustomJob(
+                display_name=config["job_name"],
+                worker_pool_specs=config["worker_pool_specs"],
+                staging_bucket=STAGING_BUCKET,
+            )
+
+            if parallel:
+                job.submit(scheduling_strategy=scheduling_strategy)
+            else:
+                job.run(sync=True, scheduling_strategy=scheduling_strategy)
+
+            batch_jobs.append(job)
+
+            # Print console URL
+            console_url = (
+                f"https://console.cloud.google.com/vertex-ai/training/custom-jobs"
+                f"/{REGION}/{job.resource_name.split('/')[-1]}"
+                f"?project={PROJECT_ID}"
+            )
+            print(f"    Console: {console_url}")
+
+        all_jobs.extend(batch_jobs)
+
+        # Wait for batch completion before submitting next batch
+        need_batch_wait = (
+            num_batches > 1
+            and batch_start + batch_size < total
+            and parallel
         )
+        if need_batch_wait or (parallel and wait and batch_start + batch_size >= total):
+            print(f"\n  Waiting for batch {batch_num} to complete...")
+            for job in batch_jobs:
+                job.wait()
+                print(f"    {job.display_name}: {job.state.name}")
 
-        if parallel:
-            # Submit without blocking
-            job.submit()
-        else:
-            # Run synchronously (blocks until complete)
-            job.run(sync=True)
-
-        jobs.append(job)
-
-        # Print console URL
-        console_url = (
-            f"https://console.cloud.google.com/vertex-ai/training/custom-jobs"
-            f"/{REGION}/{job.resource_name.split('/')[-1]}"
-            f"?project={PROJECT_ID}"
-        )
-        print(f"    Console: {console_url}")
-
-    if parallel and wait:
-        print("\n  Waiting for all jobs to complete...")
-        for job in jobs:
-            job.wait()
-            print(f"    {job.display_name}: {job.state.name}")
-
-    return jobs
+    return all_jobs
 
 
 def check_job_status(jobs: list) -> dict:
@@ -668,7 +725,22 @@ Examples:
         type=str,
         choices=list(CV_STRATEGY_MAP.values()),
         default=None,
-        help="CV strategy: 'leave_one_bearing_out', 'jin_fixed', or 'li_fixed'.",
+        help="CV strategy: 'leave_one_bearing_out', 'jin_fixed', or 'sun_fixed'.",
+    )
+    parser.add_argument(
+        "--no-spot",
+        action="store_true",
+        help="Use on-demand VMs instead of Spot VMs (default: Spot for ~60-70%% savings).",
+    )
+    parser.add_argument(
+        "--max-parallel",
+        type=int,
+        default=None,
+        help=(
+            "Maximum number of jobs to run concurrently. Jobs are submitted in "
+            "batches; each batch waits for completion before the next starts. "
+            "Useful for respecting GPU quota limits (e.g. --max-parallel 15)."
+        ),
     )
     parser.add_argument(
         "--benchmark",
@@ -688,7 +760,7 @@ Examples:
         "--benchmark-protocols",
         type=str,
         default="all",
-        help="Comma-separated protocol names for benchmark mode. Available: lobo, jin, li",
+        help="Comma-separated protocol names for benchmark mode. Available: lobo, jin, sun",
     )
 
     return parser.parse_args()
@@ -742,11 +814,18 @@ def build_benchmark_jobs(
 def main() -> None:
     args = parse_args()
 
+    use_spot = not args.no_spot
+    vm_label = "Spot" if use_spot else "On-Demand"
+
+    # Rebuild machine configs with correct pricing
+    machine_configs = _build_machine_configs(spot=use_spot)
+
     print("=" * 60)
     print("Vertex AI Training Job Submission")
     print("=" * 60)
+    print(f"  VM pricing:   {vm_label}")
 
-    machine_config = MACHINE_CONFIGS[args.machine_type]
+    machine_config = machine_configs[args.machine_type]
 
     # ---- Benchmark mode ----
     if args.benchmark:
@@ -821,6 +900,8 @@ def main() -> None:
             job_configs=job_configs,
             parallel=not args.sequential,
             wait=args.wait,
+            spot=use_spot,
+            max_parallel=args.max_parallel,
         )
 
         print(f"\n  Submitted {len(jobs)} benchmark jobs.")
@@ -863,7 +944,7 @@ def main() -> None:
 
     # Cost estimation
     if args.estimate_cost:
-        print_cost_estimate(args.model, fold_ids, args.machine_type)
+        print_cost_estimate(args.model, fold_ids, args.machine_type, spot=use_spot)
 
     # Build job configs
     job_configs = []
@@ -893,7 +974,7 @@ def main() -> None:
 
     # Confirmation prompt
     if not args.yes:
-        estimate = estimate_cost(args.model, len(fold_ids), args.machine_type)
+        estimate = estimate_cost(args.model, len(fold_ids), args.machine_type, spot=use_spot)
         print(f"\n  Estimated cost: ${estimate['total_cost']:.2f}")
         response = input("\n  Submit jobs? [y/N]: ").strip().lower()
         if response != "y":
@@ -910,6 +991,8 @@ def main() -> None:
         job_configs=job_configs,
         parallel=parallel,
         wait=args.wait,
+        spot=use_spot,
+        max_parallel=args.max_parallel,
     )
 
     print(f"\n  Submitted {len(jobs)} jobs.")

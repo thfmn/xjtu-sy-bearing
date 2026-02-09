@@ -471,7 +471,7 @@ def fixed_split_jin(
     )
 
 
-def fixed_split_li(
+def fixed_split_sun(
     df: pd.DataFrame,
     condition_col: str = "condition",
     bearing_col: str = "bearing_id",
@@ -534,7 +534,7 @@ def fixed_split_li(
 
     return CVSplit(
         folds=[fold],
-        strategy="li_fixed",
+        strategy="sun_fixed",
         n_samples=len(relevant_df),
         description=(
             "Sun et al. 2024 fixed split: 2-train/3-test per condition, "
@@ -612,7 +612,7 @@ def generate_cv_folds(
         "stratified": stratified_split,
         "time_series": time_series_split,
         "jin_fixed": fixed_split_jin,
-        "li_fixed": fixed_split_li,
+        "sun_fixed": fixed_split_sun,
     }
 
     if strategy not in strategies:

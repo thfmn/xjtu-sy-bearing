@@ -71,16 +71,16 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 |---|---|---|---|---|---|
 | **LOBO** | 4 bearings (same condition) | 1 held-out bearing | 15 (all conditions) | 9,216 | This work |
 | **Jin** | Bearing1_4 + Bearing3_2 | Remaining 13 | 15 (all conditions) | 9,216 | [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4) |
-| **Li** | Bearing1_1 + Bearing1_2 + Bearing2_1 + Bearing2_2 | 6 test bearings | 10 (Cond 1-2 only) | 6,388 | [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) |
+| **Sun** | Bearing1_1 + Bearing1_2 + Bearing2_1 + Bearing2_2 | 6 test bearings | 10 (Cond 1-2 only) | 6,388 | [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) |
 
 > **Protocol notes:**
 > - **LOBO** (Leave-One-Bearing-Out) is a 15-fold cross-validation where each fold trains on 4 bearings from the same operating condition and tests on the held-out bearing. This is the strictest protocol: the model must generalize to a completely unseen bearing's degradation pattern.
 > - **Jin split** is inferred from the results tables in Jin et al. 2025 which exclude Bearing1_4 and Bearing3_2 from test evaluation, suggesting these were used for training.
-> - **Li split**: Sun et al. 2024 do not describe their exact train/test split. We follow the standard XJTU-SY convention (train on Bearing1_1, Bearing1_2, Bearing2_1, Bearing2_2; test on the remaining 6 bearings from Conditions 1-2).
+> - **Sun split**: Sun et al. 2024 do not describe their exact train/test split. We follow the standard XJTU-SY convention (train on Bearing1_1, Bearing1_2, Bearing2_1, Bearing2_2; test on the remaining 6 bearings from Conditions 1-2).
 
 #### Aggregate Results (Normalized RMSE, lower is better)
 
-| Model | LOBO (15-fold CV) | Jin (fixed split) | Li (fixed split) |
+| Model | LOBO (15-fold CV) | Jin (fixed split) | Sun (fixed split) |
 |---|---|---|---|
 | **Feature LSTM** | **0.160** | 0.302 | **0.156** |
 | **MDSCT** | -- | -- | -- |
@@ -104,8 +104,8 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 | DCNN | [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.175 | 10 (Cond 1-2) | fixed split |
 | TCN-SA | [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.194 | 10 (Cond 1-2) | fixed split |
 | DAN | [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.268 | 10 (Cond 1-2) | fixed split |
-| **Feature LSTM (ours)** | this work | **0.156** | **10 (Cond 1-2)** | **Li split** |
-| **MDSCT (ours)** | this work | -- | 10 (Cond 1-2) | Li split |
+| **Feature LSTM (ours)** | this work | **0.156** | **10 (Cond 1-2)** | **Sun split** |
+| **MDSCT (ours)** | this work | -- | 10 (Cond 1-2) | Sun split |
 | **Feature LSTM (ours)** | this work | **0.160** | **15 (all)** | **15-fold LOBO CV** |
 | **MDSCT (ours)** | this work | -- | 15 (all) | 15-fold LOBO CV |
 
@@ -360,7 +360,7 @@ All other output files are optional. The dashboard gracefully degrades when they
 │   │   ├── models.py         #   LSTM onset classifier
 │   │   └── pipeline.py       #   End-to-end detection pipeline
 │   ├── training/             # Config, cross-validation, metrics
-│   │   ├── cv.py             #   LOBO, Jin, Li split implementations
+│   │   ├── cv.py             #   LOBO, Jin, Sun split implementations
 │   │   └── metrics.py        #   RMSE, MAE, PHM08 score
 │   └── utils/                # Experiment tracking, helpers
 ├── tests/                    # pytest suite (587 tests)
