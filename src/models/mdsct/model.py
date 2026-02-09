@@ -744,7 +744,7 @@ def build_mdsct(config: MDSCTConfig | None = None) -> keras.Model:
     # AAP4: reduce temporal dimension → (aap4_size, out_channels)
     x = AdaptiveAvgPool1D(config.aap4_size, name="aap4")(x)
 
-    # Flatten → Dense → sigmoid
+    # Flatten → Dense(1) — linear output
     x = layers.Flatten(name="flatten")(x)
     # Linear output — paper Fig. 10/14 show predictions below 0,
     # confirming no sigmoid.  Linear avoids gradient saturation that
