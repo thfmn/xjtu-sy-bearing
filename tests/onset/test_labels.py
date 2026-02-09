@@ -87,9 +87,9 @@ class TestLoadOnsetLabels:
         """onset_range should be parsed as tuple or None."""
         labels = load_onset_labels()
 
-        # Bearing2_4 has onset_range: [7, 15]
-        assert labels["Bearing2_4"].onset_range is not None
-        assert labels["Bearing2_4"].onset_range == (7, 15)
+        # Bearing3_1 has onset_range: [748, 870]
+        assert labels["Bearing3_1"].onset_range is not None
+        assert labels["Bearing3_1"].onset_range == (748, 870)
 
         # Bearing1_1 has no onset_range
         assert labels["Bearing1_1"].onset_range is None
@@ -125,8 +125,8 @@ class TestLoadOnsetLabels:
         labels = load_onset_labels()
 
         # Spot-check several bearings
-        assert labels["Bearing1_1"].onset_file_idx == 69
-        assert labels["Bearing1_5"].onset_file_idx == 27
+        assert labels["Bearing1_1"].onset_file_idx == 65
+        assert labels["Bearing1_5"].onset_file_idx == 34
         assert labels["Bearing2_1"].onset_file_idx == 452
         assert labels["Bearing3_1"].onset_file_idx == 748
 
@@ -276,15 +276,15 @@ class TestGetOnsetLabel:
 
     def test_healthy_before_onset(self, labels: dict[str, OnsetLabelEntry]) -> None:
         """ONSET-9 Acceptance: Binary labels consistent - healthy before onset."""
-        # Bearing1_1 has onset at 69
+        # Bearing1_1 has onset at 65
         assert get_onset_label("Bearing1_1", 0, labels) == 0
         assert get_onset_label("Bearing1_1", 50, labels) == 0
-        assert get_onset_label("Bearing1_1", 68, labels) == 0
+        assert get_onset_label("Bearing1_1", 64, labels) == 0
 
     def test_degraded_at_and_after_onset(self, labels: dict[str, OnsetLabelEntry]) -> None:
         """ONSET-9 Acceptance: Binary labels consistent - degraded at/after onset."""
-        # Bearing1_1 has onset at 69
-        assert get_onset_label("Bearing1_1", 69, labels) == 1
+        # Bearing1_1 has onset at 65
+        assert get_onset_label("Bearing1_1", 65, labels) == 1
         assert get_onset_label("Bearing1_1", 70, labels) == 1
         assert get_onset_label("Bearing1_1", 100, labels) == 1
 
@@ -339,11 +339,11 @@ class TestAddOnsetColumn:
 
     def test_correct_labels_for_bearing(self, labels: dict[str, OnsetLabelEntry]) -> None:
         """ONSET-9 Acceptance: add_onset_column produces correct label distribution."""
-        # Create test data for Bearing1_1 (onset at 69)
+        # Create test data for Bearing1_1 (onset at 65)
         df = pd.DataFrame(
             {
                 "bearing_id": ["Bearing1_1"] * 5,
-                "file_idx": [50, 68, 69, 70, 100],
+                "file_idx": [50, 64, 65, 70, 100],
             }
         )
 
@@ -363,8 +363,8 @@ class TestAddOnsetColumn:
 
         result = add_onset_column(df, labels)
 
-        # Bearing1_1: onset=69, Bearing2_1: onset=452
-        expected = [0, 0, 1, 1]  # 50<69, 451<452, 70>=69, 452>=452
+        # Bearing1_1: onset=65, Bearing2_1: onset=452
+        expected = [0, 0, 1, 1]  # 50<65, 451<452, 70>=65, 452>=452
         assert result["is_degraded"].tolist() == expected
 
     def test_missing_bearing_warn_mode(self, labels: dict[str, OnsetLabelEntry]) -> None:
@@ -429,7 +429,7 @@ class TestAddOnsetColumn:
 
     def test_full_bearing_distribution(self, labels: dict[str, OnsetLabelEntry]) -> None:
         """Test label distribution across full range of a bearing."""
-        # Bearing1_5 has onset at 27, total life ~52 files
+        # Bearing1_5 has onset at 34, total life ~52 files
         file_indices = list(range(52))
         df = pd.DataFrame(
             {
@@ -444,9 +444,9 @@ class TestAddOnsetColumn:
         healthy_count = (result["is_degraded"] == 0).sum()
         degraded_count = (result["is_degraded"] == 1).sum()
 
-        # onset at 27 means 0-26 healthy (27 samples), 27-51 degraded (25 samples)
-        assert healthy_count == 27
-        assert degraded_count == 25
+        # onset at 34 means 0-33 healthy (34 samples), 34-51 degraded (18 samples)
+        assert healthy_count == 34
+        assert degraded_count == 18
 
     def test_label_distribution_per_bearing_all_15(
         self, labels: dict[str, OnsetLabelEntry]

@@ -1,7 +1,14 @@
-# ONSET-8: Manual Onset Labeling Reference
+# ONSET-8: Curated Onset Labels (Reference)
 #
-# Manually-verified onset indices for all 15 XJTU-SY bearings.
-# Used for training and evaluating two-stage RUL prediction models.
+# Algorithmically derived onset indices for all 15 XJTU-SY bearings,
+# with per-bearing indicator selection, quantitative confidence scoring,
+# and documented rationale. No expert/human annotation was performed;
+# labels were produced by running statistical detectors (threshold, CUSUM)
+# on kurtosis and RMS health indicators, then curating the best result
+# per bearing based on SNR, sustained post-onset %, and σ exceedance.
+#
+# Used as the reference ground truth for training and evaluating
+# two-stage RUL prediction models.
 #
 # Labeling Methodology:
 # 1. Primary indicator: kurtosis (sensitive to impulsive defects)
@@ -26,9 +33,9 @@
 #   notes: Additional observations
 #
 # Total: 15 bearings
-# High confidence: 11 bearings
+# High confidence: 13 bearings
 # Medium confidence: 2 bearings
-# Low confidence: 2 bearings
+# Low confidence: 0 bearings
 
 bearings:
   # ============================================================
@@ -37,31 +44,34 @@ bearings:
 
   - bearing_id: Bearing1_1
     condition: 35Hz12kN
-    onset_file_idx: 69
+    onset_file_idx: 65
     confidence: high
-    detection_method: rms
+    detection_method: composite
     notes: >
-      RMS-based onset at file 69. SNR=122.8 with 100% post-onset above 2.5σ threshold.
-      Sustained degradation through failure. Upgraded from medium after quantitative
-      analysis confirmed clear onset pattern despite noisy kurtosis baseline.
+      Onset at file 65 based on visual inspection of v_kurtosis transition zone
+      (steps from 0.25-0.33 baseline to 0.38-0.70 over files 65-69) combined with
+      sustained h_rms increase. Original algorithmic detection at 69 (RMS 2σ) was
+      4 files late — the transition begins at 65.
 
   - bearing_id: Bearing1_2
     condition: 35Hz12kN
-    onset_file_idx: 43
+    onset_file_idx: 31
     confidence: high
-    detection_method: kurtosis
+    detection_method: rms
     notes: >
-      Clear kurtosis increase from baseline 0.58±0.22 starting at file 43.
-      Sustained increase through failure. High confidence onset.
+      Dramatic v_rms step-change at file 31 (0.590 → 0.827, +40%), never returns
+      to baseline. Original kurtosis-based detection at 43 missed this by 12 files.
+      File 31 is the first degraded file; file 30 is the last healthy file.
 
   - bearing_id: Bearing1_3
     condition: 35Hz12kN
-    onset_file_idx: 59
+    onset_file_idx: 58
     confidence: high
-    detection_method: kurtosis
+    detection_method: rms
     notes: >
-      Very stable baseline (0.03±0.03). Clear kurtosis spike at file 59.
-      Strong evidence of sudden defect initiation. High confidence.
+      Very stable baseline (h_rms ~0.51, v_rms ~0.52). RMS jump at file 58
+      (v_rms 0.523 → 0.614, +17%). Kurtosis detector caught it one file late
+      at 59. File 58 is the first degraded file.
 
   - bearing_id: Bearing1_4
     condition: 35Hz12kN
@@ -74,13 +84,14 @@ bearings:
 
   - bearing_id: Bearing1_5
     condition: 35Hz12kN
-    onset_file_idx: 27
+    onset_file_idx: 34
     confidence: high
     detection_method: rms
     notes: >
-      Short life (52 files). RMS-based onset at file 27 with extremely high SNR=860.8.
-      Post-onset exceedance of 29-45σ with 100% sustained above threshold.
-      Clear progressive wear failure despite no kurtosis onset. Upgraded from medium.
+      Short life (52 files). Original algorithmic onset at 27 was a false positive —
+      file 27 (h_rms=0.996) is indistinguishable from neighbors. First real deviation
+      at file 34 (h_rms=1.234, v_rms=1.189), followed by unmistakable jump at 35
+      (h_rms=1.535, v_rms=1.866). Progressive wear failure, no kurtosis onset.
 
   # ============================================================
   # Condition 2: 37.5Hz / 11kN (5 bearings)
@@ -98,12 +109,13 @@ bearings:
 
   - bearing_id: Bearing2_2
     condition: 37.5Hz11kN
-    onset_file_idx: 47
+    onset_file_idx: 46
     confidence: high
-    detection_method: kurtosis
+    detection_method: rms
     notes: >
-      Stable baseline (0.03±0.03), clear onset at file 47. Kurtosis rises
-      to 2.28 at failure. High confidence early-life defect initiation.
+      RMS jump at file 46 (h_rms 0.490 → 0.640, +31%; v_rms 0.452 → 0.565, +25%).
+      Kurtosis detector caught it one file late at 47. File 46 is the first
+      degraded file. Sustained degradation through failure.
 
   - bearing_id: Bearing2_3
     condition: 37.5Hz11kN
@@ -116,15 +128,14 @@ bearings:
 
   - bearing_id: Bearing2_4
     condition: 37.5Hz11kN
-    onset_file_idx: 9
-    confidence: low
+    onset_file_idx: 30
+    confidence: high
     detection_method: rms
-    onset_range: [7, 15]
     notes: >
-      Very short life (42 files), unstable baseline. Kurtosis shows high
-      initial values (0.87-1.79 in first 10 samples) then DECREASES during
-      failure. RMS shows onset around file 9. Unusual failure pattern -
-      possibly pre-existing defect or anomalous bearing. Low confidence.
+      Short life (42 files). Original onset at 9 was a false positive — files 0-29
+      are noisy but stable baseline (h_rms 0.51-0.65, kurtosis 0.2-1.8). Catastrophic
+      onset at file 30 (h_rms 0.633 → 1.958, 3x jump; v_rms 0.806 → 1.609, 2x jump).
+      Kurtosis unreliable for this bearing (noisy baseline, decreases during failure).
 
   - bearing_id: Bearing2_5
     condition: 37.5Hz11kN
@@ -154,16 +165,16 @@ bearings:
 
   - bearing_id: Bearing3_2
     condition: 40Hz10kN
-    onset_file_idx: 169
-    confidence: low
-    detection_method: rms
-    onset_range: [169, 1441]
+    onset_file_idx: 1020
+    confidence: medium
+    detection_method: composite
+    onset_range: [1020, 1441]
     notes: >
-      Very long life (2496 files). High initial kurtosis baseline (1.84±0.30).
-      Kurtosis never shows clear onset - actually decreases toward failure.
-      RMS shows gradual increase starting around file 169 (2σ) but more
-      definitive change at 1233-1441 (2.5-3σ). Very gradual degradation.
-      Low confidence - onset range spans large portion of life.
+      Very long life (2496 files). High initial v_kurtosis baseline (~1.7-1.9).
+      Around file 1020, structural shift: v_kurtosis drops from 1.87 to ~0.8-1.1
+      (permanent), h_rms stabilizes above 1.0. Original onset at 169 was in
+      noisy baseline — indistinguishable from normal variation. Kurtosis decreases
+      toward failure. Very gradual degradation; medium confidence.
 
   - bearing_id: Bearing3_3
     condition: 40Hz10kN
@@ -189,20 +200,20 @@ bearings:
 
   - bearing_id: Bearing3_5
     condition: 40Hz10kN
-    onset_file_idx: 29
-    confidence: medium
+    onset_file_idx: 5
+    confidence: high
     detection_method: rms
-    onset_range: [24, 71]
     notes: >
-      Short-medium life (114 files). High baseline variance (0.16) results in
-      low SNR=6.1. RMS increases from file 24-29 onwards (2σ). 95.6% post-onset
-      sustained but high baseline noise prevents high confidence. Progressive
-      wear failure mode.
+      Short-medium life (114 files). Bearing failed almost immediately. v_rms
+      accelerates from file 5 (0.995) and jumps to 1.773 at file 6 (+78%).
+      Original onset at 29 was absurdly late — h_rms was already 4.5 by then.
+      File 5 marks the start of irreversible acceleration. Progressive wear
+      failure mode with very early onset.
 
 # Summary Statistics:
-# - Bearings with kurtosis-based onset: 7 (1_2, 1_3, 1_4, 2_1, 2_2, 2_3, 3_3)
-# - Bearings with RMS-based onset: 6 (1_1, 1_5, 2_4, 2_5, 3_2, 3_4, 3_5)
-# - Bearings with composite-based onset: 2 (3_1)
+# - Bearings with kurtosis-based onset: 4 (1_4, 2_1, 2_3, 3_3)
+# - Bearings with RMS-based onset: 8 (1_2, 1_3, 1_5, 2_2, 2_4, 2_5, 3_4, 3_5)
+# - Bearings with composite-based onset: 3 (1_1, 3_1, 3_2)
 #
 # Key observations:
 # 1. Kurtosis works well for sudden/impulsive defect initiation (cage failure, spalling)

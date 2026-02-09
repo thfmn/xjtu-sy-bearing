@@ -89,7 +89,7 @@ def features_df() -> pd.DataFrame:
 
 @pytest.fixture(scope="module")
 def onset_labels() -> dict:
-    """Load the manual onset labels from YAML."""
+    """Load the curated onset labels from YAML."""
     return load_onset_labels(ONSET_LABELS_YAML)
 
 
@@ -239,7 +239,7 @@ class TestRealDataSubset:
             assert n >= 50, f"Bearing {bid} has only {n} samples (need >=50)"
 
     def test_onset_labels_exist_for_test_bearings(self, onset_labels):
-        """Manual onset labels available for all test bearings."""
+        """Curated onset labels available for all test bearings."""
         for bid in TEST_BEARINGS:
             assert bid in onset_labels
             entry = onset_labels[bid]

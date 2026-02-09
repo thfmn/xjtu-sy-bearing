@@ -45,7 +45,7 @@ onset:
   # Detection method: threshold | cusum | ewma | classifier
   method: threshold
 
-  # Onset labels file (manual reference labels)
+  # Onset labels file (curated reference labels)
   labels_path: configs/onset_labels.yaml
 
   # Method-specific parameters

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/thfmn/xjtu-sy-bearing/actions/workflows/ci.yml/badge.svg)](https://github.com/thfmn/xjtu-sy-bearing/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
-![Tests](https://img.shields.io/badge/tests-614%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-556%20passed-brightgreen)
 ![uv](https://img.shields.io/badge/package%20manager-uv-blueviolet)
 
 A reproducible benchmark for **Remaining Useful Life (RUL)** prediction of rolling element bearings on the XJTU-SY dataset. Compares 5 models across 3 evaluation protocols with a two-stage onset detection pipeline, a reproduction of [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4), an interactive Gradio dashboard, and experiment tracking via MLflow and Vertex AI. Our best model -- a bidirectional **Feature LSTM with just 5,793 parameters** -- achieves **0.160 LOBO RMSE**, outperforming all deep learning baselines trained on raw signals.
@@ -144,7 +144,7 @@ Two-stage pipeline that first identifies when degradation begins, then predicts 
 |---|---|---|
 | Statistical detectors | Kurtosis threshold, RMS threshold, Kurtosis CUSUM, RMS CUSUM | 15/15 bearings labeled |
 | LSTM classifier | 8-feature z-score input (5,793 params) | F1 = 0.844 ± 0.243 (15-fold LOBO CV) |
-| Manual labels | Expert-verified onset indices | 11 high, 2 medium, 2 low confidence |
+| Curated labels | Algorithmically derived onset indices with per-bearing analysis | 13 high, 2 medium, 0 low confidence |
 
 ## Interactive Dashboard
 
@@ -161,6 +161,8 @@ uv run python app.py
 - **Predictions:** Per-bearing RUL curves, residual analysis
 - **Onset Detection:** Health indicator explorer, classifier performance, detector comparison
 - **Audio Analysis:** Vibration signals sonified to audio (healthy → degrading → failed)
+
+A separate **Svelte + Tauri** desktop application (`frontend/`) provides a native bearing health explorer with interactive Plotly charts, scalogram viewing, and audio analysis.
 
 ## Getting Started
 
@@ -204,7 +206,7 @@ For local-only work (scripts 03+), no `.env` is needed.
 ### 4. Run tests
 
 ```bash
-uv run pytest tests/    # 614 tests
+uv run pytest tests/    # 556 tests
 ```
 
 ### 5. Launch the dashboard
@@ -311,8 +313,13 @@ All other output files are optional. The dashboard gracefully degrades when they
 ├── app/                      # Dashboard tab modules
 │   ├── data.py               #   Data loading and caching
 │   └── plots.py              #   Plotly visualization helpers
+├── frontend/                 # Svelte 5 + Tauri native desktop explorer
+│   ├── src/
+│   │   ├── App.svelte        #   Main application shell with tab navigation
+│   │   └── lib/components/   #   HealthExplorer, ScalogramViewer, AudioAnalysis
+│   └── src-tauri/            #   Tauri desktop runtime configuration
 ├── configs/                  # YAML training configurations
-│   ├── onset_labels.yaml     #   Manual onset labels (15 bearings)
+│   ├── onset_labels.yaml     #   Curated onset labels (15 bearings)
 │   ├── twostage_*.yaml       #   Two-stage pipeline configs
 │   ├── fulllife_*.yaml       #   Full-life normalized configs
 │   └── benchmark_*.yaml      #   Benchmark experiment configs
@@ -359,14 +366,13 @@ All other output files are optional. The dashboard gracefully degrades when they
 │   │   ├── cv.py             #   LOBO, Jin, Sun split implementations
 │   │   └── metrics.py        #   RMSE, MAE, PHM08 score
 │   └── utils/                # Experiment tracking, helpers
-├── tests/                    # pytest suite (614 tests)
+├── tests/                    # pytest suite (556 tests)
 └── pyproject.toml
 ```
 
 ## Guides
 
 - **[Feature LSTM Design Guide](docs/feature_lstm_guide.md)** -- Deep dive into the architecture, feature engineering, normalization strategy, and design decisions behind the project's best-performing model.
-- The `guides/` directory contains a 10-notebook learning path covering the full project, from data exploration through model training to evaluation. It also includes an interview preparation guide (`guides/10_interview_masterclass.ipynb`).
 
 ## Experiment Tracking
 
@@ -382,7 +388,7 @@ Dual-backend setup for local development and cloud reproducibility:
 - **Data:** Pandas, NumPy, BigQuery
 - **Infrastructure:** GCS, Vertex AI, MLflow
 - **Package Management:** uv
-- **Visualization:** Plotly, Gradio (interactive dashboard)
+- **Visualization:** Plotly, Gradio (interactive dashboard), Svelte + Tauri (desktop app)
 
 ## License
 

@@ -364,9 +364,9 @@ An LSTM classifier (5,793 parameters) predicts whether a bearing is healthy (0) 
 degraded (1) based on sliding windows of 4 health indicators with z-score augmentation
 (8 features total: kurtosis_h, kurtosis_v, rms_h, rms_v, plus their absolute values).
 
-The onset labels are manually verified for all 15 bearings with confidence levels
-(11 high, 2 medium, 2 low). Detection methods vary by bearing: 7 use kurtosis-based
-onset, 6 use RMS-based onset, and 2 use composite indicators.
+The onset labels are algorithmically derived for all 15 bearings with confidence levels
+(13 high, 2 medium, 0 low). Detection methods vary by bearing: 4 use kurtosis-based
+onset, 8 use RMS-based onset, and 3 use composite indicators.
 
 Onset classifier performance (15-fold LOBO CV): F1 = 0.844 +/- 0.243.
 
@@ -383,7 +383,7 @@ with onset at file 452 of 491 -- 92% healthy life). Without onset detection, the
 must also learn to predict a flat RUL during the long healthy period, wasting capacity.
 
 It helps less for bearings with gradual, ambiguous onset (e.g., Bearing3_2 with onset
-range spanning files 169-1441 of 2,496). The full-life configuration is an alternative
+range spanning files 1020-1441 of 2,496). The full-life configuration is an alternative
 that skips onset detection and normalizes RUL to [0, 1] over the entire lifetime.
 
 ---

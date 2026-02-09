@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.svelte-kit/
+*.js.map
+*.css.map
+
+# Tauri / Rust build artifacts
+src-tauri/target/
+src-tauri/gen/schemas/

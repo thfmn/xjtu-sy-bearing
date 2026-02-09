@@ -16,7 +16,7 @@
 
 """Onset label loading and management for two-stage RUL prediction.
 
-This module provides functions to load manually-verified onset labels from YAML
+This module provides functions to load curated onset labels from YAML
 configuration and apply them to features dataframes for training and evaluation.
 
 Functions:
@@ -64,7 +64,7 @@ def load_onset_labels(
 ) -> dict[str, OnsetLabelEntry]:
     """Load onset labels from YAML configuration file.
 
-    Parses the onset_labels.yaml file containing manually-verified onset indices
+    Parses the onset_labels.yaml file containing curated onset indices
     for all bearings. Returns a dictionary mapping bearing_id to label entry.
 
     Args:
@@ -145,9 +145,9 @@ def get_onset_label(
 
     Example:
         >>> labels = load_onset_labels()
-        >>> get_onset_label('Bearing1_1', 50, labels)  # Before onset at 69
+        >>> get_onset_label('Bearing1_1', 50, labels)  # Before onset at 65
         0
-        >>> get_onset_label('Bearing1_1', 70, labels)  # After onset at 69
+        >>> get_onset_label('Bearing1_1', 70, labels)  # After onset at 65
         1
     """
     if bearing_id not in onset_labels:

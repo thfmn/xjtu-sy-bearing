@@ -1,0 +1,166 @@
+/*
+ *  Copyright (C) 2026 by Tobias Hoffmann
+ *  thoffmann-ml@proton.me
+ *  https://github.com/thfmn/xjtu-sy-bearing
+ *
+ *  License: MIT | Date: 2025-2026
+ */
+
+:root {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-card: #1e2a45;
+  --text-primary: #e0e0e0;
+  --text-secondary: #b0b8c8;
+  --accent-blue: #4a9eff;
+  --accent-red: #d62728;
+  --accent-green: #2ca02c;
+  --border-color: #2a3a5e;
+  --hover-bg: #253554;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  height: 100%;
+  overflow: hidden;
+}
+
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Selects */
+select {
+  appearance: none;
+  background: #1e2a45;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23a0a0b0' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  color: #f0f0f0;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 14px;
+  padding-right: 32px;
+  min-width: 160px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  outline: none;
+}
+
+select option {
+  background: #1e2a45;
+  color: #f0f0f0;
+  padding: 4px 8px;
+}
+
+select:hover {
+  border-color: var(--accent-blue);
+}
+
+select:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
+}
+
+/* Buttons */
+button {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+button:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent-blue);
+}
+
+button:focus-visible {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
+  outline: none;
+}
+
+/* Range inputs */
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent-blue);
+}
+
+/* Radio buttons */
+input[type="radio"] {
+  accent-color: var(--accent-blue);
+}
+
+input[type="radio"]:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+label {
+  color: #c0c8d8;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+/* Plotly container — height is set by Plotly's layout.height */
+.plot-container {
+  width: 100%;
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+/* Card sections */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+/* Audio grid */
+.audio-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+audio {
+  width: 100%;
+  height: 36px;
+  border-radius: 6px;
+  background: #253554;
+  border: 1px solid var(--border-color);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}

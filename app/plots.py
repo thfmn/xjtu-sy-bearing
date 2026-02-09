@@ -83,7 +83,7 @@ def plot_degradation_trend(condition: str, bearing_id: str) -> go.Figure:
     )
 
     # Add onset marker if available
-    onset_labels = DATA.get("onset_labels_manual", {})
+    onset_labels = DATA.get("onset_labels_curated", {})
     if bearing_id in onset_labels:
         onset_idx = onset_labels[bearing_id].onset_file_idx
         max_idx = int(bearing_df["file_idx"].max())
@@ -534,8 +534,8 @@ def plot_residuals_vs_rul(model_name: str = "LightGBM") -> go.Figure:
 # ---------------------------------------------------------------------------
 
 def build_onset_overview_table() -> pd.DataFrame:
-    """Build overview table merging manual + auto onset labels for all 15 bearings."""
-    manual = DATA.get("onset_labels_manual", {})
+    """Build overview table merging curated + auto onset labels for all 15 bearings."""
+    manual = DATA.get("onset_labels_curated", {})
     auto_df = DATA.get("onset_labels_auto")
 
     rows = []
@@ -543,7 +543,7 @@ def build_onset_overview_table() -> pd.DataFrame:
         row = {
             "Bearing": bearing_id,
             "Condition": entry.condition,
-            "Manual Onset": entry.onset_file_idx,
+            "Curated Onset": entry.onset_file_idx,
             "Confidence": entry.confidence,
             "Method": entry.detection_method,
         }
@@ -591,7 +591,7 @@ def plot_health_indicators(condition: str, bearing_id: str) -> go.Figure:
     )
 
     # Onset markers
-    manual = DATA.get("onset_labels_manual", {})
+    manual = DATA.get("onset_labels_curated", {})
     auto_df = DATA.get("onset_labels_auto")
     max_idx = int(hs.file_indices[-1]) if len(hs.file_indices) > 0 else 100
 
@@ -601,7 +601,7 @@ def plot_health_indicators(condition: str, bearing_id: str) -> go.Figure:
         fig.add_vrect(x0=m_idx, x1=max_idx, fillcolor="red", opacity=0.05, line_width=0)
         fig.add_vline(
             x=m_idx, line_dash="dash", line_color="blue", line_width=2,
-            annotation_text=f"Manual ({m_idx})", annotation_position="top left",
+            annotation_text=f"Curated ({m_idx})", annotation_position="top left",
         )
 
     if auto_df is not None:
@@ -659,7 +659,7 @@ def build_detector_comparison_table() -> pd.DataFrame:
     # Rename for readability
     rename_map = {
         "bearing_id": "Bearing",
-        "manual_onset_idx": "Manual",
+        "curated_onset_idx": "Curated",
         "onset_file_idx": "Auto (selected)",
         "detector_method": "Selected Method",
         "kurtosis_threshold_idx": "Kurt. Threshold",

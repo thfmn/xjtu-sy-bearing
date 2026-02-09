@@ -18,7 +18,7 @@
 
 Tests all public functions in src/onset/visualization.py:
 - plot_bearing_onset: Single bearing onset plot
-- plot_onset_comparison: Manual vs automated onset comparison
+- plot_onset_comparison: Curated vs automated onset comparison
 - plot_all_bearings_onset: Grid of onset plots for all bearings
 
 Tests cover:
@@ -225,33 +225,33 @@ class TestPlotOnsetComparison:
     def test_returns_figure(self, synthetic_features_df: pd.DataFrame):
         """Test that function returns a matplotlib Figure."""
         fig = plot_onset_comparison(
-            "Bearing1_1", manual_idx=20, auto_idx=22,
+            "Bearing1_1", curated_idx=20, auto_idx=22,
             features_df=synthetic_features_df,
         )
         assert isinstance(fig, plt.Figure)
 
     def test_both_labels(self, synthetic_features_df: pd.DataFrame):
-        """Test comparison with both manual and auto labels."""
+        """Test comparison with both curated and auto labels."""
         fig = plot_onset_comparison(
-            "Bearing2_1", manual_idx=28, auto_idx=30,
+            "Bearing2_1", curated_idx=28, auto_idx=30,
             features_df=synthetic_features_df,
         )
         ax = fig.axes[0]
         # Title should contain the difference
         assert "diff=" in ax.get_title()
 
-    def test_manual_only(self, synthetic_features_df: pd.DataFrame):
-        """Test comparison with only manual label (auto=None)."""
+    def test_curated_only(self, synthetic_features_df: pd.DataFrame):
+        """Test comparison with only curated label (auto=None)."""
         fig = plot_onset_comparison(
-            "Bearing1_1", manual_idx=20, auto_idx=None,
+            "Bearing1_1", curated_idx=20, auto_idx=None,
             features_df=synthetic_features_df,
         )
         assert isinstance(fig, plt.Figure)
 
     def test_auto_only(self, synthetic_features_df: pd.DataFrame):
-        """Test comparison with only auto label (manual=None)."""
+        """Test comparison with only auto label (curated=None)."""
         fig = plot_onset_comparison(
-            "Bearing1_1", manual_idx=None, auto_idx=25,
+            "Bearing1_1", curated_idx=None, auto_idx=25,
             features_df=synthetic_features_df,
         )
         assert isinstance(fig, plt.Figure)
@@ -259,7 +259,7 @@ class TestPlotOnsetComparison:
     def test_neither_label(self, synthetic_features_df: pd.DataFrame):
         """Test comparison with no labels at all."""
         fig = plot_onset_comparison(
-            "Bearing1_1", manual_idx=None, auto_idx=None,
+            "Bearing1_1", curated_idx=None, auto_idx=None,
             features_df=synthetic_features_df,
         )
         assert isinstance(fig, plt.Figure)
@@ -268,7 +268,7 @@ class TestPlotOnsetComparison:
         """Test saving comparison figure to disk."""
         save_path = tmp_path / "test_comparison.png"
         fig = plot_onset_comparison(
-            "Bearing1_1", manual_idx=20, auto_idx=22,
+            "Bearing1_1", curated_idx=20, auto_idx=22,
             features_df=synthetic_features_df, save_path=save_path,
         )
         assert isinstance(fig, plt.Figure)
@@ -276,17 +276,17 @@ class TestPlotOnsetComparison:
         assert save_path.stat().st_size > 0
 
     def test_identical_labels(self, synthetic_features_df: pd.DataFrame):
-        """Test when manual and auto labels are the same."""
+        """Test when curated and auto labels are the same."""
         fig = plot_onset_comparison(
-            "Bearing1_1", manual_idx=20, auto_idx=20,
+            "Bearing1_1", curated_idx=20, auto_idx=20,
             features_df=synthetic_features_df,
         )
         assert "diff=+0" in fig.axes[0].get_title()
 
     def test_negative_difference(self, synthetic_features_df: pd.DataFrame):
-        """Test when auto onset is before manual (negative diff)."""
+        """Test when auto onset is before curated (negative diff)."""
         fig = plot_onset_comparison(
-            "Bearing1_1", manual_idx=30, auto_idx=20,
+            "Bearing1_1", curated_idx=30, auto_idx=20,
             features_df=synthetic_features_df,
         )
         assert "diff=-10" in fig.axes[0].get_title()

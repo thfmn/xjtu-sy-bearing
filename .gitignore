@@ -46,6 +46,7 @@ CLAUDE.md
 .codeium/
 .aider*
 .github/copilot/
+.playwright-mcp/
 
 # Personal utility scripts
 ralph-*
@@ -64,12 +65,20 @@ progress*.txt
 # Personal learning guides
 guides/
 
+# Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/src-tauri/target/
+frontend/src-tauri/gen/schemas/
+
 # Downloaded web content
 notebooks/raw.githubusercontent.com/
 PRD-ONSET.md
 
 # Temporary files
 Dockerfile.tmp
+debug-*.png
+qa-*.png
 
 # Reference papers (binary, not project code)
 docs/*.pdf

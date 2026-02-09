@@ -88,21 +88,21 @@ class TestTwostageRulFlatBeforeOnsetDecayAfter:
         """Verify two-stage RUL shape for all 15 XJTU-SY bearings using real onset indices."""
         # Real bearing file counts and onset indices from configs/onset_labels.yaml
         bearings = {
-            "Bearing1_1": (123, 69),
-            "Bearing1_2": (161, 43),
-            "Bearing1_3": (158, 59),
+            "Bearing1_1": (123, 65),
+            "Bearing1_2": (161, 31),
+            "Bearing1_3": (158, 58),
             "Bearing1_4": (122, 79),
-            "Bearing1_5": (52, 27),
+            "Bearing1_5": (52, 34),
             "Bearing2_1": (491, 452),
-            "Bearing2_2": (161, 47),
+            "Bearing2_2": (161, 46),
             "Bearing2_3": (533, 122),
-            "Bearing2_4": (42, 9),
+            "Bearing2_4": (42, 30),
             "Bearing2_5": (339, 121),
             "Bearing3_1": (2538, 748),
-            "Bearing3_2": (2496, 169),
+            "Bearing3_2": (2496, 1020),
             "Bearing3_3": (371, 339),
             "Bearing3_4": (1515, 1417),
-            "Bearing3_5": (114, 29),
+            "Bearing3_5": (114, 5),
         }
 
         for bearing_id, (num_files, onset_idx) in bearings.items():
@@ -148,21 +148,21 @@ class TestOnsetRelativeRulAtFailureIsZero:
     def test_all_15_bearings_failure_is_zero(self):
         """All 15 XJTU-SY bearings have RUL=0 at failure, matching piecewise_linear."""
         bearings = {
-            "Bearing1_1": (123, 69),
-            "Bearing1_2": (161, 43),
-            "Bearing1_3": (158, 59),
+            "Bearing1_1": (123, 65),
+            "Bearing1_2": (161, 31),
+            "Bearing1_3": (158, 58),
             "Bearing1_4": (122, 79),
-            "Bearing1_5": (52, 27),
+            "Bearing1_5": (52, 34),
             "Bearing2_1": (491, 452),
-            "Bearing2_2": (161, 47),
+            "Bearing2_2": (161, 46),
             "Bearing2_3": (533, 122),
-            "Bearing2_4": (42, 9),
+            "Bearing2_4": (42, 30),
             "Bearing2_5": (339, 121),
             "Bearing3_1": (2538, 748),
-            "Bearing3_2": (2496, 169),
+            "Bearing3_2": (2496, 1020),
             "Bearing3_3": (371, 339),
             "Bearing3_4": (1515, 1417),
-            "Bearing3_5": (114, 29),
+            "Bearing3_5": (114, 5),
         }
         for bearing_id, (num_files, onset_idx) in bearings.items():
             rul_ts = compute_twostage_rul(num_files, onset_idx, max_rul=125)

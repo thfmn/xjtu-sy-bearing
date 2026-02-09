@@ -22,7 +22,7 @@ annotations showing healthy vs degraded regions and onset points.
 
 Functions:
     plot_bearing_onset: Plot single bearing with onset point marked
-    plot_onset_comparison: Compare manual vs automated onset labels
+    plot_onset_comparison: Compare curated vs automated onset labels
     plot_all_bearings_onset: Grid of onset plots for all bearings
 """
 
@@ -120,20 +120,20 @@ def plot_bearing_onset(
 
 def plot_onset_comparison(
     bearing_id: str,
-    manual_idx: int | None,
+    curated_idx: int | None,
     auto_idx: int | None,
     features_df: pd.DataFrame,
     save_path: str | Path | None = None,
     figsize: tuple[float, float] = (10, 4),
 ) -> plt.Figure:
-    """Compare manual vs automated onset labels on the same plot.
+    """Compare curated vs automated onset labels on the same plot.
 
-    Draws two vertical lines — one for the manual label and one for the
-    automated label — so the user can visually assess agreement.
+    Draws two vertical lines — one for the curated reference label and one
+    for the fully-automated label — so the user can visually assess agreement.
 
     Args:
         bearing_id: Bearing identifier.
-        manual_idx: Manual onset file index (None if no manual label).
+        curated_idx: Curated reference onset file index (None if unavailable).
         auto_idx: Automated onset file index (None if not detected).
         features_df: Features DataFrame.
         save_path: If provided, save figure to this path.
@@ -150,17 +150,17 @@ def plot_onset_comparison(
 
     ax.plot(file_indices, kurtosis_avg, linewidth=1.0, color="#2c3e50", label="Kurtosis (avg)")
 
-    if manual_idx is not None:
-        ax.axvline(manual_idx, color="blue", linestyle="--", linewidth=1.5, label=f"Manual (idx={manual_idx})")
+    if curated_idx is not None:
+        ax.axvline(curated_idx, color="blue", linestyle="--", linewidth=1.5, label=f"Curated (idx={curated_idx})")
     if auto_idx is not None:
         ax.axvline(auto_idx, color="red", linestyle="-.", linewidth=1.5, label=f"Auto (idx={auto_idx})")
 
     # Annotate difference if both are available
-    if manual_idx is not None and auto_idx is not None:
-        diff = auto_idx - manual_idx
+    if curated_idx is not None and auto_idx is not None:
+        diff = auto_idx - curated_idx
         sign = "+" if diff >= 0 else ""
         ax.set_title(
-            f"{bearing_id} — Manual vs Auto (diff={sign}{diff})",
+            f"{bearing_id} — Curated vs Auto (diff={sign}{diff})",
             fontsize=_FONT_SIZES["title"],
         )
     else:

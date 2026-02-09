@@ -238,10 +238,10 @@ def load_data() -> dict:
         logger.info("DL history: %d models, %d fold histories loaded", len(data["dl_history"]), total_folds)
 
     # 8. Load onset detection data
-    data["onset_labels_manual"] = {}
+    data["onset_labels_curated"] = {}
     try:
-        data["onset_labels_manual"] = load_onset_labels(ONSET_LABELS_YAML)
-        logger.info("Onset labels: %d bearings loaded from YAML", len(data["onset_labels_manual"]))
+        data["onset_labels_curated"] = load_onset_labels(ONSET_LABELS_YAML)
+        logger.info("Onset labels: %d bearings loaded from YAML", len(data["onset_labels_curated"]))
     except Exception as e:
         logger.warning("Could not load onset labels YAML: %s", e)
 

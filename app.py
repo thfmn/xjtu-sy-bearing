@@ -363,7 +363,7 @@ def create_app() -> gr.Blocks:
                 if not onset_overview.empty:
                     gr.Dataframe(
                         value=onset_overview,
-                        label="Manual + Auto Onset Labels (15 bearings)",
+                        label="Curated + Auto Onset Labels (15 bearings)",
                         interactive=False,
                     )
                 else:
@@ -513,4 +513,4 @@ if __name__ == "__main__":
         print(f"  DL predictions: {len(dl_preds)} models, {total_bearings} bearings total")
 
     app = create_app()
-    app.launch(server_name="0.0.0.0", server_port=7860, theme=gr.themes.Soft())
+    app.launch(server_name="127.0.0.1", server_port=7860, theme=gr.themes.Soft())

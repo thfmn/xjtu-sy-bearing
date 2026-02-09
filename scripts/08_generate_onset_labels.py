@@ -20,7 +20,7 @@
 
 Applies ThresholdOnsetDetector and CUSUMOnsetDetector to each bearing's
 health indicator series (kurtosis + RMS) to automatically detect degradation
-onset. Compares results to manual labels and saves automated labels to CSV.
+onset. Compares results to curated labels and saves automated labels to CSV.
 
 Strategy:
     1. Try ThresholdOnsetDetector on kurtosis (h, v avg) — best for impulsive defects
@@ -87,7 +87,7 @@ def _run_detector(
     series = np.asarray(series, dtype=float)
 
     if detector_type == "threshold":
-        # Match manual labeling criteria: >2σ for >5 consecutive samples
+        # Match curated labeling criteria: >2σ for >5 consecutive samples
         detector = ThresholdOnsetDetector(threshold_sigma=2.0, min_consecutive=5)
     elif detector_type == "cusum":
         detector = CUSUMOnsetDetector(drift=0.5, threshold=5.0)
@@ -139,7 +139,7 @@ def select_best_onset(
     """Select the best onset index from multiple detector results.
 
     Priority: kurtosis_threshold > rms_threshold > kurtosis_cusum > rms_cusum.
-    This matches the manual labeling methodology which prefers kurtosis for
+    This matches the curated labeling methodology which prefers kurtosis for
     impulsive onset and falls back to RMS for progressive wear.
 
     Guard: If kurtosis detects onset within the healthy baseline period (first
@@ -180,7 +180,7 @@ def run_automated_labeling(
     Args:
         features_path: Path to features_v2.csv.
         output_path: Path for output CSV.
-        tolerance: Sample tolerance for agreement with manual labels.
+        tolerance: Sample tolerance for agreement with curated labels.
 
     Returns:
         DataFrame with automated onset labels.
@@ -194,13 +194,13 @@ def run_automated_labeling(
         features_df["bearing_id"].nunique(),
     )
 
-    # Load manual labels for comparison
+    # Load curated labels for comparison
     try:
-        manual_labels = load_onset_labels()
-        logger.info("Loaded manual labels for %d bearings", len(manual_labels))
+        curated_labels = load_onset_labels()
+        logger.info("Loaded curated labels for %d bearings", len(curated_labels))
     except (FileNotFoundError, KeyError) as e:
-        logger.warning("Could not load manual labels: %s", e)
-        manual_labels = {}
+        logger.warning("Could not load curated labels: %s", e)
+        curated_labels = {}
 
     # Process each bearing
     rows = []
@@ -242,16 +242,16 @@ def run_automated_labeling(
 
     auto_df = pd.DataFrame(rows)
 
-    # Add manual labels for comparison
-    if manual_labels:
-        auto_df["manual_onset_idx"] = auto_df["bearing_id"].map(
-            lambda bid: manual_labels[bid].onset_file_idx if bid in manual_labels else None
+    # Add curated labels for comparison
+    if curated_labels:
+        auto_df["curated_onset_idx"] = auto_df["bearing_id"].map(
+            lambda bid: curated_labels[bid].onset_file_idx if bid in curated_labels else None
         )
     else:
-        auto_df["manual_onset_idx"] = None
+        auto_df["curated_onset_idx"] = None
 
     # Print comparison report
-    print_comparison_report(auto_df, manual_labels, tolerance)
+    print_comparison_report(auto_df, curated_labels, tolerance)
 
     # Save output
     output_dir = Path(output_path).parent
@@ -264,49 +264,49 @@ def run_automated_labeling(
 
 def print_comparison_report(
     auto_df: pd.DataFrame,
-    manual_labels: dict,
+    curated_labels: dict,
     tolerance: int,
 ) -> None:
-    """Print comparison report between automated and manual labels."""
+    """Print comparison report between automated and curated labels."""
     print("\n" + "=" * 70)
     print("ONSET DETECTION COMPARISON REPORT")
     print("=" * 70)
 
-    if not manual_labels:
-        print("No manual labels available for comparison.")
+    if not curated_labels:
+        print("No curated labels available for comparison.")
         print("=" * 70)
         return
 
-    # Compare selected onset with manual labels
-    print("\n--- Selected Onset vs Manual ---")
+    # Compare selected onset with curated labels
+    print("\n--- Selected Onset vs Curated ---")
     agree_count = 0
     disagree_cases = []
     total = 0
 
     for _, row in auto_df.iterrows():
-        manual_idx = row.get("manual_onset_idx")
+        curated_idx = row.get("curated_onset_idx")
         auto_idx = row["onset_file_idx"]
 
-        if manual_idx is None or pd.isna(manual_idx):
+        if curated_idx is None or pd.isna(curated_idx):
             continue
 
         total += 1
-        manual_idx = int(manual_idx)
+        curated_idx = int(curated_idx)
 
         if auto_idx is None or pd.isna(auto_idx):
             disagree_cases.append(
-                f"  {row['bearing_id']}: auto=None, manual={manual_idx} [{row['detector_method']}]"
+                f"  {row['bearing_id']}: auto=None, curated={curated_idx} [{row['detector_method']}]"
             )
             continue
 
         auto_idx = int(auto_idx)
-        diff = abs(auto_idx - manual_idx)
+        diff = abs(auto_idx - curated_idx)
 
         if diff <= tolerance:
             agree_count += 1
         else:
             disagree_cases.append(
-                f"  {row['bearing_id']}: auto={auto_idx}, manual={manual_idx}, "
+                f"  {row['bearing_id']}: auto={auto_idx}, curated={curated_idx}, "
                 f"diff={diff} [{row['detector_method']}]"
             )
 
@@ -335,13 +335,13 @@ def print_comparison_report(
         agree = 0
         n = 0
         for _, row in auto_df.iterrows():
-            manual_idx = row.get("manual_onset_idx")
+            curated_idx = row.get("curated_onset_idx")
             auto_idx = row.get(col)
-            if manual_idx is None or pd.isna(manual_idx):
+            if curated_idx is None or pd.isna(curated_idx):
                 continue
             n += 1
             if auto_idx is not None and not pd.isna(auto_idx):
-                if abs(int(auto_idx) - int(manual_idx)) <= tolerance:
+                if abs(int(auto_idx) - int(curated_idx)) <= tolerance:
                     agree += 1
         if n > 0:
             print(f"  {label}: {agree}/{n} ({agree / n * 100:.0f}%)")
@@ -349,21 +349,21 @@ def print_comparison_report(
     # Per-bearing summary table
     print(f"\n--- Per-Bearing Summary ---")
     print(
-        f"{'Bearing':<15} {'Manual':>7} {'Selected':>9} {'Method':<20} {'Diff':>6}"
+        f"{'Bearing':<15} {'Curated':>7} {'Selected':>9} {'Method':<20} {'Diff':>6}"
     )
     print("-" * 70)
 
     for _, row in auto_df.iterrows():
-        manual = row.get("manual_onset_idx")
+        curated = row.get("curated_onset_idx")
         selected = row["onset_file_idx"]
         method = row["detector_method"]
 
-        m_str = str(int(manual)) if manual is not None and not pd.isna(manual) else "N/A"
+        m_str = str(int(curated)) if curated is not None and not pd.isna(curated) else "N/A"
         s_str = str(int(selected)) if selected is not None and not pd.isna(selected) else "None"
 
         diff_str = ""
-        if manual is not None and not pd.isna(manual) and selected is not None and not pd.isna(selected):
-            d = int(selected) - int(manual)
+        if curated is not None and not pd.isna(curated) and selected is not None and not pd.isna(selected):
+            d = int(selected) - int(curated)
             diff_str = f"{d:+d}"
 
         print(f"{row['bearing_id']:<15} {m_str:>7} {s_str:>9} {method:<20} {diff_str:>6}")
