@@ -578,6 +578,19 @@ class TestFullMDSCT:
         assert "loss" in history.history
         assert len(history.history["loss"]) == 1
 
+    def test_model_checkpoint_save(self, small_config, tmp_path):
+        """All custom layers implement get_config() for Keras serialization.
+
+        This ensures ModelCheckpoint can save .keras files during training,
+        which is required for checkpoint-based early stopping.
+        """
+        model = build_mdsct(small_config)
+        model.compile(optimizer="adam", loss="mse")
+        save_path = tmp_path / "mdsct_test.keras"
+        model.save(save_path)
+        assert save_path.exists()
+        assert save_path.stat().st_size > 0
+
 
 # ---------------------------------------------------------------------------
 # Architectural constants (Table 1)

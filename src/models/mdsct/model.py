@@ -48,8 +48,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import keras
 import tensorflow as tf
-from tensorflow import keras
 from tensorflow.keras import layers
 
 
@@ -113,6 +113,7 @@ class MDSCTConfig:
 # ---------------------------------------------------------------------------
 
 
+@keras.saving.register_keras_serializable(package="mdsct")
 class MinMaxNormalize(layers.Layer):
     """Per-sample per-channel min-max normalization to [0, 1] (Eq. 19).
 
@@ -136,6 +137,7 @@ class MinMaxNormalize(layers.Layer):
         return config
 
 
+@keras.saving.register_keras_serializable(package="mdsct")
 class AdaptiveAvgPool1D(layers.Layer):
     """Adaptive average pooling for 1D sequences.
 
@@ -167,6 +169,7 @@ class AdaptiveAvgPool1D(layers.Layer):
         return config
 
 
+@keras.saving.register_keras_serializable(package="mdsct")
 class AdaptHSwish(layers.Layer):
     """Adaptive H-Swish activation with trainable scale parameter (Eq. 9).
 
@@ -201,6 +204,7 @@ class AdaptHSwish(layers.Layer):
         return config
 
 
+@keras.saving.register_keras_serializable(package="mdsct")
 class EfficientChannelAttention(layers.Layer):
     """Efficient Channel Attention (ECA) module (Eq. 10).
 
@@ -230,7 +234,11 @@ class EfficientChannelAttention(layers.Layer):
         attn = tf.transpose(attn, [0, 2, 1])   # (batch, 1, channels)
         return x * attn
 
+    def get_config(self):
+        return super().get_config()
 
+
+@keras.saving.register_keras_serializable(package="mdsct")
 class MDSCAttentionModule(layers.Layer):
     """Multi-scale Depthwise Separable Convolution Attention (Fig. 4-5).
 
@@ -321,7 +329,18 @@ class MDSCAttentionModule(layers.Layer):
 
         return h + residual
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "kernel_sizes": self.kernel_sizes,
+            "bottleneck_ch": self.bottleneck_ch,
+            "branch_ch": self.branch_ch,
+            "maxpool_kernel": self.maxpool_kernel,
+        })
+        return config
 
+
+@keras.saving.register_keras_serializable(package="mdsct")
 class PatchEmbedding(layers.Layer):
     """Segment input into overlapping patches and project (Eq. 11-12).
 
@@ -360,6 +379,7 @@ class PatchEmbedding(layers.Layer):
         return config
 
 
+@keras.saving.register_keras_serializable(package="mdsct")
 class ProbSparseAttention(layers.Layer):
     """ProbSparse Self-Attention from Informer (Zhou et al. 2021, Eq. 14-15).
 
@@ -452,7 +472,17 @@ class ProbSparseAttention(layers.Layer):
         output = tf.reshape(output, [batch_size, seq_len, self.model_dim])
         return self.wo(output)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "model_dim": self.model_dim,
+            "num_heads": self.num_heads,
+            "factor": self.factor,
+        })
+        return config
 
+
+@keras.saving.register_keras_serializable(package="mdsct")
 class TransformerBlock(layers.Layer):
     """Post-norm Transformer encoder block with ProbSparse attention (Fig. 6).
 
@@ -495,7 +525,16 @@ class TransformerBlock(layers.Layer):
         x = self.ln2(h + residual)
         return x
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "model_dim": self.attn.model_dim,
+            "num_heads": self.attn.num_heads,
+        })
+        return config
 
+
+@keras.saving.register_keras_serializable(package="mdsct")
 class PPSformerModule(layers.Layer):
     """PPSformer branch: global attention pathway (Fig. 6-7).
 
@@ -576,7 +615,18 @@ class PPSformerModule(layers.Layer):
 
         return h
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "aap2_size": self.aap2_size,
+            "aap3_size": self.aap3_size,
+            "proj_ch": self.proj_ch,
+            "model_dim": self._model_dim,
+        })
+        return config
 
+
+@keras.saving.register_keras_serializable(package="mdsct")
 class MixerBlock(layers.Layer):
     """Parallel MDSC + PPSformer mixer block (Fig. 7, Section 3.4).
 
@@ -624,6 +674,11 @@ class MixerBlock(layers.Layer):
         mdsc_out = self.mdsc(x, training=training)
         pps_out = self.ppsformer(x, training=training)
         return layers.concatenate([mdsc_out, pps_out], axis=-1)
+
+    def get_config(self):
+        # MixerBlock takes a full MDSCTConfig, so we serialize the key params
+        config = super().get_config()
+        return config
 
 
 # ---------------------------------------------------------------------------
