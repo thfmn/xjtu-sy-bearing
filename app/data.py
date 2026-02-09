@@ -17,10 +17,13 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 from src.models.baselines.lgbm_baseline import train_with_cv, get_feature_columns
 from src.onset.labels import load_onset_labels
@@ -140,7 +143,7 @@ def load_data() -> dict:
             [data["model_comparison"], pd.DataFrame(dl_fold_rows)],
             ignore_index=True,
         )
-        print(f"  Merged {len(dl_fold_rows)} DL model(s) into model comparison")
+        logger.info("Merged %d DL model(s) into model comparison", len(dl_fold_rows))
 
     # 3. Retrain LightGBM with CV for interactive predictions
     data["predictions"] = {}
@@ -157,7 +160,7 @@ def load_data() -> dict:
             }
         data["has_model"] = True
     except Exception as e:
-        print(f"Warning: LightGBM retraining failed: {e}")
+        logger.warning("LightGBM retraining failed: %s", e)
 
     # 4. Load DL model predictions (if available)
     #    Scan both outputs/evaluation/predictions/ and outputs/vertex_training/*/predictions/
@@ -209,7 +212,7 @@ def load_data() -> dict:
     # 6. Load DL model summary (if available)
     if DL_SUMMARY_CSV.exists():
         data["dl_summary"] = pd.read_csv(DL_SUMMARY_CSV)
-        print(f"DL summary: {len(data['dl_summary'])} models loaded from {DL_SUMMARY_CSV.name}")
+        logger.info("DL summary: %d models loaded from %s", len(data["dl_summary"]), DL_SUMMARY_CSV.name)
     else:
         data["dl_summary"] = None
 
@@ -232,24 +235,24 @@ def load_data() -> dict:
                 data["dl_history"][model_name].append(pd.read_csv(csv_path))
     if data["dl_history"]:
         total_folds = sum(len(v) for v in data["dl_history"].values())
-        print(f"DL history: {len(data['dl_history'])} models, {total_folds} fold histories loaded")
+        logger.info("DL history: %d models, %d fold histories loaded", len(data["dl_history"]), total_folds)
 
     # 8. Load onset detection data
     data["onset_labels_manual"] = {}
     try:
         data["onset_labels_manual"] = load_onset_labels(ONSET_LABELS_YAML)
-        print(f"  Onset labels: {len(data['onset_labels_manual'])} bearings loaded from YAML")
+        logger.info("Onset labels: %d bearings loaded from YAML", len(data["onset_labels_manual"]))
     except Exception as e:
-        print(f"Warning: Could not load onset labels YAML: {e}")
+        logger.warning("Could not load onset labels YAML: %s", e)
 
     data["onset_labels_auto"] = None
     if ONSET_AUTO_CSV.exists():
         data["onset_labels_auto"] = pd.read_csv(ONSET_AUTO_CSV)
-        print(f"  Onset auto labels: {len(data['onset_labels_auto'])} rows from {ONSET_AUTO_CSV.name}")
+        logger.info("Onset auto labels: %d rows from %s", len(data["onset_labels_auto"]), ONSET_AUTO_CSV.name)
 
     data["onset_cv_results"] = None
     if ONSET_CV_CSV.exists():
         data["onset_cv_results"] = pd.read_csv(ONSET_CV_CSV)
-        print(f"  Onset classifier CV: {len(data['onset_cv_results'])} folds from {ONSET_CV_CSV.name}")
+        logger.info("Onset classifier CV: %d folds from %s", len(data["onset_cv_results"]), ONSET_CV_CSV.name)
 
     return data

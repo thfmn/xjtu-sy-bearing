@@ -8,5 +8,6 @@ echo "Starting MLflow UI at http://localhost:${PORT}"
 echo "Tracking URI: mlruns/"
 mlflow ui \
     --backend-store-uri mlruns \
-    --host 0.0.0.0 \
+    --host 127.0.0.1 \
     --port "${PORT}"
+# Bind to localhost only for security. Change to 0.0.0.0 if remote access is needed.
