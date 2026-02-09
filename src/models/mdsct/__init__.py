@@ -16,16 +16,20 @@
 
 """MDSCT: Multi-scale Depthwise Separable Convolution Transformer for bearing RUL.
 
-Reproduction of the architecture described in:
+Faithful reproduction of the architecture described in:
     Sun et al. (2024) "Remaining useful life prognostics of bearings based on
-    convolution attention networks and enhanced transformer", Heliyon.
+    convolution attention networks and enhanced transformer", Heliyon, e38317.
 
-Architecture: Raw Signal → Initial Conv1D → MixerBlock (MDSC + ECA) × 3
-              → ProbSparse Transformer → AdaptiveAvgPool → Dropout → FC → RUL
-
-Note: The paper does not provide complete architectural details for all
-components. This implementation fills in missing details with standard
-choices and documents all assumptions. See model.py for specifics.
+Architecture (Table 2, Fig. 7):
+    Input (32768, 2) → MinMaxNormalize (Eq. 19)
+    → Conv1D stem (1 channel) → AAP1(1024) → Dropout
+    → MixerBlock × 3:
+        ├─ MDSC Attention: MaxPool → Bottleneck(16) → DSC(24×3) → Concat(72ch)
+        │   → BN → AdaptH_Swish(δ) → Dropout → ECA → Residual
+        └─ PPSformer: AAP2(96) → Conv1D(16) → PatchEmbed → ProbSparse MHA
+            → FFN(256→128) → AAP3(1024)
+        → Concatenate (200ch)
+    → AAP4(64) → Flatten → Dense(1, sigmoid) → RUL
 """
 
 from .model import MDSCTConfig, build_mdsct, create_default_mdsct

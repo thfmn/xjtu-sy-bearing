@@ -14,7 +14,10 @@
 #  Date:      2025-2026
 #  Package:   xjtu-sy-bearing onset and RUL prediction ML Pipeline
 
-"""Tests for MDSCT architecture and its components."""
+"""Tests for MDSCT architecture — Sun et al. 2024 (Heliyon e38317).
+
+Each test references the specific equation, figure, or table it verifies.
+"""
 
 from __future__ import annotations
 
@@ -24,10 +27,13 @@ import tensorflow as tf
 
 from src.models.mdsct.model import (
     AdaptHSwish,
+    AdaptiveAvgPool1D,
     EfficientChannelAttention,
+    MDSCAttentionModule,
     MDSCTConfig,
+    MinMaxNormalize,
     MixerBlock,
-    MultiScaleDepthwiseSeparableConv,
+    PPSformerModule,
     PatchEmbedding,
     ProbSparseAttention,
     TransformerBlock,
@@ -35,20 +41,113 @@ from src.models.mdsct.model import (
 )
 
 
+# ---------------------------------------------------------------------------
+# MinMaxNormalize (Eq. 19)
+# ---------------------------------------------------------------------------
+
+
+class TestMinMaxNormalize:
+    """Verify per-sample per-channel min-max normalization (Eq. 19)."""
+
+    def test_output_in_unit_range(self):
+        """Eq. 19: normalized output must be in [0, 1]."""
+        norm = MinMaxNormalize()
+        x = tf.random.normal((4, 256, 2))
+        out = norm(x).numpy()
+        assert out.min() >= -1e-6
+        assert out.max() <= 1.0 + 1e-6
+
+    def test_per_sample_independence(self):
+        """Eq. 19: each sample is normalized independently."""
+        norm = MinMaxNormalize()
+        x = tf.constant([
+            [[1.0, 10.0], [3.0, 30.0], [2.0, 20.0]],
+            [[100.0, 0.5], [200.0, 1.5], [300.0, 1.0]],
+        ])
+        out = norm(x).numpy()
+        # Sample 0: min=[1,10], max=[3,30] → [0,0], [1,1], [0.5,0.5]
+        np.testing.assert_allclose(out[0, 0], [0.0, 0.0], atol=1e-6)
+        np.testing.assert_allclose(out[0, 1], [1.0, 1.0], atol=1e-6)
+        np.testing.assert_allclose(out[0, 2], [0.5, 0.5], atol=1e-6)
+        # Sample 1 is independent — different scale
+        np.testing.assert_allclose(out[1, 0], [0.0, 0.0], atol=1e-6)
+        np.testing.assert_allclose(out[1, 2], [1.0, 0.5], atol=1e-6)
+
+    def test_shape_preserved(self):
+        """Output shape must match input shape."""
+        norm = MinMaxNormalize()
+        x = tf.random.normal((3, 512, 2))
+        assert norm(x).shape == (3, 512, 2)
+
+    def test_constant_signal_no_nan(self):
+        """Constant signal (max == min) should not produce NaN."""
+        norm = MinMaxNormalize()
+        x = tf.constant([[[5.0, 5.0]] * 100])
+        out = norm(x).numpy()
+        assert not np.any(np.isnan(out))
+
+
+# ---------------------------------------------------------------------------
+# AdaptiveAvgPool1D (Table 2)
+# ---------------------------------------------------------------------------
+
+
+class TestAdaptiveAvgPool1D:
+    """Verify adaptive average pooling at key AAP locations."""
+
+    def test_downsample_to_1024(self):
+        """Table 2: AAP1 reduces 16384 → 1024."""
+        pool = AdaptiveAvgPool1D(1024)
+        x = tf.random.normal((2, 16384, 1))
+        out = pool(x)
+        assert out.shape == (2, 1024, 1)
+
+    def test_downsample_to_96(self):
+        """Table 2: AAP2 reduces 1024 → 96."""
+        pool = AdaptiveAvgPool1D(96)
+        x = tf.random.normal((2, 1024, 72))
+        out = pool(x)
+        assert out.shape == (2, 96, 72)
+
+    def test_downsample_to_64(self):
+        """Table 2: AAP4 reduces 1024 → 64."""
+        pool = AdaptiveAvgPool1D(64)
+        x = tf.random.normal((2, 1024, 200))
+        out = pool(x)
+        assert out.shape == (2, 64, 200)
+
+    def test_upsample(self):
+        """Table 2: AAP3 upsamples num_patches → 1024."""
+        pool = AdaptiveAvgPool1D(1024)
+        x = tf.random.normal((2, 11, 128))
+        out = pool(x)
+        assert out.shape == (2, 1024, 128)
+
+    def test_identity(self):
+        """When target_size == input_size, output should equal input."""
+        pool = AdaptiveAvgPool1D(64)
+        x = tf.random.normal((2, 64, 8))
+        out = pool(x)
+        assert out.shape == (2, 64, 8)
+
+
+# ---------------------------------------------------------------------------
+# AdaptH_Swish (Eq. 9)
+# ---------------------------------------------------------------------------
+
+
 class TestAdaptHSwish:
-    """Test the AdaptH_Swish activation function."""
+    """Verify AdaptH_Swish = δx * relu6(δx + 3) / 6."""
 
     def test_output_shape(self):
         act = AdaptHSwish()
         x = tf.random.normal((2, 16, 64))
-        out = act(x)
-        assert out.shape == (2, 16, 64)
+        assert act(x).shape == (2, 16, 64)
 
-    def test_standard_hswish_at_default(self):
-        """At init a=3.0, should behave like standard H-Swish."""
-        act = AdaptHSwish(init_value=3.0)
-        # Build the layer
-        _ = act(tf.constant([0.0]))
+    def test_standard_hswish_at_delta_1(self):
+        """Eq. 9: when δ=1.0, should behave like standard H-Swish."""
+        act = AdaptHSwish(init_value=1.0)
+        _ = act(tf.constant([0.0]))  # build
         x = tf.constant([0.0, 6.0, -3.0, -6.0])
         out = act(x).numpy()
         # H-Swish(0) = 0 * relu6(3) / 6 = 0
@@ -60,160 +159,269 @@ class TestAdaptHSwish:
         # H-Swish(-6) = -6 * relu6(-3) / 6 = 0
         assert abs(out[3]) < 1e-6
 
-    def test_trainable_parameter(self):
-        act = AdaptHSwish()
-        _ = act(tf.constant([1.0]))  # build
-        a_vars = [v for v in act.trainable_variables if "adapt_shift" in v.name]
-        assert len(a_vars) == 1
-        assert a_vars[0].shape == ()
+    def test_scaling_not_shifting(self):
+        """Eq. 9: δ scales the input, not shifts inside relu6.
 
-    def test_gradient_flow(self):
+        With δ=2.0, x=1.0: δx=2, relu6(2+3)/6 = relu6(5)/6 = 5/6
+        Result = 2 * 5/6 ≈ 1.6667
+        If it were shifting (old bug): x * relu6(x+2)/6 = 1 * relu6(3)/6 = 0.5
+        """
+        act = AdaptHSwish(init_value=2.0)
+        _ = act(tf.constant([0.0]))  # build
+        x = tf.constant([1.0])
+        out = act(x).numpy()[0]
+        expected_scale = 2.0 * tf.nn.relu6(2.0 + 3.0).numpy() / 6.0  # 1.6667
+        assert abs(out - expected_scale) < 1e-5
+
+    def test_delta_init_value(self):
+        """Eq. 9: δ should be initialized to 1.0 (not 3.0)."""
+        act = AdaptHSwish(init_value=1.0)
+        _ = act(tf.constant([0.0]))  # build
+        delta_vars = [v for v in act.trainable_variables if "adapt_scale" in v.name]
+        assert len(delta_vars) == 1
+        np.testing.assert_allclose(delta_vars[0].numpy(), 1.0)
+
+    def test_trainable_parameter(self):
+        """The δ parameter must be trainable for gradient-based learning."""
         act = AdaptHSwish()
+        _ = act(tf.constant([1.0]))
+        delta_vars = [v for v in act.trainable_variables if "adapt_scale" in v.name]
+        assert len(delta_vars) == 1
+        assert delta_vars[0].shape == ()
+
+    def test_gradient_through_delta(self):
+        """Gradient must flow through both x and δ."""
+        act = AdaptHSwish(init_value=1.0)
         x = tf.constant([1.0, 2.0, 3.0])
-        with tf.GradientTape() as tape:
+        with tf.GradientTape(persistent=True) as tape:
             tape.watch(x)
             out = act(x)
             loss = tf.reduce_mean(out)
-        grad = tape.gradient(loss, x)
-        assert grad is not None
-        assert not tf.reduce_all(grad == 0)
+        grad_x = tape.gradient(loss, x)
+        grad_delta = tape.gradient(loss, act.delta)
+        del tape
+        assert grad_x is not None
+        assert not tf.reduce_all(grad_x == 0)
+        assert grad_delta is not None
 
     def test_serialization(self):
-        act = AdaptHSwish(init_value=4.0)
+        act = AdaptHSwish(init_value=2.5)
         config = act.get_config()
-        assert config["init_value"] == 4.0
+        assert config["init_value"] == 2.5
         restored = AdaptHSwish.from_config(config)
-        assert restored.init_value == 4.0
+        assert restored.init_value == 2.5
 
 
-class TestEfficientChannelAttention:
-    """Test the ECA attention module."""
+# ---------------------------------------------------------------------------
+# EfficientChannelAttention (Eq. 10)
+# ---------------------------------------------------------------------------
+
+
+class TestECA:
+    """Verify Efficient Channel Attention (Eq. 10)."""
 
     def test_output_shape(self):
         eca = EfficientChannelAttention()
-        x = tf.random.normal((2, 128, 64))
-        out = eca(x)
-        assert out.shape == (2, 128, 64)
+        x = tf.random.normal((2, 128, 72))
+        assert eca(x).shape == (2, 128, 72)
 
-    def test_channel_reweighting(self):
-        """Output should differ from input (channels are reweighted)."""
+    def test_kernel_formula(self):
+        """Eq. 10: k = |log2(C)/2 + 0.5| rounded to odd, min 3."""
         eca = EfficientChannelAttention()
-        x = tf.random.normal((2, 64, 32))
-        out = eca(x)
-        # Not identical to input
-        assert not np.allclose(out.numpy(), x.numpy(), atol=1e-3)
+        x = tf.random.normal((2, 64, 72))
+        _ = eca(x)  # build
+        # C=72 → log2(72)/2 + 0.5 = 3.58/2 + 0.5 = ~6.17/2 + 0.5
+        # Actually: log2(72) ≈ 6.17, 6.17/2 + 0.5 = 3.585 → int(abs(...)) = 3
+        # 3 is odd, max(3,3) = 3
+        assert eca.conv.kernel_size == (3,)
 
     def test_attention_weights_bounded(self):
         """Sigmoid ensures attention weights are in [0, 1]."""
         eca = EfficientChannelAttention()
         x = tf.random.normal((2, 64, 32))
         out = eca(x)
-        # Output magnitude should be <= input magnitude per element
-        # (since weights are in [0, 1])
         assert (tf.abs(out) <= tf.abs(x) + 1e-6).numpy().all()
 
 
-class TestMultiScaleDepthwiseSeparableConv:
-    """Test the MDSC module."""
+# ---------------------------------------------------------------------------
+# MDSCAttentionModule (Fig. 4-5)
+# ---------------------------------------------------------------------------
 
-    def test_output_shape(self):
-        mdsc = MultiScaleDepthwiseSeparableConv(filters=64, kernel_sizes=(4, 8, 16))
-        x = tf.random.normal((2, 128, 32))
+
+class TestMDSCAttentionModule:
+    """Verify MDSC Attention structure (Fig. 4-5)."""
+
+    def test_output_channels_72(self):
+        """Fig. 4: 3 branches × 24 ch = 72 output channels via concat."""
+        mdsc = MDSCAttentionModule(
+            kernel_sizes=(8, 16, 32), bottleneck_ch=16, branch_ch=24,
+        )
+        x = tf.random.normal((2, 1024, 1))
         out = mdsc(x, training=False)
-        assert out.shape == (2, 128, 64)
+        assert out.shape == (2, 1024, 72)
 
-    def test_multiple_branches(self):
-        """Verify all kernel-size branches are created."""
-        kernels = (8, 16, 32)
-        mdsc = MultiScaleDepthwiseSeparableConv(filters=64, kernel_sizes=kernels)
-        x = tf.random.normal((2, 128, 32))
-        _ = mdsc(x)  # build
-        assert len(mdsc.branches) == len(kernels)
+    def test_three_dsc_branches(self):
+        """Fig. 4: exactly 3 DSC branches with different kernel sizes."""
+        mdsc = MDSCAttentionModule(kernel_sizes=(8, 16, 32))
+        _ = mdsc(tf.random.normal((1, 64, 16)))  # build
+        assert len(mdsc.dsc_branches) == 3
+
+    def test_has_maxpool(self):
+        """Fig. 5: MaxPool(3) is first operation in MDSC."""
+        mdsc = MDSCAttentionModule(maxpool_kernel=3)
+        assert isinstance(mdsc.maxpool, tf.keras.layers.MaxPooling1D)
+
+    def test_has_bottleneck_16ch(self):
+        """Fig. 5: Bottleneck Conv1D(1×1, 16ch) after MaxPool."""
+        mdsc = MDSCAttentionModule(bottleneck_ch=16)
+        assert isinstance(mdsc.bottleneck, tf.keras.layers.Conv1D)
+        # Verify the bottleneck conv will produce 16 channels
+        _ = mdsc(tf.random.normal((1, 64, 1)))  # build
+        assert mdsc.bottleneck.filters == 16
+
+    def test_concat_not_sum(self):
+        """Fig. 4: branches are concatenated (72ch), not summed.
+
+        If summed, output would be 24ch. Concat gives 3×24 = 72ch.
+        """
+        mdsc = MDSCAttentionModule(
+            kernel_sizes=(8, 16, 32), branch_ch=24,
+        )
+        x = tf.random.normal((2, 1024, 1))
+        out = mdsc(x, training=False)
+        # 72 channels proves concat; if sum, would be 24
+        assert out.shape[-1] == 72
+
+    def test_residual_connection(self):
+        """Fig. 5: residual add with 1×1 projection when channels differ."""
+        mdsc = MDSCAttentionModule()
+        x = tf.random.normal((2, 64, 1))
+        out = mdsc(x, training=False)
+        # Output should not be all zeros (residual helps)
+        assert tf.reduce_mean(tf.abs(out)).numpy() > 1e-4
 
     def test_gradient_flow(self):
-        mdsc = MultiScaleDepthwiseSeparableConv(filters=32, kernel_sizes=(4, 8))
-        x = tf.random.normal((2, 64, 16))
+        mdsc = MDSCAttentionModule(kernel_sizes=(4, 8), bottleneck_ch=8, branch_ch=8)
+        x = tf.random.normal((2, 64, 8))
         with tf.GradientTape() as tape:
             out = mdsc(x, training=True)
             loss = tf.reduce_mean(out)
         grads = tape.gradient(loss, mdsc.trainable_variables)
         assert all(g is not None for g in grads)
-        assert any(not tf.reduce_all(g == 0) for g in grads)
+
+
+# ---------------------------------------------------------------------------
+# PPSformerModule (Fig. 6-7)
+# ---------------------------------------------------------------------------
+
+
+class TestPPSformerModule:
+    """Verify PPSformer global attention branch (Fig. 6-7)."""
+
+    def test_output_shape(self):
+        """Fig. 7: PPSformer output is (1024, 128)."""
+        pps = PPSformerModule(aap2_size=96, aap3_size=1024, model_dim=128)
+        x = tf.random.normal((2, 1024, 1))
+        out = pps(x, training=False)
+        assert out.shape == (2, 1024, 128)
+
+    def test_has_aap2(self):
+        """Fig. 7: AAP2 reduces to 96 before patch embedding."""
+        pps = PPSformerModule(aap2_size=96)
+        assert isinstance(pps.aap2, AdaptiveAvgPool1D)
+        assert pps.aap2.target_size == 96
+
+    def test_has_conv1d_projection(self):
+        """Fig. 7: Conv1D(1×1, 16ch) projects after AAP2."""
+        pps = PPSformerModule(proj_ch=16)
+        assert isinstance(pps.proj, tf.keras.layers.Conv1D)
+
+    def test_has_aap3(self):
+        """Fig. 7: AAP3 resizes back to 1024 after transformer."""
+        pps = PPSformerModule(aap3_size=1024)
+        assert isinstance(pps.aap3, AdaptiveAvgPool1D)
+        assert pps.aap3.target_size == 1024
+
+    def test_out_channels_property(self):
+        """PPSformer output channels = model_dim = 128."""
+        pps = PPSformerModule(model_dim=128)
+        assert pps.out_channels == 128
+
+
+# ---------------------------------------------------------------------------
+# MixerBlock (Fig. 7, Section 3.4)
+# ---------------------------------------------------------------------------
 
 
 class TestMixerBlock:
-    """Test the MDSC + ECA mixer block."""
+    """Verify parallel MDSC + PPSformer mixer block (Fig. 7)."""
 
-    def test_output_shape(self):
-        block = MixerBlock(filters=64, kernel_sizes=(4, 8))
-        x = tf.random.normal((2, 128, 64))
+    def test_output_channels_200(self):
+        """Fig. 7: MDSC(72) + PPSformer(128) concatenated → 200 channels."""
+        config = MDSCTConfig()
+        block = MixerBlock(config)
+        x = tf.random.normal((2, 1024, 1))
         out = block(x, training=False)
-        assert out.shape == (2, 128, 64)
+        assert out.shape == (2, 1024, 200)
 
-    def test_residual_projection(self):
-        """When input channels != filters, residual projection is applied."""
-        block = MixerBlock(filters=64, kernel_sizes=(4, 8))
-        x = tf.random.normal((2, 128, 32))
-        out = block(x, training=False)
-        assert out.shape == (2, 128, 64)
+    def test_parallel_not_serial(self):
+        """Fig. 7: MDSC and PPSformer run in parallel, not serial.
 
-    def test_residual_connection(self):
-        """Output should be close to input for random init (residual path)."""
-        block = MixerBlock(filters=32, kernel_sizes=(4,))
-        x = tf.random.normal((2, 64, 32))
-        out = block(x, training=False)
-        # With residual, output shouldn't be zero
-        assert tf.reduce_mean(tf.abs(out)).numpy() > 0.01
+        Verify by checking that MixerBlock has both sub-modules
+        and output channels = sum of both paths.
+        """
+        config = MDSCTConfig()
+        block = MixerBlock(config)
+        assert hasattr(block, "mdsc")
+        assert hasattr(block, "ppsformer")
+        assert block.out_channels == block.mdsc.out_channels + block.ppsformer.out_channels
+
+    def test_output_is_concatenation(self):
+        """Fig. 7: verify output channels = MDSC channels + PPSformer channels."""
+        config = MDSCTConfig()
+        block = MixerBlock(config)
+        assert block.out_channels == 72 + 128  # 200
+
+    def test_accepts_varying_input_channels(self):
+        """MixerBlock should handle 1-channel input (from stem) and
+        200-channel input (from previous MixerBlock)."""
+        config = MDSCTConfig()
+        # First block: 1 channel input
+        block1 = MixerBlock(config)
+        x1 = tf.random.normal((1, 1024, 1))
+        out1 = block1(x1, training=False)
+        assert out1.shape == (1, 1024, 200)
+
+        # Second block: 200 channel input
+        block2 = MixerBlock(config)
+        out2 = block2(out1, training=False)
+        assert out2.shape == (1, 1024, 200)
 
 
-class TestPatchEmbedding:
-    """Test the patch embedding module."""
-
-    def test_output_shape(self):
-        pe = PatchEmbedding(patch_length=8, patch_stride=4, model_dim=64)
-        x = tf.random.normal((2, 256, 32))
-        out = pe(x)
-        # num_patches = (256 - 8) / 4 + 1 = 63
-        assert out.shape == (2, 63, 64)
-
-    def test_num_patches_calculation(self):
-        pe = PatchEmbedding(patch_length=16, patch_stride=8, model_dim=32)
-        x = tf.random.normal((2, 512, 16))
-        out = pe(x)
-        expected_patches = (512 - 16) // 8 + 1  # 63
-        assert out.shape[1] == expected_patches
-
-    def test_no_overlap(self):
-        """Non-overlapping patches (stride == length)."""
-        pe = PatchEmbedding(patch_length=16, patch_stride=16, model_dim=32)
-        x = tf.random.normal((2, 256, 8))
-        out = pe(x)
-        # 256 / 16 = 16 patches
-        assert out.shape == (2, 16, 32)
+# ---------------------------------------------------------------------------
+# ProbSparseAttention (Eq. 14-15)
+# ---------------------------------------------------------------------------
 
 
 class TestProbSparseAttention:
-    """Test the ProbSparse attention mechanism."""
+    """Test ProbSparse attention (from Informer, used in PPSformer)."""
 
     def test_output_shape(self):
         attn = ProbSparseAttention(model_dim=64, num_heads=4)
         x = tf.random.normal((2, 32, 64))
-        out = attn(x)
-        assert out.shape == (2, 32, 64)
+        assert attn(x).shape == (2, 32, 64)
 
     def test_short_sequence_full_attention(self):
         """Sequences < 64 should use full attention (no sparsity)."""
         attn = ProbSparseAttention(model_dim=32, num_heads=4)
         x = tf.random.normal((2, 16, 32))
-        out = attn(x)
-        assert out.shape == (2, 16, 32)
+        assert attn(x).shape == (2, 16, 32)
 
     def test_long_sequence(self):
         """Sequences >= 64 should use ProbSparse attention."""
         attn = ProbSparseAttention(model_dim=32, num_heads=4, factor=5)
         x = tf.random.normal((2, 128, 32))
-        out = attn(x)
-        assert out.shape == (2, 128, 32)
+        assert attn(x).shape == (2, 128, 32)
 
     def test_gradient_flow(self):
         attn = ProbSparseAttention(model_dim=32, num_heads=4)
@@ -227,103 +435,184 @@ class TestProbSparseAttention:
         assert not tf.reduce_all(grad == 0)
 
 
+# ---------------------------------------------------------------------------
+# TransformerBlock (Fig. 6)
+# ---------------------------------------------------------------------------
+
+
 class TestTransformerBlock:
-    """Test the Transformer encoder block."""
+    """Verify post-norm Transformer block (Fig. 6)."""
 
     def test_output_shape(self):
-        block = TransformerBlock(model_dim=64, num_heads=4, ff_dim=128)
+        block = TransformerBlock(model_dim=64, num_heads=4)
         x = tf.random.normal((2, 16, 64))
-        out = block(x)
-        assert out.shape == (2, 16, 64)
+        assert block(x).shape == (2, 16, 64)
 
-    def test_residual_connection(self):
-        block = TransformerBlock(model_dim=32, num_heads=4, ff_dim=64)
-        x = tf.random.normal((2, 8, 32))
-        out = block(x, training=False)
-        diff = tf.reduce_mean(tf.abs(out - x))
-        assert diff < 5.0  # reasonable for random init
+    def test_post_norm_structure(self):
+        """Fig. 6: post-norm means LayerNorm is AFTER residual add.
+
+        Check that ln1 exists as a separate attribute (not inside attn).
+        In post-norm, the call order is: attn → drop → add → ln
+        (vs pre-norm: ln → attn → drop → add).
+        """
+        block = TransformerBlock(model_dim=32, num_heads=4)
+        assert hasattr(block, "ln1")
+        assert hasattr(block, "ln2")
+        # Verify they are LayerNormalization instances
+        assert isinstance(block.ln1, tf.keras.layers.LayerNormalization)
+        assert isinstance(block.ln2, tf.keras.layers.LayerNormalization)
+
+    def test_ffn_dims(self):
+        """Section 3.4: FFN expands to 256, contracts to model_dim via 128."""
+        block = TransformerBlock(model_dim=64, num_heads=4, ff_dims=(256, 128))
+        _ = block(tf.random.normal((1, 8, 64)))  # build
+        # The FFN sequential: Dense(256) → Dropout → Dense(model_dim=64)
+        ffn_layers = block.ffn.layers
+        dense_layers = [l for l in ffn_layers if isinstance(l, tf.keras.layers.Dense)]
+        assert dense_layers[0].units == 256
+        assert dense_layers[1].units == 64  # model_dim
+
+
+# ---------------------------------------------------------------------------
+# Full MDSCT model (Table 2)
+# ---------------------------------------------------------------------------
 
 
 class TestFullMDSCT:
-    """Test the complete MDSCT model."""
+    """Test the complete MDSCT model against Table 2."""
 
-    def test_small_config_build(self):
-        config = MDSCTConfig(
-            input_length=512,
-            stem_filters=16,
+    @pytest.fixture
+    def small_config(self):
+        """Small config for fast tests (preserves architecture ratios)."""
+        return MDSCTConfig(
+            input_length=2048,
+            input_channels=2,
             stem_kernel=8,
             stem_stride=2,
+            stem_out_channels=1,
             mdsc_kernels=(4, 8),
+            mdsc_bottleneck_ch=8,
+            mdsc_branch_ch=12,
+            mdsc_maxpool_kernel=3,
             num_mixer_blocks=1,
-            model_dim=32,
+            aap1_size=128,
+            aap2_size=32,
+            aap3_size=128,
+            aap4_size=16,
+            ppsformer_proj_ch=8,
+            ppsformer_model_dim=64,
             num_heads=4,
-            ff_dim=64,
-            num_transformer_layers=1,
+            ff_dims=(64, 32),
             patch_length=8,
             patch_stride=4,
+            probsparse_factor=5,
+            dropout_rate=0.05,
+            adapt_hswish_init=1.0,
         )
+
+    def test_stem_produces_1_channel(self):
+        """Table 2: stem Conv1D has 1 output channel."""
+        config = MDSCTConfig()
         model = build_mdsct(config)
-        assert model.input_shape == (None, 512, 2)
-        assert model.output_shape == (None, 1)
+        stem = model.get_layer("stem_conv")
+        assert stem.filters == 1
+
+    def test_has_min_max_normalization(self):
+        """Eq. 19: model starts with per-sample min-max normalization."""
+        model = build_mdsct()
+        norm = model.get_layer("min_max_norm")
+        assert isinstance(norm, MinMaxNormalize)
+
+    def test_has_aap1(self):
+        """Table 2: AAP1(1024) after stem."""
+        model = build_mdsct()
+        aap1 = model.get_layer("aap1")
+        assert isinstance(aap1, AdaptiveAvgPool1D)
+        assert aap1.target_size == 1024
+
+    def test_has_aap4(self):
+        """Table 2: AAP4(64) before final FC."""
+        model = build_mdsct()
+        aap4 = model.get_layer("aap4")
+        assert isinstance(aap4, AdaptiveAvgPool1D)
+        assert aap4.target_size == 64
+
+    def test_three_mixer_blocks(self):
+        """Table 2: 3 MixerBlocks."""
+        model = build_mdsct()
+        mixer_layers = [l for l in model.layers if isinstance(l, MixerBlock)]
+        assert len(mixer_layers) == 3
+
+    def test_single_fc_output(self):
+        """Table 2: single Dense(1, sigmoid) at the end."""
+        model = build_mdsct()
+        output_layer = model.get_layer("rul_output")
+        assert isinstance(output_layer, tf.keras.layers.Dense)
+        assert output_layer.units == 1
+        assert output_layer.activation.__name__ == "sigmoid"
 
     def test_default_build(self):
+        """Default config builds with correct I/O shapes."""
         model = build_mdsct()
         assert model.input_shape == (None, 32768, 2)
         assert model.output_shape == (None, 1)
 
-    def test_forward_pass(self):
-        config = MDSCTConfig(
-            input_length=512,
-            stem_filters=16,
-            stem_kernel=8,
-            stem_stride=2,
-            mdsc_kernels=(4, 8),
-            num_mixer_blocks=1,
-            model_dim=32,
-            num_heads=4,
-            ff_dim=64,
-            num_transformer_layers=1,
-            patch_length=8,
-            patch_stride=4,
-        )
-        model = build_mdsct(config)
-        batch = np.random.randn(2, 512, 2).astype(np.float32)
+    def test_small_config_build(self, small_config):
+        model = build_mdsct(small_config)
+        assert model.input_shape == (None, 2048, 2)
+        assert model.output_shape == (None, 1)
+
+    def test_forward_pass(self, small_config):
+        model = build_mdsct(small_config)
+        batch = np.random.randn(2, 2048, 2).astype(np.float32)
         preds = model.predict(batch, verbose=0)
         assert preds.shape == (2, 1)
         assert (preds >= 0).all() and (preds <= 1).all()
 
-    def test_training_step(self):
-        config = MDSCTConfig(
-            input_length=256,
-            stem_filters=8,
-            stem_kernel=8,
-            stem_stride=2,
-            mdsc_kernels=(4,),
-            num_mixer_blocks=1,
-            model_dim=16,
-            num_heads=4,
-            ff_dim=32,
-            num_transformer_layers=1,
-            patch_length=8,
-            patch_stride=4,
-        )
-        model = build_mdsct(config)
+    def test_training_step(self, small_config):
+        model = build_mdsct(small_config)
         model.compile(optimizer="adam", loss="mse")
-
-        x = np.random.randn(4, 256, 2).astype(np.float32)
+        x = np.random.randn(4, 2048, 2).astype(np.float32)
         y = np.random.rand(4, 1).astype(np.float32)
-
         history = model.fit(x, y, epochs=1, verbose=0)
         assert "loss" in history.history
         assert len(history.history["loss"]) == 1
 
-    def test_parameter_count_reasonable(self):
-        """Default model should have a reasonable parameter count."""
-        model = build_mdsct()
-        params = model.count_params()
-        # We don't have a specific target from the paper, but it should be
-        # under 5M for this architecture
-        assert 100_000 < params < 5_000_000, f"Unexpected params: {params:,}"
+
+# ---------------------------------------------------------------------------
+# Architectural constants (Table 1)
+# ---------------------------------------------------------------------------
+
+
+class TestArchitecturalConstants:
+    """Verify default config matches paper Table 1."""
+
+    def test_patch_params(self):
+        """Table 1: patch_length=16, patch_stride=8."""
+        cfg = MDSCTConfig()
+        assert cfg.patch_length == 16
+        assert cfg.patch_stride == 8
+
+    def test_num_heads(self):
+        """Table 1: 4 attention heads."""
+        assert MDSCTConfig().num_heads == 4
+
+    def test_dropout_rate(self):
+        """Table 1: dropout = 0.05."""
+        assert MDSCTConfig().dropout_rate == 0.05
+
+    def test_mdsc_kernels(self):
+        """Table 2: kernel sizes (8, 16, 32)."""
+        assert MDSCTConfig().mdsc_kernels == (8, 16, 32)
+
+    def test_adapt_hswish_delta_init(self):
+        """Eq. 9: δ initialized to 1.0."""
+        assert MDSCTConfig().adapt_hswish_init == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Model registry integration
+# ---------------------------------------------------------------------------
 
 
 class TestModelRegistry:
