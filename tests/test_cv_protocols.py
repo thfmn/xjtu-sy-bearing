@@ -16,7 +16,7 @@
 
 """Tests for cross-validation protocol splitters.
 
-Validates the fixed-split CV protocols (Jin et al. 2025, Li et al. 2024)
+Validates the fixed-split CV protocols (Jin et al. 2025, Sun et al. 2024)
 alongside existing LOBO CV for the benchmarking paper.
 """
 
@@ -134,7 +134,7 @@ class TestFixedSplitJin:
 
 
 class TestFixedSplitLi:
-    """Tests for Li et al. 2024 fixed-split protocol."""
+    """Tests for Sun et al. 2024 fixed-split protocol."""
 
     def test_returns_single_fold(self, bearing_df):
         cv = fixed_split_li(bearing_df)

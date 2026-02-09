@@ -2,7 +2,7 @@
 #
 # 2D CNN on STFT spectrograms (128×128×2) with full-life normalized RUL.
 # Evaluates on all 9,216 samples with normalized [0, 1] RUL targets.
-# Directly comparable to published papers (e.g., Li et al. 2024).
+# Directly comparable to published papers (e.g., Sun et al. 2024).
 #
 # Huber delta: 10.0 / 125 = 0.08 (scaled from raw RUL to [0,1] range)
 #

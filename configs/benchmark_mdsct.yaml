@@ -1,11 +1,11 @@
-# Benchmark: MDSCT (Li et al. 2024 reproduction)
+# Benchmark: MDSCT (Sun et al. 2024 reproduction)
 #
 # Multi-scale Depthwise Separable Convolution Transformer for bearing RUL.
 # Raw signal input (32768, 2) → Conv1D stem → MixerBlock (MDSC+ECA) × 3
 # → PatchEmbed → ProbSparse Transformer → RUL
 #
 # Paper: "Remaining useful life prognostics of bearings based on convolution
-#         attention networks and enhanced transformer" (Li et al., Heliyon, 2024)
+#         attention networks and enhanced transformer" (Sun et al., Heliyon, 2024)
 #
 # Hyperparameters from paper: Adam lr=0.001, batch=32, dropout=0.05, 100 epochs
 #

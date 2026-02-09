@@ -17,7 +17,7 @@
 """MDSCT: Multi-scale Depthwise Separable Convolution Transformer for bearing RUL.
 
 Reproduction of the architecture described in:
-    Li et al. (2024) "Remaining useful life prognostics of bearings based on
+    Sun et al. (2024) "Remaining useful life prognostics of bearings based on
     convolution attention networks and enhanced transformer", Heliyon.
 
 Architecture: Raw Signal → Initial Conv1D → MixerBlock (MDSC + ECA) × 3

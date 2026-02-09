@@ -16,7 +16,7 @@
 
 """MDSCT model implementation.
 
-Reproduces the architecture from Li et al. (2024):
+Reproduces the architecture from Sun et al. (2024):
     Raw Signal → Conv1D stem → MixerBlock (MDSC + ECA) × 3
     → PatchEmbedding → ProbSparse Transformer → AdaptiveAvgPool → FC → RUL
 

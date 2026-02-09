@@ -476,13 +476,13 @@ def fixed_split_li(
     condition_col: str = "condition",
     bearing_col: str = "bearing_id",
 ) -> CVSplit:
-    """Generate a fixed train/test split reproducing the Li et al. 2024 protocol.
+    """Generate a fixed train/test split reproducing the Sun et al. 2024 protocol.
 
     Uses only Conditions 1 and 2 (10 bearings total). Trains on Bearing1_1,
     Bearing1_2, Bearing2_1, Bearing2_2. Tests on Bearing1_3, Bearing1_4,
     Bearing1_5, Bearing2_3, Bearing2_4, Bearing2_5.
 
-    Note: Li et al. do not describe their train/test split. This follows the
+    Note: Sun et al. do not describe their train/test split. This follows the
     standard XJTU-SY convention of 2-train/3-test per condition. This
     assumption is documented in the paper.
 
@@ -527,7 +527,7 @@ def fixed_split_li(
         train_bearings=sorted(train_bearing_ids),
         val_bearings=sorted(test_bearing_ids),
         description=(
-            "Li et al. 2024 fixed split: train={B1_1, B1_2, B2_1, B2_2}, "
+            "Sun et al. 2024 fixed split: train={B1_1, B1_2, B2_1, B2_2}, "
             "test={B1_3-B1_5, B2_3-B2_5}, Conditions 1-2 only"
         ),
     )
@@ -537,7 +537,7 @@ def fixed_split_li(
         strategy="li_fixed",
         n_samples=len(relevant_df),
         description=(
-            "Li et al. 2024 fixed split: 2-train/3-test per condition, "
+            "Sun et al. 2024 fixed split: 2-train/3-test per condition, "
             "Conditions 1-2 only (10 bearings, Condition 3 excluded)"
         ),
     )

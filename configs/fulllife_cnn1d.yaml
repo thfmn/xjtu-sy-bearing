@@ -2,7 +2,7 @@
 #
 # 1D CNN on raw vibration signals (32768×2) with full-life normalized RUL.
 # Evaluates on all 9,216 samples with normalized [0, 1] RUL targets.
-# Directly comparable to published papers (e.g., Li et al. 2024).
+# Directly comparable to published papers (e.g., Sun et al. 2024).
 # Same architecture/hyperparams as twostage_cnn1d.yaml — only the
 # evaluation protocol and Huber delta differ.
 #

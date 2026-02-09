@@ -61,10 +61,10 @@ Six model architectures are benchmarked. Four are original designs; two reproduc
 | **1D CNN** | 32768 × 2 raw signal | Conv1D → BatchNorm → GlobalAvgPool → Dense | Original |
 | **CNN2D** | 128 × 128 × 2 spectrogram | 2D CNN with progressive downsampling | Original |
 | **DTA-MLP** | 32768 × 2 raw signal | CNN encoder → Dual Temporal Attention → MLP | Reproduction of [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4) |
-| **MDSCT** | 32768 × 2 raw signal | Multi-scale dilated conv → ProbSparse attention → ECA | Reproduction of [Li et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) |
+| **MDSCT** | 32768 × 2 raw signal | Multi-scale dilated conv → ProbSparse attention → ECA | Reproduction of [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) |
 
 > **Replication notes:**
-> - **MDSCT** is a faithful reproduction of Li et al. 2024, implementing the ProbSparse self-attention, ECA (Efficient Channel Attention) blocks, and multi-scale dilated separable convolutions as described in the paper.
+> - **MDSCT** is a faithful reproduction of Sun et al. 2024, implementing the ProbSparse self-attention, ECA (Efficient Channel Attention) blocks, and multi-scale dilated separable convolutions as described in the paper.
 > - **DTA-MLP** reproduces the Dual Temporal Attention mechanism and MLP head from Jin et al. 2025. The paper does not fully specify the CNN frontend architecture used to extract temporal features from raw signals; our implementation uses a standard 1D convolutional encoder.
 > - **CNN1D, CNN2D, Feature LSTM, LightGBM** are original architectures designed for this project and are not reproductions of any published method.
 
@@ -82,12 +82,12 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 |---|---|---|---|---|---|
 | **LOBO** | 4 bearings (same condition) | 1 held-out bearing | 15 (all conditions) | 9,216 | This work |
 | **Jin** | Bearing1_4 + Bearing3_2 | Remaining 13 | 15 (all conditions) | 9,216 | [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4) |
-| **Li** | Bearing1_1 + Bearing1_2 + Bearing2_1 + Bearing2_2 | 6 test bearings | 10 (Cond 1-2 only) | 6,388 | [Li et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) |
+| **Li** | Bearing1_1 + Bearing1_2 + Bearing2_1 + Bearing2_2 | 6 test bearings | 10 (Cond 1-2 only) | 6,388 | [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) |
 
 > **Protocol notes:**
 > - **LOBO** (Leave-One-Bearing-Out) is a 15-fold cross-validation where each fold trains on 4 bearings from the same operating condition and tests on the held-out bearing. This is the strictest protocol: the model must generalize to a completely unseen bearing's degradation pattern.
 > - **Jin split** is inferred from the results tables in Jin et al. 2025 which exclude Bearing1_4 and Bearing3_2 from test evaluation, suggesting these were used for training.
-> - **Li split**: Li et al. 2024 do not describe their exact train/test split. We follow the standard XJTU-SY convention (train on Bearing1_1, Bearing1_2, Bearing2_1, Bearing2_2; test on the remaining 6 bearings from Conditions 1-2).
+> - **Li split**: Sun et al. 2024 do not describe their exact train/test split. We follow the standard XJTU-SY convention (train on Bearing1_1, Bearing1_2, Bearing2_1, Bearing2_2; test on the remaining 6 bearings from Conditions 1-2).
 
 #### Aggregate Results (Normalized RMSE, lower is better)
 
@@ -109,12 +109,12 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 | Method | Source | RMSE | Bearings | Protocol |
 |---|---|---|---|---|
 | Bi-LSTM-Transformer | [Wang et al. 2025](https://www.mdpi.com/2076-3417/15/17/9529) | 0.056 | n/a | fixed split |
-| MDSCT | [Li et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.160 | 10 (Cond 1-2) | fixed split |
+| MDSCT | [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.160 | 10 (Cond 1-2) | fixed split |
 | DTA-MLP | [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4) | 0.169 | 13 (all cond) | fixed split |
 | CNN-ResNet | [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4) | 0.173 | 13 (all cond) | fixed split |
-| DCNN | [Li et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.175 | 10 (Cond 1-2) | fixed split |
-| TCN-SA | [Li et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.194 | 10 (Cond 1-2) | fixed split |
-| DAN | [Li et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.268 | 10 (Cond 1-2) | fixed split |
+| DCNN | [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.175 | 10 (Cond 1-2) | fixed split |
+| TCN-SA | [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.194 | 10 (Cond 1-2) | fixed split |
+| DAN | [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.268 | 10 (Cond 1-2) | fixed split |
 | **Feature LSTM (ours)** | this work | **0.156** | **10 (Cond 1-2)** | **Li split** |
 | **MDSCT (ours)** | this work | **0.188** | **10 (Cond 1-2)** | **Li split** |
 | **Feature LSTM (ours)** | this work | **0.160** | **15 (all)** | **15-fold LOBO CV** |
@@ -122,7 +122,7 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 
 > **Comparison caveats:**
 > - Published papers typically use fixed train/test splits that train on more data and test on fewer bearings. Our LOBO protocol is harder since each fold trains on only 4 bearings and must generalize to an unseen degradation pattern.
-> - Li et al. 2024 evaluates only on Conditions 1-2 (10 bearings). Our LOBO includes the challenging Condition 3 bearings (Bearing3_1: 2,538 files, Bearing3_2: 2,496 files).
+> - Sun et al. 2024 evaluates only on Conditions 1-2 (10 bearings). Our LOBO includes the challenging Condition 3 bearings (Bearing3_1: 2,538 files, Bearing3_2: 2,496 files).
 > - Our Feature LSTM uses per-bearing z-score normalization (first 20% of each bearing as healthy baseline), which is a form of test-time adaptation, a legitimate but methodologically different approach compared to end-to-end models that learn features from raw signals.
 > - Our MDSCT reproduction achieves 0.188 on the Li split vs. the published 0.160. This gap may be due to differences in the exact train/test split (not specified in the paper), hyperparameter tuning, or implementation details.
 > - Results use a single random seed. Variance across seeds is not reported.
@@ -363,7 +363,7 @@ All other output files are optional. The dashboard gracefully degrades when they
 │   │   ├── baselines/        #   LightGBM, 1D CNN, Feature LSTM
 │   │   ├── cnn2d/            #   Spectrogram-based 2D CNN
 │   │   ├── dta_mlp/          #   DTA-MLP (Jin et al. 2025 reproduction)
-│   │   ├── mdsct/            #   MDSCT (Li et al. 2024 reproduction)
+│   │   ├── mdsct/            #   MDSCT (Sun et al. 2024 reproduction)
 │   │   ├── pattern1/         #   TCN-Transformer variants
 │   │   └── registry.py       #   Unified model registry
 │   ├── onset/                # Degradation onset detection pipeline
