@@ -5,7 +5,7 @@
 ![Tests](https://img.shields.io/badge/tests-587%20passed-brightgreen)
 ![uv](https://img.shields.io/badge/package%20manager-uv-blueviolet)
 
-An MLOps pipeline that predicts the **Remaining Useful Life (RUL)** of rolling element bearings from vibration sensor data. Built on the XJTU-SY benchmark dataset with GCP infrastructure for data processing, model training, and experiment tracking.
+A reproducible benchmark for **Remaining Useful Life (RUL)** prediction of rolling element bearings on the XJTU-SY dataset. Compares 6 models across 3 evaluation protocols with a two-stage onset detection pipeline, reproductions of two published methods ([Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/), [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4)), an interactive Gradio dashboard, and experiment tracking via MLflow and Vertex AI.
 
 <!-- TODO: Add XJTU-SY test rig photo -->
 
