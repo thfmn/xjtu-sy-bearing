@@ -7,7 +7,9 @@
 
 A reproducible benchmark for **Remaining Useful Life (RUL)** prediction of rolling element bearings on the XJTU-SY dataset. Compares 6 models across 3 evaluation protocols with a two-stage onset detection pipeline, reproductions of two published methods ([Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/), [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4)), an interactive Gradio dashboard, and experiment tracking via MLflow and Vertex AI.
 
-<!-- TODO: Add XJTU-SY test rig photo -->
+<p align="center">
+  <img src="docs/Demonstration-of-test-best-setup-for-XJTU-SY-experimental-study-58.png" alt="XJTU-SY bearing test rig: AC motor driving a shaft with support bearings under hydraulic loading, with horizontal and vertical accelerometers mounted on the tested bearing" width="700">
+</p>
 
 ## The Problem
 
