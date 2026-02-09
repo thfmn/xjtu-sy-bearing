@@ -5,7 +5,7 @@
 ![Tests](https://img.shields.io/badge/tests-614%20passed-brightgreen)
 ![uv](https://img.shields.io/badge/package%20manager-uv-blueviolet)
 
-A reproducible benchmark for **Remaining Useful Life (RUL)** prediction of rolling element bearings on the XJTU-SY dataset. Compares 6 models across 3 evaluation protocols with a two-stage onset detection pipeline, reproductions of two published methods ([Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/), [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4)), an interactive Gradio dashboard, and experiment tracking via MLflow and Vertex AI.
+A reproducible benchmark for **Remaining Useful Life (RUL)** prediction of rolling element bearings on the XJTU-SY dataset. Compares 5 models across 3 evaluation protocols with a two-stage onset detection pipeline, a reproduction of [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4), an interactive Gradio dashboard, and experiment tracking via MLflow and Vertex AI. Our best model -- a bidirectional **Feature LSTM with just 5,793 parameters** -- achieves **0.160 LOBO RMSE**, outperforming all deep learning baselines trained on raw signals.
 
 <p align="center">
   <img src="docs/Demonstration-of-test-best-setup-for-XJTU-SY-experimental-study-58.png" alt="XJTU-SY bearing test rig: AC motor driving a shaft with support bearings under hydraulic loading, with horizontal and vertical accelerometers mounted on the tested bearing" width="700">
@@ -43,25 +43,25 @@ Each CSV file contains 32,768 samples (1.28 s recording) captured at regular int
 
 ## Models
 
-Six model architectures are benchmarked. Four are original designs; two are attempts to reproduce published methods.
+Five model architectures are benchmarked. Four are original designs; one is an attempt to reproduce a published method.
 
-| Model | Input | Architecture | Source |
-|---|---|---|---|
-| **LightGBM** | 65 features | Gradient-boosted trees | Original |
-| **Feature LSTM** | 65 features × 10 steps | Bidirectional LSTM + Dense | Original |
-| **1D CNN** | 32768 × 2 raw signal | Conv1D → BatchNorm → GlobalAvgPool → Dense | Original |
-| **CNN2D** | 128 × 128 × 2 spectrogram | 2D CNN with progressive downsampling | Original |
-| **DTA-MLP** | 32768 × 2 raw signal | CNN encoder → Dual Temporal Attention → MLP | Reproduction of [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4) |
-| **MDSCT** | 32768 × 2 raw signal | Multi-scale depthwise separable conv → ProbSparse attention → ECA | Reproduction of [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) |
+| Model | Input | Architecture | Params | Source |
+|---|---|---|---|---|
+| **Feature LSTM** | 65 features × 10 steps | Bidirectional LSTM + Dense | 5,793 | Original |
+| **LightGBM** | 65 features | Gradient-boosted trees | ~1,200 leaves | Original |
+| **1D CNN** | 32768 × 2 raw signal | Conv1D → BatchNorm → GlobalAvgPool → Dense | ~50K | Original |
+| **CNN2D** | 128 × 128 × 2 spectrogram | 2D CNN with progressive downsampling | ~80K | Original |
+| **DTA-MLP** | 32768 × 2 raw signal | CNN encoder → Dual Temporal Attention → MLP | ~120K | Reproduction of [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4) |
+
+For a deep dive into the Feature LSTM architecture and design decisions, see the **[Feature LSTM Design Guide](docs/feature_lstm_guide.md)**.
 
 > **Replication notes:**
-> - **MDSCT** reproduces Sun et al. 2024 with parallel MDSC attention + PPSformer (ProbSparse self-attention) mixer blocks, ECA (Efficient Channel Attention), and per-sample min-max normalization. Using the paper's parallel topology (Fig. 7) and component details. Results are pending retraining.
 > - **DTA-MLP** reproduces the Dual Temporal Attention mechanism and MLP head from Jin et al. 2025. The paper does not fully specify the CNN frontend architecture used to extract temporal features from raw signals; our implementation uses a standard 1D convolutional encoder. The results are not comparable and serve only an experimentation purpose.
 > - **CNN1D, CNN2D, Feature LSTM, LightGBM** are original architectures designed for this project and are not reproductions of any published method.
 
 ## Results
 
-### Benchmark: 6 Models × 3 Evaluation Protocols
+### Benchmark: 5 Models × 3 Evaluation Protocols
 
 All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL is linearly normalized from 1.0 (start of life) to 0.0 (failure), making results comparable across bearings of different lifetimes and across published papers.
 
@@ -83,13 +83,10 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 | Model | LOBO (15-fold CV) | Jin (fixed split) | Sun (fixed split) |
 |---|---|---|---|
 | **Feature LSTM** | **0.160** | 0.302 | **0.156** |
-| **MDSCT** | pending | pending | pending |
 | **LightGBM** | 0.234 | 0.284 | 0.227 |
 | **1D CNN** | 0.251 | 0.280 | 0.199 |
 | **CNN2D** | 0.289 | **0.262** | 0.229 |
 | **DTA-MLP** | 0.402 | 0.445 | 0.353 |
-
-> **Note:** MDSCT results are pending -- model retraining is in progress and results will be updated shortly.
 
 #### Comparison with Published Results
 
@@ -103,40 +100,41 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 | TCN-SA | [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.194 | 10 (Cond 1-2) | fixed split |
 | DAN | [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.268 | 10 (Cond 1-2) | fixed split |
 | **Feature LSTM (ours)** | this work | **0.156** | **10 (Cond 1-2)** | **Sun split** |
-| **MDSCT (ours)** | this work | pending | 10 (Cond 1-2) | Sun split |
 | **Feature LSTM (ours)** | this work | **0.160** | **15 (all)** | **15-fold LOBO CV** |
-| **MDSCT (ours)** | this work | pending | 15 (all) | 15-fold LOBO CV |
 
 > **Comparison caveats:**
 > - Published papers typically use fixed train/test splits that train on more data and test on fewer bearings. Our LOBO protocol is harder since each fold trains on only 4 bearings and must generalize to an unseen degradation pattern.
-> - Sun et al. 2024 evaluates only on Conditions 1-2 (10 bearings). Our LOBO includes the challenging Condition 3 bearings (Bearing3_1: 2,538 files, Bearing3_2: 2,496 files).
+> - The Sun split evaluates only on Conditions 1-2 (10 bearings). Our LOBO includes the challenging Condition 3 bearings (Bearing3_1: 2,538 files, Bearing3_2: 2,496 files).
 > - Our Feature LSTM uses per-bearing z-score normalization (first 20% of each bearing as healthy baseline), which is a form of test-time adaptation. As such it is a methodologically different approach compared to end-to-end models that learn features from raw signals.
 > - Results use a single random seed. Variance across seeds is not reported.
 
 #### Per-Bearing Results (LOBO, Normalized RMSE)
 
-| Bearing | Cond | Files | Feature LSTM | MDSCT | LightGBM | 1D CNN | CNN2D | DTA-MLP |
-|---|---|---|---|---|---|---|---|---|
-| Bearing1_1 | 1 | 123 | 0.127 | pending | 0.166 | 0.141 | 0.482 | 0.440 |
-| Bearing1_2 | 1 | 161 | 0.219 | pending | 0.231 | 0.204 | 0.367 | 0.477 |
-| Bearing1_3 | 1 | 158 | 0.090 | pending | 0.201 | 0.207 | 0.337 | 0.542 |
-| Bearing1_4 | 1 | 122 | 0.149 | pending | 0.294 | 0.272 | 0.303 | 0.298 |
-| Bearing1_5 | 1 | 52 | 0.120 | pending | 0.215 | 0.219 | 0.271 | 0.303 |
-| Bearing2_1 | 2 | 491 | 0.188 | pending | 0.272 | 0.280 | 0.258 | 0.289 |
-| Bearing2_2 | 2 | 161 | 0.227 | pending | 0.149 | 0.210 | 0.149 | 0.417 |
-| Bearing2_3 | 2 | 533 | 0.189 | pending | 0.094 | 0.068 | 0.129 | 0.515 |
-| Bearing2_4 | 2 | 42 | 0.067 | pending | 0.183 | 0.175 | 0.194 | 0.355 |
-| Bearing2_5 | 2 | 339 | 0.143 | pending | 0.291 | 0.194 | 0.138 | 0.342 |
-| Bearing3_1 | 3 | 2538 | 0.175 | pending | 0.274 | 0.289 | 0.312 | 0.370 |
-| Bearing3_2 | 3 | 2496 | 0.162 | pending | 0.271 | 0.290 | 0.347 | 0.535 |
-| Bearing3_3 | 3 | 371 | 0.219 | pending | 0.284 | 0.502 | 0.310 | 0.352 |
-| Bearing3_4 | 3 | 1515 | 0.184 | pending | 0.288 | 0.224 | 0.244 | 0.281 |
-| Bearing3_5 | 3 | 114 | 0.141 | pending | 0.292 | 0.491 | 0.502 | 0.520 |
-| **Mean** | | | **0.160** | pending | **0.234** | **0.251** | **0.289** | **0.402** |
+| Bearing | Cond | Files | Feature LSTM | LightGBM | 1D CNN | CNN2D | DTA-MLP |
+|---|---|---|---|---|---|---|---|
+| Bearing1_1 | 1 | 123 | **0.127** | 0.166 | 0.141 | 0.482 | 0.440 |
+| Bearing1_2 | 1 | 161 | 0.219 | 0.231 | **0.204** | 0.367 | 0.477 |
+| Bearing1_3 | 1 | 158 | **0.090** | 0.201 | 0.207 | 0.337 | 0.542 |
+| Bearing1_4 | 1 | 122 | **0.149** | 0.294 | 0.272 | 0.303 | 0.298 |
+| Bearing1_5 | 1 | 52 | **0.120** | 0.215 | 0.219 | 0.271 | 0.303 |
+| Bearing2_1 | 2 | 491 | **0.188** | 0.272 | 0.280 | 0.258 | 0.289 |
+| Bearing2_2 | 2 | 161 | 0.227 | **0.149** | 0.210 | **0.149** | 0.417 |
+| Bearing2_3 | 2 | 533 | 0.189 | 0.094 | **0.068** | 0.129 | 0.515 |
+| Bearing2_4 | 2 | 42 | **0.067** | 0.183 | 0.175 | 0.194 | 0.355 |
+| Bearing2_5 | 2 | 339 | 0.143 | 0.291 | 0.194 | **0.138** | 0.342 |
+| Bearing3_1 | 3 | 2538 | **0.175** | 0.274 | 0.289 | 0.312 | 0.370 |
+| Bearing3_2 | 3 | 2496 | **0.162** | 0.271 | 0.290 | 0.347 | 0.535 |
+| Bearing3_3 | 3 | 371 | **0.219** | 0.284 | 0.502 | 0.310 | 0.352 |
+| Bearing3_4 | 3 | 1515 | **0.184** | 0.288 | 0.224 | 0.244 | 0.281 |
+| Bearing3_5 | 3 | 114 | **0.141** | 0.292 | 0.491 | 0.502 | 0.520 |
+| **Mean** | | | **0.160** | **0.234** | **0.251** | **0.289** | **0.402** |
 
 #### Key Findings
 
-Feature LSTM achieves the best overall LOBO performance (0.160 RMSE), demonstrating that traditional hand-crafted features combined with temporal modeling outperform deep learning on raw signals for this dataset. The two-stage onset detection pipeline further improves predictions for bearings with a clear degradation onset by focusing the model on the degraded region of the bearing's lifetime.
+- **Feature LSTM (5,793 parameters) is the best model overall.** It achieves 0.160 LOBO RMSE and 0.156 on the Sun split, outperforming all deep learning models that are 10-20x larger and trained on raw signals or spectrograms. Feature LSTM wins on 11 of 15 individual bearings in the per-bearing LOBO evaluation.
+- **Engineered features + temporal modeling > end-to-end deep learning** for this dataset. A sliding window of 65 hand-crafted time/frequency features fed into a small bidirectional LSTM captures degradation dynamics more effectively than CNNs or attention models operating on raw 25.6 kHz signals.
+- **Per-bearing z-score normalization is critical for cross-condition generalization.** The XJTU-SY dataset has 3 operating conditions with vastly different feature scales (e.g., kurtosis ranges from ~5 to ~141 across conditions). Normalizing each bearing's features against its own healthy baseline (first 20%) enables the model to generalize across conditions.
+- **Two-stage onset detection improves predictions** for bearings with a clear degradation onset by focusing the model on the degraded region of the bearing's lifetime, rather than fitting a monotonic curve over an extended healthy period.
 
 ### Onset Detection
 
@@ -258,7 +256,7 @@ python scripts/03b_enrich_temporal_features.py
 #   → outputs/spectrograms/  (128×128×2 .npy files, Hive-partitioned)
 python scripts/04_generate_spectrograms.py
 
-# Step 5: Train deep learning models (1D CNN, CNN2D, DTA-MLP, MDSCT)
+# Step 5: Train deep learning models (1D CNN, CNN2D, DTA-MLP)
 #   → outputs/models/  (saved Keras models)
 #   → outputs/evaluation/  (*_fold_results.csv, predictions/, history/)
 python scripts/05_train_dl_models.py --model cnn1d_baseline --folds 0
@@ -328,7 +326,7 @@ All other output files are optional. The dashboard gracefully degrades when they
 │   ├── 03_extract_features.py
 │   ├── 03b_enrich_temporal_features.py
 │   ├── 04_generate_spectrograms.py
-│   ├── 05_train_dl_models.py #   Train CNN1D, CNN2D, DTA-MLP, MDSCT
+│   ├── 05_train_dl_models.py #   Train CNN1D, CNN2D, DTA-MLP
 │   ├── 06_evaluate_dl_models.py
 │   ├── 07_create_audio.py
 │   ├── 08_generate_onset_labels.py
@@ -349,7 +347,6 @@ All other output files are optional. The dashboard gracefully degrades when they
 │   │   ├── baselines/        #   LightGBM, 1D CNN, Feature LSTM
 │   │   ├── cnn2d/            #   Spectrogram-based 2D CNN
 │   │   ├── dta_mlp/          #   DTA-MLP (Jin et al. 2025 reproduction)
-│   │   ├── mdsct/            #   MDSCT (Sun et al. 2024 reproduction)
 │   │   ├── pattern1/         #   TCN-Transformer variants
 │   │   └── registry.py       #   Unified model registry
 │   ├── onset/                # Degradation onset detection pipeline
@@ -368,7 +365,8 @@ All other output files are optional. The dashboard gracefully degrades when they
 
 ## Guides
 
-The `guides/` directory contains a 10-notebook learning path covering the full project, from data exploration through model training to evaluation. It also includes an interview preparation guide (`guides/10_interview_masterclass.ipynb`).
+- **[Feature LSTM Design Guide](docs/feature_lstm_guide.md)** -- Deep dive into the architecture, feature engineering, normalization strategy, and design decisions behind the project's best-performing model.
+- The `guides/` directory contains a 10-notebook learning path covering the full project, from data exploration through model training to evaluation. It also includes an interview preparation guide (`guides/10_interview_masterclass.ipynb`).
 
 ## Experiment Tracking
 

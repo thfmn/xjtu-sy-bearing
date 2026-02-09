@@ -99,7 +99,6 @@ def _register_all() -> None:
     )
     from src.models.baselines.feature_lstm import create_default_feature_lstm
     from src.models.dta_mlp import create_default_dta_mlp
-    from src.models.mdsct import create_default_mdsct
 
     register_model(
         name="cnn1d_baseline",
@@ -155,13 +154,6 @@ def _register_all() -> None:
         build_fn=create_default_dta_mlp,
         input_type="cwt_scaleogram",
         default_input_shape=(64, 128, 2),
-    )
-
-    register_model(
-        name="mdsct",
-        build_fn=create_default_mdsct,
-        input_type="raw_signal",
-        default_input_shape=(32768, 2),
     )
 
 

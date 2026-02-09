@@ -31,7 +31,7 @@ Usage:
     python scripts/13_sync_vertex_to_mlflow.py --local
 
     # Sync specific models/protocols
-    python scripts/13_sync_vertex_to_mlflow.py --models cnn2d_simple,mdsct --protocols lobo
+    python scripts/13_sync_vertex_to_mlflow.py --models cnn2d_simple,dta_mlp --protocols lobo
 
     # Dry run — show what would be synced
     python scripts/13_sync_vertex_to_mlflow.py --dry-run
@@ -57,7 +57,7 @@ MLFLOW_TRACKING_URI = "mlruns"
 MLFLOW_EXPERIMENT_NAME = "bearing_rul_fulllife"
 
 # Model × protocol matrix
-BENCHMARK_MODELS = ["cnn1d_baseline", "cnn2d_simple", "dta_mlp", "mdsct"]
+BENCHMARK_MODELS = ["cnn1d_baseline", "cnn2d_simple", "dta_mlp"]
 PROTOCOLS = ["lobo", "jin", "sun"]
 
 CV_STRATEGY_MAP = {

@@ -90,12 +90,6 @@ MODEL_SPECS: dict[str, ModelSpec] = {
         config="configs/benchmark_dta_mlp.yaml",
         extra_args=["--model", "dta_mlp"],
     ),
-    "mdsct": ModelSpec(
-        name="mdsct",
-        script="scripts/05_train_dl_models.py",
-        config="configs/benchmark_mdsct.yaml",
-        extra_args=["--model", "mdsct"],
-    ),
     "cnn2d_simple": ModelSpec(
         name="cnn2d_simple",
         script="scripts/05_train_dl_models.py",
