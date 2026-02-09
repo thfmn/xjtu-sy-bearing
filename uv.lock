@@ -5600,6 +5600,12 @@ dev = [
     { name = "pytest-cov" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-cov" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "db-dtypes", specifier = ">=1.4.4" },
@@ -5629,6 +5635,12 @@ requires-dist = [
     { name = "tf-keras", specifier = ">=2.20.1" },
 ]
 provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "pytest-cov", specifier = ">=4.1.0" },
+]
 
 [[package]]
 name = "zipp"
