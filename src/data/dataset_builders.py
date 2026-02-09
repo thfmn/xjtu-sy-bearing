@@ -24,6 +24,7 @@ from src.models.registry import get_model_info
 
 
 SPECTROGRAM_DIR = "outputs/spectrograms/stft"
+CWT_DIR = "outputs/spectrograms/cwt"
 
 
 def _load_npy(path_bytes: tf.Tensor) -> tf.Tensor:
@@ -200,6 +201,73 @@ def build_spectrogram_dataset(
     return ds
 
 
+def build_cwt_dataset(
+    metadata_df: pd.DataFrame,
+    cwt_dir: str | Path,
+    indices: np.ndarray,
+    batch_size: int = 32,
+    shuffle: bool = True,
+    shuffle_buffer_size: int = 5000,
+) -> tf.data.Dataset:
+    """Build a tf.data.Dataset of CWT scaleograms for given row indices.
+
+    Loads .npy files on-the-fly using tf.py_function, constructs file paths
+    from metadata columns (condition, bearing_id, filename), and pairs each
+    scaleogram with its RUL label.
+
+    Path formula: {cwt_dir}/condition={condition}/bearing_id={bearing_id}/{stem}.npy
+
+    Args:
+        metadata_df: DataFrame with columns: condition, bearing_id, filename, rul.
+        cwt_dir: Root directory of the .npy CWT scaleogram files.
+            E.g., "outputs/spectrograms/cwt".
+        indices: Array of row indices into metadata_df selecting the subset.
+        batch_size: Number of samples per batch.
+        shuffle: Whether to shuffle the dataset.
+        shuffle_buffer_size: Buffer size for tf.data.Dataset.shuffle().
+
+    Returns:
+        tf.data.Dataset yielding (scaleogram, rul) batches.
+        scaleogram shape: (batch_size, 64, 128, 2) float32
+        rul shape: (batch_size,) float32
+    """
+    cwt_dir = Path(cwt_dir)
+    subset = metadata_df.iloc[indices]
+
+    # Build file paths: {cwt_dir}/condition={cond}/bearing_id={id}/{stem}.npy
+    paths = [
+        str(
+            cwt_dir
+            / f"condition={row.condition}"
+            / f"bearing_id={row.bearing_id}"
+            / f"{Path(row.filename).stem}.npy"
+        )
+        for _, row in subset.iterrows()
+    ]
+    rul_values = subset["rul"].values.astype(np.float32)
+
+    # Create dataset from path strings and RUL labels
+    path_ds = tf.data.Dataset.from_tensor_slices(paths)
+    rul_ds = tf.data.Dataset.from_tensor_slices(rul_values)
+    ds = tf.data.Dataset.zip((path_ds, rul_ds))
+
+    # Map: load .npy scaleogram for each path
+    def _load_sample(path_tensor: tf.Tensor, rul: tf.Tensor):
+        scaleogram = tf.py_function(_load_npy, [path_tensor], tf.float32)
+        scaleogram.set_shape((64, 128, 2))
+        return scaleogram, rul
+
+    ds = ds.map(_load_sample, num_parallel_calls=tf.data.AUTOTUNE)
+
+    if shuffle:
+        ds = ds.shuffle(buffer_size=shuffle_buffer_size)
+
+    ds = ds.batch(batch_size)
+    ds = ds.prefetch(tf.data.AUTOTUNE)
+
+    return ds
+
+
 def build_dataset_for_model(
     model_name: str,
     metadata_df: pd.DataFrame,
@@ -208,12 +276,13 @@ def build_dataset_for_model(
     shuffle: bool = True,
     data_root: str | Path = "assets/Data/XJTU-SY_Bearing_Datasets",
     spectrogram_dir: str | Path = "outputs/spectrograms/stft",
+    cwt_dir: str | Path = "outputs/spectrograms/cwt",
     augment: bool = False,
 ) -> tf.data.Dataset:
     """Build the appropriate tf.data.Dataset for a model based on its registry input type.
 
     Looks up the model in the registry and dispatches to the correct dataset
-    builder (raw signal or spectrogram).
+    builder (raw signal, spectrogram, or CWT scaleogram).
 
     Args:
         model_name: Registered model name (e.g., "cnn1d_baseline", "cnn2d_simple").
@@ -222,7 +291,8 @@ def build_dataset_for_model(
         batch_size: Number of samples per batch.
         shuffle: Whether to shuffle the dataset.
         data_root: Root directory of the raw bearing CSV files.
-        spectrogram_dir: Root directory of the .npy spectrogram files.
+        spectrogram_dir: Root directory of the .npy STFT spectrogram files.
+        cwt_dir: Root directory of the .npy CWT scaleogram files.
         augment: Whether to apply data augmentation (training only).
 
     Returns:
@@ -251,8 +321,16 @@ def build_dataset_for_model(
             batch_size=batch_size,
             shuffle=shuffle,
         )
+    elif info.input_type == "cwt_scaleogram":
+        return build_cwt_dataset(
+            metadata_df=metadata_df,
+            cwt_dir=cwt_dir,
+            indices=indices,
+            batch_size=batch_size,
+            shuffle=shuffle,
+        )
     else:
         raise ValueError(
             f"Unsupported input_type '{info.input_type}' for model '{model_name}'. "
-            f"Expected 'raw_signal' or 'spectrogram'."
+            f"Expected 'raw_signal', 'spectrogram', or 'cwt_scaleogram'."
         )

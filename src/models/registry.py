@@ -12,7 +12,7 @@ class ModelInfo:
 
     name: str
     build_fn: Callable  # () -> keras.Model
-    input_type: Literal["raw_signal", "spectrogram"]
+    input_type: Literal["raw_signal", "spectrogram", "cwt_scaleogram", "feature_sequence"]
     default_input_shape: tuple[int, ...]
 
 
@@ -22,7 +22,7 @@ _REGISTRY: dict[str, ModelInfo] = {}
 def register_model(
     name: str,
     build_fn: Callable,
-    input_type: Literal["raw_signal", "spectrogram"],
+    input_type: Literal["raw_signal", "spectrogram", "cwt_scaleogram", "feature_sequence"],
     default_input_shape: tuple[int, ...],
 ) -> None:
     """Register a model architecture in the global registry."""
@@ -76,7 +76,14 @@ def _register_all() -> None:
         create_tcn_transformer_lstm,
         create_tcn_transformer_transformer,
     )
-    from src.models.cnn2d.model import create_cnn2d_lstm, create_cnn2d_simple
+    from src.models.cnn2d.model import (
+        create_cnn2d_lstm,
+        create_cnn2d_simple,
+        create_cnn2d_bottleneck,
+    )
+    from src.models.baselines.feature_lstm import create_default_feature_lstm
+    from src.models.dta_mlp import create_default_dta_mlp
+    from src.models.mdsct import create_default_mdsct
 
     register_model(
         name="cnn1d_baseline",
@@ -111,6 +118,34 @@ def _register_all() -> None:
         build_fn=create_cnn2d_simple,
         input_type="spectrogram",
         default_input_shape=(128, 128, 2),
+    )
+
+    register_model(
+        name="cnn2d_bottleneck",
+        build_fn=create_cnn2d_bottleneck,
+        input_type="spectrogram",
+        default_input_shape=(128, 128, 2),
+    )
+
+    register_model(
+        name="feature_lstm",
+        build_fn=create_default_feature_lstm,
+        input_type="feature_sequence",
+        default_input_shape=(10, 65),
+    )
+
+    register_model(
+        name="dta_mlp",
+        build_fn=create_default_dta_mlp,
+        input_type="cwt_scaleogram",
+        default_input_shape=(64, 128, 2),
+    )
+
+    register_model(
+        name="mdsct",
+        build_fn=create_default_mdsct,
+        input_type="raw_signal",
+        default_input_shape=(32768, 2),
     )
 
 

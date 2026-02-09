@@ -1,0 +1,67 @@
+# Two-Stage Pipeline: LightGBM with Temporal Feature Enrichment
+#
+# Gradient boosting on 65 handcrafted features + 80 temporal features
+# (lags, rolling stats, rate of change) for degradation trajectory awareness.
+#
+# Usage:
+#   python scripts/10_train_lgbm.py \
+#       --config configs/twostage_lgbm_temporal.yaml \
+#       --features-csv outputs/features/features_v3.csv
+
+# --- Model identification ---
+model_name: lgbm_temporal
+model_version: "v1"
+
+# --- LightGBM hyperparameters ---
+lgbm:
+  objective: regression
+  metric: rmse
+  num_leaves: 31
+  learning_rate: 0.05
+  n_estimators: 500
+  max_depth: -1
+  min_child_samples: 20
+  subsample: 0.8
+  colsample_bytree: 0.8
+  reg_alpha: 0.1
+  reg_lambda: 0.1
+  random_state: 42
+  n_jobs: -1
+  verbose: -1
+  early_stopping_rounds: 50
+
+# --- Temporal feature enrichment ---
+temporal:
+  base_features:
+    - h_kurtosis
+    - v_kurtosis
+    - h_rms
+    - v_rms
+    - h_peak
+    - v_peak
+    - cross_correlation
+    - h_bpfo_band_power
+    - v_bpfo_band_power
+    - h_bpfi_band_power
+  lags: [1, 5, 10]
+  rolling_windows: [5, 10]
+
+# --- Experiment tracking ---
+tracking:
+  experiment_name: bearing_rul_twostage
+  tracking_uri: mlruns
+
+# --- Onset detection (Stage 1) ---
+onset:
+  method: threshold
+  labels_path: configs/onset_labels.yaml
+  params:
+    threshold_sigma: 2.0
+    min_consecutive: 5
+
+# --- Two-stage training settings ---
+training:
+  filter_pre_onset: true
+  max_rul: 125
+
+seed: 9

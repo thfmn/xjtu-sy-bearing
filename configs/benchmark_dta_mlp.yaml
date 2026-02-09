@@ -1,0 +1,60 @@
+# Benchmark: DTA-MLP (Jin et al. 2025 reproduction)
+#
+# Dynamic Temporal Attention + Mixed MLP for bearing RUL prediction.
+# CWT scaleogram input (64×128×2) → CNN → Transformer (DTA) → CT-MLP → RUL
+#
+# Paper: "Enhanced bearing RUL prediction based on dynamic temporal attention
+#         and mixed MLP" (Jin et al., Autonomous Intelligent Systems, 2025)
+#
+# Hyperparameters from paper: Adam lr=0.0005, batch=64, dropout=0.1, 100 epochs
+#
+# Usage:
+#   python scripts/05_train_dl_models.py --model dta_mlp \
+#       --config configs/benchmark_dta_mlp.yaml --cv-strategy jin_fixed
+#   python scripts/05_train_dl_models.py --model dta_mlp \
+#       --config configs/benchmark_dta_mlp.yaml --cv-strategy leave_one_bearing_out
+
+# --- Standard training parameters (from paper) ---
+model_version: "v1"
+batch_size: 64
+epochs: 100
+seed: 9
+
+optimizer:
+  name: adam
+  learning_rate: 0.0005
+
+loss:
+  name: huber
+  delta: 0.08
+
+callbacks:
+  checkpoint_dir: outputs/models/checkpoints
+  save_best_only: true
+  monitor: val_loss
+  mode: min
+  lr_reduce_factor: 0.5
+  lr_reduce_patience: 5
+  lr_min: 0.000001
+  early_stop_patience: 10
+  restore_best_weights: true
+  mlflow_tracking: true
+  mlflow_tracking_uri: mlruns
+  mlflow_experiment_name: bearing_rul_benchmark
+
+# --- Model ---
+model:
+  name: dta_mlp
+  input_type: cwt_scaleogram
+
+# --- Full-life training settings ---
+training:
+  eval_mode: full_life
+  filter_pre_onset: false
+  max_rul: 1.0
+
+vertex:
+  enabled: false
+  experiment_name: bearing-rul-benchmark
+  project_id: xjtu-bearing-failure
+  location: asia-southeast1

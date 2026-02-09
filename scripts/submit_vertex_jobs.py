@@ -54,12 +54,36 @@ CONTAINER_URI = f"{REGION}-docker.pkg.dev/{PROJECT_ID}/training/bearing-rul:late
 # All paths must use staging bucket (same region as Vertex AI jobs)
 GCS_DATA_ROOT = f"/gcs/{STAGING_BUCKET_NAME}/xjtu_data"
 GCS_SPECTROGRAM_DIR = f"/gcs/{STAGING_BUCKET_NAME}/outputs/spectrograms/stft"
+GCS_CWT_DIR = f"/gcs/{STAGING_BUCKET_NAME}/outputs/spectrograms/cwt"
 GCS_FEATURES_CSV = f"/gcs/{STAGING_BUCKET_NAME}/outputs/features/features_v2.csv"
 GCS_OUTPUT_BASE = f"/gcs/{STAGING_BUCKET_NAME}/outputs/vertex_training"
+
+# CV strategy name → --cv-strategy value
+CV_STRATEGY_MAP = {
+    "lobo": "leave_one_bearing_out",
+    "jin": "jin_fixed",
+    "li": "li_fixed",
+}
+
+# Number of folds per CV strategy
+FOLDS_PER_STRATEGY = {
+    "lobo": 15,
+    "jin": 1,
+    "li": 1,
+}
+
+# Benchmark model definitions: maps model key → (config_path, extra_args)
+BENCHMARK_MODELS = {
+    "cnn1d_baseline": ("configs/fulllife_cnn1d.yaml", ["--model", "cnn1d_baseline"]),
+    "cnn2d_simple": ("configs/fulllife_cnn2d.yaml", ["--model", "cnn2d_simple"]),
+    "dta_mlp": ("configs/benchmark_dta_mlp.yaml", ["--model", "dta_mlp"]),
+    "mdsct": ("configs/benchmark_mdsct.yaml", ["--model", "mdsct"]),
+}
 
 # Hourly costs (approximate, asia-southeast1)
 HOURLY_COSTS = {
     "gpu-t4": 0.54,  # n1-standard-4 + NVIDIA T4
+    "gpu-t4-highmem": 0.64,  # n1-standard-8 + NVIDIA T4 (30 GB RAM)
     "cpu-only": 0.19,  # n1-standard-4
 }
 
@@ -73,7 +97,7 @@ TRAINING_TIME_ESTIMATES = {
 }
 
 # Default training time for models not in the lookup table
-DEFAULT_TRAINING_TIME = {"gpu-t4": 1.0, "cpu-only": 4.0}
+DEFAULT_TRAINING_TIME = {"gpu-t4": 1.0, "gpu-t4-highmem": 1.0, "cpu-only": 4.0}
 
 
 # =============================================================================
@@ -105,6 +129,14 @@ MACHINE_CONFIGS: dict[str, MachineConfig] = {
         accelerator_count=1,
         container_uri=CONTAINER_URI,
         hourly_cost=HOURLY_COSTS["gpu-t4"],
+    ),
+    "gpu-t4-highmem": MachineConfig(
+        name="gpu-t4-highmem",
+        machine_type="n1-standard-8",
+        accelerator_type="NVIDIA_TESLA_T4",
+        accelerator_count=1,
+        container_uri=CONTAINER_URI,
+        hourly_cost=HOURLY_COSTS["gpu-t4-highmem"],
     ),
     "cpu-only": MachineConfig(
         name="cpu-only",
@@ -244,7 +276,10 @@ def build_job_config(
     fold_id: int,
     machine_config: MachineConfig,
     config_path: str | None = None,
-    tracking_mode: str = "vertex",
+    tracking_mode: str = "none",
+    two_stage: bool = False,
+    cv_strategy: str | None = None,
+    output_dir_override: str | None = None,
 ) -> dict:
     """Build CustomJob configuration for a single fold.
 
@@ -254,12 +289,15 @@ def build_job_config(
         machine_config: Machine configuration.
         config_path: Optional path to training config YAML.
         tracking_mode: Experiment tracking mode.
+        two_stage: Enable two-stage pipeline (onset detection + RUL).
+        cv_strategy: CV strategy value (e.g. "leave_one_bearing_out", "jin_fixed").
+        output_dir_override: Custom GCS output directory (overrides default).
 
     Returns:
         Dictionary with job_name and worker_pool_specs.
     """
     job_name = f"{model_name}-fold{fold_id}"
-    output_dir = f"{GCS_OUTPUT_BASE}/{model_name}"
+    output_dir = output_dir_override or f"{GCS_OUTPUT_BASE}/{model_name}"
 
     # Build training command args
     args = [
@@ -267,6 +305,7 @@ def build_job_config(
         "--folds", str(fold_id),
         "--data-root", GCS_DATA_ROOT,
         "--spectrogram-dir", GCS_SPECTROGRAM_DIR,
+        "--cwt-dir", GCS_CWT_DIR,
         "--features-csv", GCS_FEATURES_CSV,
         "--output-dir", output_dir,
         "--tracking", tracking_mode,
@@ -274,6 +313,12 @@ def build_job_config(
 
     if config_path:
         args.extend(["--config", config_path])
+
+    if cv_strategy:
+        args.extend(["--cv-strategy", cv_strategy])
+
+    if two_stage:
+        args.append("--two-stage")
 
     # Build worker pool spec
     worker_pool_spec = {
@@ -553,8 +598,8 @@ Examples:
     parser.add_argument(
         "--model",
         type=str,
-        required=True,
-        help="Model name (e.g., cnn1d_baseline, tcn_transformer_lstm).",
+        default=None,
+        help="Model name (e.g., cnn1d_baseline, dta_mlp). Required unless --benchmark.",
     )
     parser.add_argument(
         "--folds",
@@ -613,6 +658,38 @@ Examples:
         default=None,
         help="Custom training config YAML path.",
     )
+    parser.add_argument(
+        "--two-stage",
+        action="store_true",
+        help="Enable two-stage pipeline (onset detection + RUL prediction).",
+    )
+    parser.add_argument(
+        "--cv-strategy",
+        type=str,
+        choices=list(CV_STRATEGY_MAP.values()),
+        default=None,
+        help="CV strategy: 'leave_one_bearing_out', 'jin_fixed', or 'li_fixed'.",
+    )
+    parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="Benchmark mode: submit jobs for all remaining model × protocol pairs.",
+    )
+    parser.add_argument(
+        "--benchmark-models",
+        type=str,
+        default="all",
+        help=(
+            "Comma-separated model names for benchmark mode, or 'all'. "
+            f"Available: {', '.join(sorted(BENCHMARK_MODELS))}"
+        ),
+    )
+    parser.add_argument(
+        "--benchmark-protocols",
+        type=str,
+        default="all",
+        help="Comma-separated protocol names for benchmark mode. Available: lobo, jin, li",
+    )
 
     return parser.parse_args()
 
@@ -627,6 +704,41 @@ def validate_model(model_name: str) -> None:
         sys.exit(1)
 
 
+def build_benchmark_jobs(
+    models: list[str],
+    protocols: list[str],
+    machine_config: MachineConfig,
+    tracking_mode: str = "none",
+) -> list[tuple[str, str, int, dict]]:
+    """Build all job configs for benchmark mode.
+
+    Returns list of (model, protocol, fold_id, job_config) tuples.
+    """
+    all_jobs = []
+    for model in models:
+        config_path, _extra_args = BENCHMARK_MODELS[model]
+        for protocol in protocols:
+            cv_strategy = CV_STRATEGY_MAP[protocol]
+            n_folds = FOLDS_PER_STRATEGY[protocol]
+            output_dir = f"{GCS_OUTPUT_BASE}/benchmark/{model}_{protocol}"
+
+            for fold_id in range(n_folds):
+                job_config = build_job_config(
+                    model_name=model,
+                    fold_id=fold_id,
+                    machine_config=machine_config,
+                    config_path=config_path,
+                    tracking_mode=tracking_mode,
+                    cv_strategy=cv_strategy,
+                    output_dir_override=output_dir,
+                )
+                # Override job name to include protocol
+                job_config["job_name"] = f"bench-{model}-{protocol}-fold{fold_id}"
+                all_jobs.append((model, protocol, fold_id, job_config))
+
+    return all_jobs
+
+
 def main() -> None:
     args = parse_args()
 
@@ -634,7 +746,101 @@ def main() -> None:
     print("Vertex AI Training Job Submission")
     print("=" * 60)
 
-    # Validate model
+    machine_config = MACHINE_CONFIGS[args.machine_type]
+
+    # ---- Benchmark mode ----
+    if args.benchmark:
+        # Parse model list
+        if args.benchmark_models == "all":
+            models = sorted(BENCHMARK_MODELS.keys())
+        else:
+            models = [m.strip() for m in args.benchmark_models.split(",")]
+            for m in models:
+                if m not in BENCHMARK_MODELS:
+                    print(f"ERROR: Unknown model '{m}'. Available: {sorted(BENCHMARK_MODELS)}")
+                    sys.exit(1)
+
+        # Parse protocol list
+        if args.benchmark_protocols == "all":
+            protocols = list(CV_STRATEGY_MAP.keys())
+        else:
+            protocols = [p.strip() for p in args.benchmark_protocols.split(",")]
+            for p in protocols:
+                if p not in CV_STRATEGY_MAP:
+                    print(f"ERROR: Unknown protocol '{p}'. Available: {sorted(CV_STRATEGY_MAP)}")
+                    sys.exit(1)
+
+        # Build all job configs
+        all_jobs = build_benchmark_jobs(models, protocols, machine_config, args.tracking)
+        total_jobs = len(all_jobs)
+
+        # Estimate cost
+        total_hours = sum(
+            TRAINING_TIME_ESTIMATES.get(model, DEFAULT_TRAINING_TIME).get(
+                args.machine_type, DEFAULT_TRAINING_TIME[args.machine_type]
+            )
+            for model, _, _, _ in all_jobs
+        )
+        total_cost = total_hours * machine_config.hourly_cost
+
+        print(f"\n  Benchmark Mode")
+        print(f"  Models:    {', '.join(models)}")
+        print(f"  Protocols: {', '.join(protocols)}")
+        print(f"  Machine:   {args.machine_type} ({machine_config.machine_type})")
+        if machine_config.has_gpu:
+            print(f"  GPU:       {machine_config.accelerator_type}")
+        print(f"  Total jobs: {total_jobs}")
+        print(f"  Est. cost:  ${total_cost:.2f} ({total_hours:.1f} GPU-hours)")
+        print()
+
+        # Print job plan
+        for model, protocol, fold_id, job_config in all_jobs:
+            folds_total = FOLDS_PER_STRATEGY[protocol]
+            print(f"  {job_config['job_name']:45s}  ({model} × {protocol}, fold {fold_id}/{folds_total})")
+
+        if args.dry_run:
+            print(f"\n{'=' * 60}")
+            print("Dry run complete. No jobs submitted.")
+            print("=" * 60)
+            return
+
+        # Confirmation
+        if not args.yes:
+            response = input(f"\n  Submit {total_jobs} jobs (est. ${total_cost:.2f})? [y/N]: ").strip().lower()
+            if response != "y":
+                print("  Aborted.")
+                return
+
+        # Submit all jobs in parallel
+        print(f"\n{'=' * 60}")
+        print("Submitting Benchmark Jobs")
+        print("=" * 60)
+
+        job_configs = [jc for _, _, _, jc in all_jobs]
+        jobs = submit_jobs(
+            job_configs=job_configs,
+            parallel=not args.sequential,
+            wait=args.wait,
+        )
+
+        print(f"\n  Submitted {len(jobs)} benchmark jobs.")
+
+        if args.wait:
+            status = check_job_status(jobs)
+            print(f"\n  Final Status:")
+            print(f"    Succeeded: {status['SUCCEEDED']}")
+            print(f"    Failed:    {status['FAILED']}")
+
+        print(f"\n{'=' * 60}")
+        print(f"  Output base: gs://{STAGING_BUCKET_NAME}/outputs/vertex_training/benchmark/")
+        print(f"  Sync results: python scripts/13_sync_vertex_to_mlflow.py")
+        print("=" * 60)
+        return
+
+    # ---- Single-model mode (original behavior) ----
+    if not args.model:
+        print("ERROR: --model is required (or use --benchmark for batch mode).")
+        sys.exit(1)
     validate_model(args.model)
     print(f"  Model:        {args.model}")
 
@@ -646,14 +852,13 @@ def main() -> None:
         sys.exit(1)
     print(f"  Folds:        {len(fold_ids)} ({fold_ids[0]}-{fold_ids[-1] if len(fold_ids) > 1 else fold_ids[0]})")
 
-    # Machine config
-    machine_config = MACHINE_CONFIGS[args.machine_type]
     print(f"  Machine:      {args.machine_type}")
     print(f"    Instance:   {machine_config.machine_type}")
     if machine_config.has_gpu:
         print(f"    GPU:        {machine_config.accelerator_type}")
     print(f"  Container:    {machine_config.container_uri}")
     print(f"  Tracking:     {args.tracking}")
+    print(f"  Two-stage:    {args.two_stage}")
     print(f"  Parallel:     {not args.sequential}")
 
     # Cost estimation
@@ -669,6 +874,8 @@ def main() -> None:
             machine_config=machine_config,
             config_path=args.config,
             tracking_mode=args.tracking,
+            two_stage=args.two_stage,
+            cv_strategy=args.cv_strategy,
         )
         job_configs.append(config)
 

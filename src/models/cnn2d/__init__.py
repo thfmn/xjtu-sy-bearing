@@ -82,6 +82,7 @@ from .model import (
     create_cnn2d_transformer,
     create_cnn2d_with_uncertainty,
     create_cnn2d_simple,
+    create_cnn2d_bottleneck,
     get_model_summary,
     print_model_summary,
 )
@@ -120,6 +121,7 @@ __all__ = [
     "create_cnn2d_transformer",
     "create_cnn2d_with_uncertainty",
     "create_cnn2d_simple",
+    "create_cnn2d_bottleneck",
     "get_model_summary",
     "print_model_summary",
 ]

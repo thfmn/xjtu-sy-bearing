@@ -115,10 +115,22 @@ def create_app() -> gr.Blocks:
                 )
             with gr.Tab("Model Results"):
                 gr.Markdown("### Model Comparison")
-                gr.Markdown(
-                    "> *Note: DL models evaluated on Fold 0 only (Bearing1_1, 123 samples). "
-                    "Full 15-fold CV pending. LightGBM uses full 15-fold leave-one-bearing-out CV.*"
-                )
+                # Build a dynamic note based on which models have full CV
+                _fold0_models = [
+                    row["Model"] for _, row in DATA["model_comparison"].iterrows()
+                    if row.get("Type") == "DL - Fold 0 only"
+                ]
+                if _fold0_models:
+                    _fold0_list = ", ".join(_fold0_models)
+                    gr.Markdown(
+                        f"> *Note: {_fold0_list} evaluated on Fold 0 only "
+                        "(Bearing1_1, 123 samples). LightGBM and models marked "
+                        "'CV' use full 15-fold leave-one-bearing-out cross-validation.*"
+                    )
+                else:
+                    gr.Markdown(
+                        "> *All models evaluated with 15-fold leave-one-bearing-out CV.*"
+                    )
                 comparison_df = DATA["model_comparison"][
                     ["Model", "Type", "RMSE", "MAE", "PHM08 (norm)"]
                 ].round(2)

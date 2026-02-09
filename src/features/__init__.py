@@ -1,6 +1,6 @@
 """Feature extraction modules."""
 
-from src.features import cwt, envelope, frequency_domain, fusion, stft, time_domain
+from src.features import cwt, envelope, frequency_domain, fusion, stft, temporal, time_domain
 from src.features.fusion import (
     ExtractionMode,
     FeatureExtractor,
@@ -75,6 +75,13 @@ from src.features.cwt import (
     get_scale_frequencies,
     estimate_memory_usage as estimate_cwt_memory_usage,
 )
+from src.features.temporal import (
+    TEMPORAL_BASE_FEATURES,
+    DEFAULT_LAGS,
+    DEFAULT_ROLLING_WINDOWS,
+    enrich_temporal_features,
+    get_temporal_feature_names,
+)
 
 __all__ = [
     # Submodules
@@ -84,6 +91,13 @@ __all__ = [
     "stft",
     "envelope",
     "cwt",
+    "temporal",
+    # Temporal enrichment exports
+    "TEMPORAL_BASE_FEATURES",
+    "DEFAULT_LAGS",
+    "DEFAULT_ROLLING_WINDOWS",
+    "enrich_temporal_features",
+    "get_temporal_feature_names",
     # Fusion exports (unified interface)
     "ExtractionMode",
     "FeatureExtractor",

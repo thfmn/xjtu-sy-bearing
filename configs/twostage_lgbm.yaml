@@ -1,0 +1,49 @@
+# Two-Stage Pipeline: LightGBM on extracted features
+#
+# Gradient boosting on 65 handcrafted time/frequency features with two-stage
+# onset filtering. Fast to train, strong interpretable baseline.
+#
+# Usage:
+#   python scripts/10_train_lgbm.py --config configs/twostage_lgbm.yaml
+
+# --- Model identification ---
+model_name: lgbm_baseline
+model_version: "v1"
+
+# --- LightGBM hyperparameters ---
+lgbm:
+  objective: regression
+  metric: rmse
+  num_leaves: 31
+  learning_rate: 0.05
+  n_estimators: 500
+  max_depth: -1
+  min_child_samples: 20
+  subsample: 0.8
+  colsample_bytree: 0.8
+  reg_alpha: 0.1
+  reg_lambda: 0.1
+  random_state: 9
+  n_jobs: -1
+  verbose: -1
+  early_stopping_rounds: 50
+
+# --- Experiment tracking ---
+tracking:
+  experiment_name: bearing_rul_twostage
+  tracking_uri: mlruns
+
+# --- Onset detection (Stage 1) ---
+onset:
+  method: threshold
+  labels_path: configs/onset_labels.yaml
+  params:
+    threshold_sigma: 2.0
+    min_consecutive: 5
+
+# --- Two-stage training settings ---
+training:
+  filter_pre_onset: true
+  max_rul: 125
+
+seed: 9

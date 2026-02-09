@@ -47,13 +47,14 @@ ONSET_LABELS_YAML = BASE_DIR / "configs" / "onset_labels.yaml"
 # ---------------------------------------------------------------------------
 MODEL_DISPLAY_NAMES: dict[str, str] = {
     "LightGBM": "LightGBM (CV)",
-    "cnn1d_baseline": "1D CNN (Fold 0)",
-    "tcn_transformer_lstm": "TCN-LSTM (Fold 0)",
-    "tcn_transformer_transformer": "TCN-Transformer (Fold 0)",
-    "pattern2_simple": "CNN2D Simple (Fold 0)",
-    "cnn2d_lstm": "2D CNN LSTM (Fold 0)",
-    "cnn2d_simple": "2D CNN Simple (Fold 0)",
+    "cnn1d_baseline": "1D CNN",
+    "tcn_transformer_lstm": "TCN-LSTM",
+    "tcn_transformer_transformer": "TCN-Transformer",
+    "pattern2_simple": "CNN2D Simple",
+    "cnn2d_lstm": "CNN2D-LSTM",
+    "cnn2d_simple": "CNN2D Simple",
 }
+VERTEX_TRAINING_DIR = OUTPUTS / "vertex_training"
 
 
 def load_data() -> dict:
@@ -91,8 +92,11 @@ def load_data() -> dict:
     data["per_bearing"] = pd.read_csv(PER_BEARING_CSV)
 
     # 2b. Dynamically merge DL fold results into model_comparison
+    #     Scan both outputs/evaluation/ and outputs/vertex_training/
     eval_dir = OUTPUTS / "evaluation"
-    dl_fold_rows = []
+    dl_fold_dfs: dict[str, pd.DataFrame] = {}  # model_name -> combined fold_df
+
+    # Scan evaluation dir for *_fold_results.csv
     for csv_path in sorted(eval_dir.glob("*_fold_results.csv")):
         if csv_path.name.startswith("all_models"):
             continue
@@ -100,8 +104,28 @@ def load_data() -> dict:
         if fold_df.empty:
             continue
         model_name = fold_df["model_name"].iloc[0]
-        display = MODEL_DISPLAY_NAMES.get(model_name, model_name)
+        dl_fold_dfs[model_name] = fold_df
+
+    # Scan vertex_training dir for dl_model_results.csv (per model subdir)
+    if VERTEX_TRAINING_DIR.exists():
+        for csv_path in sorted(VERTEX_TRAINING_DIR.glob("*/dl_model_results.csv")):
+            fold_df = pd.read_csv(csv_path)
+            if fold_df.empty:
+                continue
+            model_name = fold_df["model_name"].iloc[0]
+            if model_name in dl_fold_dfs:
+                # Vertex results have more folds — prefer them
+                if len(fold_df) > len(dl_fold_dfs[model_name]):
+                    dl_fold_dfs[model_name] = fold_df
+            else:
+                dl_fold_dfs[model_name] = fold_df
+
+    dl_fold_rows = []
+    for model_name, fold_df in dl_fold_dfs.items():
+        base_display = MODEL_DISPLAY_NAMES.get(model_name, model_name)
         n_folds = len(fold_df)
+        fold_label = "Fold 0" if n_folds == 1 else f"{n_folds}-fold CV"
+        display = f"{base_display} ({fold_label})"
         dl_fold_rows.append({
             "Model": display,
             "Type": f"DL - Fold 0 only" if n_folds == 1 else f"DL - {n_folds}-fold CV",
@@ -136,9 +160,15 @@ def load_data() -> dict:
         print(f"Warning: LightGBM retraining failed: {e}")
 
     # 4. Load DL model predictions (if available)
+    #    Scan both outputs/evaluation/predictions/ and outputs/vertex_training/*/predictions/
     data["dl_predictions"] = {}  # {model_name: {bearing_id: {"y_true": [...], "y_pred": [...]}}}
+    prediction_dirs = []
     if PREDICTIONS_DIR.exists():
-        for csv_path in sorted(PREDICTIONS_DIR.glob("*_predictions.csv")):
+        prediction_dirs.append(PREDICTIONS_DIR)
+    if VERTEX_TRAINING_DIR.exists():
+        prediction_dirs.extend(sorted(VERTEX_TRAINING_DIR.glob("*/predictions")))
+    for pred_dir in prediction_dirs:
+        for csv_path in sorted(pred_dir.glob("*_predictions.csv")):
             # filename pattern: {model_name}_fold{N}_predictions.csv
             parts = csv_path.stem.rsplit("_fold", 1)
             if len(parts) == 2:
@@ -184,10 +214,16 @@ def load_data() -> dict:
         data["dl_summary"] = None
 
     # 7. Load DL training history (if available)
+    #    Scan both outputs/evaluation/history/ and outputs/vertex_training/*/*/history/
     data["dl_history"] = {}  # {model_name: [fold0_df, fold1_df, ...]}
+    history_dirs = []
     history_dir = OUTPUTS / "evaluation" / "history"
     if history_dir.exists():
-        for csv_path in sorted(history_dir.glob("*_history.csv")):
+        history_dirs.append(history_dir)
+    if VERTEX_TRAINING_DIR.exists():
+        history_dirs.extend(sorted(VERTEX_TRAINING_DIR.glob("*/*/history")))
+    for h_dir in history_dirs:
+        for csv_path in sorted(h_dir.glob("*_history.csv")):
             parts = csv_path.stem.rsplit("_fold", 1)
             if len(parts) == 2:
                 model_name = parts[0]

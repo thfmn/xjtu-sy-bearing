@@ -415,6 +415,134 @@ def time_series_split(
     )
 
 
+def fixed_split_jin(
+    df: pd.DataFrame,
+    condition_col: str = "condition",
+    bearing_col: str = "bearing_id",
+) -> CVSplit:
+    """Generate a fixed train/test split reproducing the Jin et al. 2025 protocol.
+
+    Train on Bearing1_4 + Bearing3_2, test on the remaining 13 bearings.
+    This is the evaluation protocol used in "Enhanced bearing RUL prediction
+    based on dynamic temporal attention and mixed MLP" (Jin et al., 2025).
+
+    Note: The paper does not explicitly state its split. This reconstruction is
+    inferred from results tables that exclude Bearing1_4 and Bearing3_2.
+
+    Args:
+        df: DataFrame with bearing data (must have condition and bearing_id columns)
+        condition_col: Name of the condition column
+        bearing_col: Name of the bearing ID column
+
+    Returns:
+        CVSplit with 1 fold: 2 training bearings, 13 test bearings
+    """
+    train_bearing_ids = {"Bearing1_4", "Bearing3_2"}
+    all_bearings = set(df[bearing_col].unique())
+
+    missing = train_bearing_ids - all_bearings
+    if missing:
+        raise ValueError(f"Training bearings not found in data: {missing}")
+
+    train_mask = df[bearing_col].isin(train_bearing_ids)
+    val_mask = ~train_mask
+
+    train_indices = df.index[train_mask].values
+    val_indices = df.index[val_mask].values
+    val_bearings = sorted(df.loc[val_mask, bearing_col].unique().tolist())
+
+    fold = CVFold(
+        fold_id=0,
+        train_indices=train_indices,
+        val_indices=val_indices,
+        train_bearings=sorted(train_bearing_ids),
+        val_bearings=val_bearings,
+        description="Jin et al. 2025 fixed split: train={Bearing1_4, Bearing3_2}, test=13 remaining",
+    )
+
+    return CVSplit(
+        folds=[fold],
+        strategy="jin_fixed",
+        n_samples=len(df),
+        description=(
+            "Jin et al. 2025 fixed split: train on Bearing1_4 + Bearing3_2, "
+            "test on 13 remaining bearings across all 3 conditions"
+        ),
+    )
+
+
+def fixed_split_li(
+    df: pd.DataFrame,
+    condition_col: str = "condition",
+    bearing_col: str = "bearing_id",
+) -> CVSplit:
+    """Generate a fixed train/test split reproducing the Li et al. 2024 protocol.
+
+    Uses only Conditions 1 and 2 (10 bearings total). Trains on Bearing1_1,
+    Bearing1_2, Bearing2_1, Bearing2_2. Tests on Bearing1_3, Bearing1_4,
+    Bearing1_5, Bearing2_3, Bearing2_4, Bearing2_5.
+
+    Note: Li et al. do not describe their train/test split. This follows the
+    standard XJTU-SY convention of 2-train/3-test per condition. This
+    assumption is documented in the paper.
+
+    Condition 3 (40Hz/10kN) bearings are excluded entirely: their indices do
+    not appear in either train or test sets.
+
+    Args:
+        df: DataFrame with bearing data (must have condition and bearing_id columns)
+        condition_col: Name of the condition column
+        bearing_col: Name of the bearing ID column
+
+    Returns:
+        CVSplit with 1 fold: 4 training bearings, 6 test bearings (Conditions 1-2 only)
+    """
+    train_bearing_ids = {"Bearing1_1", "Bearing1_2", "Bearing2_1", "Bearing2_2"}
+    test_bearing_ids = {
+        "Bearing1_3", "Bearing1_4", "Bearing1_5",
+        "Bearing2_3", "Bearing2_4", "Bearing2_5",
+    }
+
+    # Filter to Conditions 1-2 only
+    cond3_bearings = {f"Bearing3_{i}" for i in range(1, 6)}
+    relevant_mask = ~df[bearing_col].isin(cond3_bearings)
+    relevant_df = df[relevant_mask]
+
+    all_bearings = set(relevant_df[bearing_col].unique())
+    expected = train_bearing_ids | test_bearing_ids
+    missing = expected - all_bearings
+    if missing:
+        raise ValueError(f"Expected bearings not found in data: {missing}")
+
+    train_mask = relevant_df[bearing_col].isin(train_bearing_ids)
+    val_mask = relevant_df[bearing_col].isin(test_bearing_ids)
+
+    train_indices = relevant_df.index[train_mask].values
+    val_indices = relevant_df.index[val_mask].values
+
+    fold = CVFold(
+        fold_id=0,
+        train_indices=train_indices,
+        val_indices=val_indices,
+        train_bearings=sorted(train_bearing_ids),
+        val_bearings=sorted(test_bearing_ids),
+        description=(
+            "Li et al. 2024 fixed split: train={B1_1, B1_2, B2_1, B2_2}, "
+            "test={B1_3-B1_5, B2_3-B2_5}, Conditions 1-2 only"
+        ),
+    )
+
+    return CVSplit(
+        folds=[fold],
+        strategy="li_fixed",
+        n_samples=len(relevant_df),
+        description=(
+            "Li et al. 2024 fixed split: 2-train/3-test per condition, "
+            "Conditions 1-2 only (10 bearings, Condition 3 excluded)"
+        ),
+    )
+
+
 def get_bearing_groups(
     df: pd.DataFrame,
     condition_col: str = "condition",
@@ -483,6 +611,8 @@ def generate_cv_folds(
         "leave_one_condition_out": leave_one_condition_out,
         "stratified": stratified_split,
         "time_series": time_series_split,
+        "jin_fixed": fixed_split_jin,
+        "li_fixed": fixed_split_li,
     }
 
     if strategy not in strategies:

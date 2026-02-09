@@ -59,6 +59,7 @@ class CNN2DConfig:
     transformer_config: TransformerAggregatorConfig = field(
         default_factory=TransformerAggregatorConfig
     )
+    bottleneck_dim: Optional[int] = None  # Dense projection after fusion (e.g. 128)
     rul_hidden_dim: int = 64
     rul_dropout_rate: float = 0.1
     output_uncertainty: bool = False
@@ -201,10 +202,11 @@ class RULHead(keras.layers.Layer):
                 name=f"{self.name}_dropout"
             )
 
-        # Mean output (non-negative via ReLU)
+        # Linear output — standard for regression. Non-negative activations
+        # (ReLU, softplus) cause gradient death when pre-activation goes negative.
+        # Huber loss handles any output range; clip to [0, ∞) at inference if needed.
         self.dense_mean = layers.Dense(
             1,
-            activation="relu",
             name=f"{self.name}_mean"
         )
 
@@ -300,6 +302,18 @@ def build_cnn2d_model(
         name="late_fusion"
     )
     fused = fusion((h_embedding, v_embedding))
+
+    # Optional bottleneck projection (dimensionality reduction after fusion)
+    if config.bottleneck_dim is not None:
+        fused = layers.Dense(
+            config.bottleneck_dim,
+            activation="gelu",
+            name="bottleneck_proj"
+        )(fused)
+        fused = layers.Dropout(
+            config.rul_dropout_rate,
+            name="bottleneck_dropout"
+        )(fused)
 
     # For temporal aggregation, we need a sequence dimension
     # In single-spectrogram mode, expand dims to (batch, 1, features)
@@ -515,10 +529,12 @@ def create_cnn2d_simple(
             filters=filters,
             kernel_sizes=[3] * num_conv_blocks,
             pool_sizes=[2] * num_conv_blocks,
+            dropout_rate=0.25,
         ),
         share_backbone_weights=True,
         fusion_mode="concat",
         aggregator_type="none",  # No temporal aggregation
+        rul_dropout_rate=0.3,
     )
 
     return build_cnn2d_model(config, name="cnn2d_simple")
@@ -526,6 +542,49 @@ def create_cnn2d_simple(
 
 # Backwards compatibility alias
 create_simple_pattern2 = create_cnn2d_simple
+
+
+def create_cnn2d_bottleneck(
+    spectrogram_shape: tuple[int, int] = (128, 128),
+    num_conv_blocks: int = 4,
+    base_filters: int = 32,
+    bottleneck_dim: int = 128,
+) -> keras.Model:
+    """Create 2D CNN model with bottleneck projection (no temporal aggregation).
+
+    Same as cnn2d_simple but adds a Dense projection layer after fusion
+    to compress the 512-dim fused features down to bottleneck_dim. This
+    mimics the regularization effect of the LSTM bottleneck in cnn2d_lstm
+    without any temporal modeling overhead.
+
+    Args:
+        spectrogram_shape: Input spectrogram (height, width).
+        num_conv_blocks: Number of convolutional blocks.
+        base_filters: Base number of filters (doubles each block).
+        bottleneck_dim: Dimensionality of bottleneck projection.
+
+    Returns:
+        Configured Keras model.
+    """
+    filters = [base_filters * (2 ** i) for i in range(num_conv_blocks)]
+
+    config = CNN2DConfig(
+        spectrogram_height=spectrogram_shape[0],
+        spectrogram_width=spectrogram_shape[1],
+        backbone_config=CNN2DBackboneConfig(
+            filters=filters,
+            kernel_sizes=[3] * num_conv_blocks,
+            pool_sizes=[2] * num_conv_blocks,
+            dropout_rate=0.25,
+        ),
+        share_backbone_weights=True,
+        fusion_mode="concat",
+        aggregator_type="none",
+        bottleneck_dim=bottleneck_dim,
+        rul_dropout_rate=0.3,
+    )
+
+    return build_cnn2d_model(config, name="cnn2d_bottleneck")
 
 
 def get_model_summary(model: keras.Model) -> dict:

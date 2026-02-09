@@ -1,12 +1,13 @@
-# Two-Stage Pipeline Configuration for Bearing RUL Prediction
+# Two-Stage Pipeline: cnn2d_bottleneck
 #
-# Stage 1: Onset detection (binary classification: healthy vs degraded)
-# Stage 2: RUL prediction (regression on post-onset samples only)
+# Same as cnn2d_simple but adds a Dense(128) bottleneck projection after
+# fusion to compress 512-dim features, mimicking the regularization effect
+# of the LSTM bottleneck in cnn2d_lstm without temporal modeling overhead.
 #
 # Usage:
-#   python scripts/05_train_dl_models.py --model cnn1d_baseline --config configs/twostage_pipeline.yaml --two-stage
+#   python scripts/05_train_dl_models.py --model cnn2d_bottleneck --config configs/twostage_cnn2d_bottleneck.yaml --two-stage
 
-# --- Standard training parameters (inherited by RUL model) ---
+# --- Standard training parameters ---
 model_version: "v1"
 batch_size: 32
 epochs: 100
@@ -27,9 +28,9 @@ callbacks:
   monitor: val_loss
   mode: min
   lr_reduce_factor: 0.5
-  lr_reduce_patience: 10
+  lr_reduce_patience: 5
   lr_min: 0.000001
-  early_stop_patience: 20
+  early_stop_patience: 7
   restore_best_weights: true
   mlflow_tracking: true
   mlflow_tracking_uri: mlruns
@@ -37,33 +38,23 @@ callbacks:
 
 # --- RUL model (Stage 2) ---
 model:
-  name: cnn2d_simple
+  name: cnn2d_bottleneck
   input_type: spectrogram
 
 # --- Onset detection (Stage 1) ---
 onset:
-  # Detection method: threshold | cusum | ewma | classifier
   method: threshold
-
-  # Onset labels file (manual reference labels)
   labels_path: configs/onset_labels.yaml
-
-  # Method-specific parameters
   params:
-    # ThresholdOnsetDetector
     threshold_sigma: 2.0
     min_consecutive: 5
-    # CUSUMOnsetDetector (used when method=cusum)
     drift: 0.5
     threshold: 5.0
-    # EWMAOnsetDetector (used when method=ewma)
     span: 10
 
 # --- Two-stage training settings ---
 training:
-  # When true, RUL model trains only on post-onset samples
   filter_pre_onset: true
-  # Maximum RUL value (pre-onset samples get this constant value)
   max_rul: 125
 
 vertex:

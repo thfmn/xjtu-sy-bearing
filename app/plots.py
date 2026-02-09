@@ -184,23 +184,24 @@ def plot_feature_importance(top_n: int = 20) -> go.Figure:
 
 
 def plot_model_comparison_bars() -> go.Figure:
-    """Grouped bar chart comparing RMSE and MAE across all models."""
+    """Horizontal bar chart comparing RMSE and MAE across all models."""
     df = DATA["model_comparison"].copy()
-    df = df.sort_values("RMSE", ascending=True)
+    df = df.sort_values("MAE", ascending=True)
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        name="RMSE", x=df["Model"], y=df["RMSE"],
-        marker_color="#1f77b4",
+        name="RMSE", y=df["Model"], x=df["RMSE"],
+        marker_color="#1f77b4", orientation="h",
     ))
     fig.add_trace(go.Bar(
-        name="MAE", x=df["Model"], y=df["MAE"],
-        marker_color="#ff7f0e",
+        name="MAE", y=df["Model"], x=df["MAE"],
+        marker_color="#ff7f0e", orientation="h",
     ))
     fig.update_layout(
         title="Model Comparison — RMSE and MAE (lower is better)",
-        barmode="group", yaxis_title="Error",
-        height=450,
+        barmode="group", xaxis_title="Error",
+        yaxis=dict(autorange="reversed"),
+        height=max(400, len(df) * 60),
     )
     return fig
 

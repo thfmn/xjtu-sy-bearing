@@ -1,0 +1,43 @@
+# Full-Life Pipeline: LightGBM on extracted features (normalized RUL)
+#
+# Same LightGBM hyperparameters as twostage_lgbm.yaml, but evaluates on ALL
+# samples with RUL normalized to [0, 1] per bearing (first file = 1.0, last = 0.0).
+# This produces metrics directly comparable to published papers (e.g., Jin et al. 2025).
+#
+# Usage:
+#   python scripts/10_train_lgbm.py --config configs/twostage_lgbm_fulllife.yaml
+
+# --- Model identification ---
+model_name: lgbm_fulllife
+model_version: "v1"
+
+# --- LightGBM hyperparameters ---
+lgbm:
+  objective: regression
+  metric: rmse
+  num_leaves: 31
+  learning_rate: 0.05
+  n_estimators: 500
+  max_depth: -1
+  min_child_samples: 20
+  subsample: 0.8
+  colsample_bytree: 0.8
+  reg_alpha: 0.1
+  reg_lambda: 0.1
+  random_state: 9
+  n_jobs: -1
+  verbose: -1
+  early_stopping_rounds: 50
+
+# --- Experiment tracking ---
+tracking:
+  experiment_name: bearing_rul_fulllife
+  tracking_uri: mlruns
+
+# --- Training settings ---
+training:
+  eval_mode: full_life
+  filter_pre_onset: false
+  max_rul: 125
+
+seed: 9

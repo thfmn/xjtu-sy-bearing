@@ -77,7 +77,7 @@ vertex:
   enabled: true
   experiment_name: bearing-rul-dl
   project_id: xjtu-bearing-failure
-  location: asia-southeast3
+  location: asia-southeast1
 ```
 
 ### Train with both backends

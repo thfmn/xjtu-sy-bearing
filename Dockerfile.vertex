@@ -4,21 +4,22 @@
 # Build and push to Artifact Registry:
 #   gcloud builds submit \
 #     --tag asia-southeast1-docker.pkg.dev/xjtu-bearing-failure/training/bearing-rul:latest \
-#     -f Dockerfile.vertex .
+#     --dockerfile Dockerfile.vertex .
 
 FROM tensorflow/tensorflow:2.20.0-gpu
 
 WORKDIR /app
 
-# Install uv package manager
-RUN pip install --no-cache-dir uv
+# Copy uv binary from official image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Copy dependency files
-COPY uv.lock pyproject.toml /app/
+COPY pyproject.toml uv.lock /app/
 
-# Install dependencies using uv
+# Export lock file to requirements format and install into system Python
 # Note: TensorFlow, Keras, numpy, pandas are already in the base image
-RUN uv pip install --system -r uv.lock --no-cache-dir
+RUN uv export --frozen --no-dev --no-hashes -o /tmp/requirements.txt && \
+    uv pip install --system -r /tmp/requirements.txt
 
 # Copy project source code
 COPY src/ /app/src/
@@ -26,7 +27,7 @@ COPY scripts/ /app/scripts/
 COPY configs/ /app/configs/
 
 # Set Python path to include project root
-ENV PYTHONPATH=/app:$PYTHONPATH
+ENV PYTHONPATH=/app
 
 # Default command (overridden by Vertex AI job spec)
 CMD ["python", "--version"]

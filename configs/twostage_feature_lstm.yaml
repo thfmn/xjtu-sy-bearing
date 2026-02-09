@@ -1,0 +1,67 @@
+# Two-Stage Pipeline: Feature Sequence LSTM
+#
+# BiLSTM on sliding windows of 65 extracted features. Captures degradation
+# trajectory instead of single-snapshot features. ~11K parameters.
+#
+# Usage:
+#   python scripts/11_train_feature_lstm.py --config configs/twostage_feature_lstm.yaml
+
+# --- Model identification ---
+model_name: feature_lstm
+model_version: "v1"
+
+# --- Feature LSTM architecture ---
+feature_lstm:
+  window_size: 10
+  n_features: 65
+  lstm_units: 16
+  bidirectional: true
+  dropout_rate: 0.2
+  dense_units: 16
+
+# --- Standard training parameters ---
+batch_size: 32
+epochs: 100
+seed: 9
+
+optimizer:
+  name: adamw
+  learning_rate: 0.001
+  weight_decay: 0.0001
+
+loss:
+  name: huber
+  delta: 10.0
+
+callbacks:
+  checkpoint_dir: outputs/models/checkpoints
+  save_best_only: true
+  monitor: val_loss
+  mode: min
+  lr_reduce_factor: 0.5
+  lr_reduce_patience: 5
+  lr_min: 0.000001
+  early_stop_patience: 7
+  restore_best_weights: true
+  mlflow_tracking: true
+  mlflow_tracking_uri: mlruns
+  mlflow_experiment_name: bearing_rul_twostage
+
+# --- Onset detection (Stage 1) ---
+onset:
+  method: threshold
+  labels_path: configs/onset_labels.yaml
+  params:
+    threshold_sigma: 2.0
+    min_consecutive: 5
+
+# --- Two-stage training settings ---
+training:
+  filter_pre_onset: true
+  max_rul: 125
+
+vertex:
+  enabled: false
+  experiment_name: bearing-rul-twostage
+  project_id: xjtu-bearing-failure
+  location: asia-southeast1

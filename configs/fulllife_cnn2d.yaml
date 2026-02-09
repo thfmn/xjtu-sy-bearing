@@ -1,0 +1,59 @@
+# Full-Life Pipeline: cnn2d_simple
+#
+# 2D CNN on STFT spectrograms (128×128×2) with full-life normalized RUL.
+# Evaluates on all 9,216 samples with normalized [0, 1] RUL targets.
+# Directly comparable to published papers (e.g., Li et al. 2024).
+#
+# Huber delta: 10.0 / 125 = 0.08 (scaled from raw RUL to [0,1] range)
+#
+# Usage:
+#   python scripts/05_train_dl_models.py --model cnn2d_simple \
+#       --config configs/fulllife_cnn2d.yaml --tracking mlflow
+
+# --- Standard training parameters ---
+model_version: "v1"
+batch_size: 32
+epochs: 100
+seed: 9
+
+optimizer:
+  name: adamw
+  learning_rate: 0.001
+  weight_decay: 0.0001
+
+loss:
+  name: huber
+  delta: 0.08
+
+callbacks:
+  checkpoint_dir: outputs/models/checkpoints
+  save_best_only: true
+  monitor: val_loss
+  mode: min
+  lr_reduce_factor: 0.5
+  lr_reduce_patience: 5
+  lr_min: 0.000001
+  early_stop_patience: 7
+  restore_best_weights: true
+  mlflow_tracking: true
+  mlflow_tracking_uri: mlruns
+  mlflow_experiment_name: bearing_rul_fulllife
+
+# --- RUL model ---
+model:
+  name: cnn2d_simple
+  input_type: spectrogram
+
+# No onset section needed for full-life mode
+
+# --- Full-life training settings ---
+training:
+  eval_mode: full_life
+  filter_pre_onset: false
+  max_rul: 1.0
+
+vertex:
+  enabled: false
+  experiment_name: bearing-rul-fulllife
+  project_id: xjtu-bearing-failure
+  location: asia-southeast1

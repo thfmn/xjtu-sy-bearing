@@ -110,8 +110,8 @@ def build_cnn1d_model(
     if config.dense_units is not None:
         x = layers.Dense(config.dense_units, activation="relu", name="dense")(x)
 
-    # RUL output - ReLU ensures non-negative predictions
-    outputs = layers.Dense(1, activation="relu", name="rul_output")(x)
+    # RUL output - linear activation; clipping to non-negative is done post-prediction
+    outputs = layers.Dense(1, name="rul_output")(x)
 
     model = keras.Model(inputs=inputs, outputs=outputs, name=name)
     return model

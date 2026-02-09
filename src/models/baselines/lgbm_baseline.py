@@ -486,6 +486,9 @@ def get_feature_columns(
         "file_idx",
         "total_files",
         "rul",
+        "rul_original",
+        "rul_twostage",
+        "is_post_onset",
     }
     if exclude_cols:
         metadata_cols.update(exclude_cols)

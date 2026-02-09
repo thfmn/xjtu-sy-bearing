@@ -23,16 +23,17 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import yaml
 from tensorflow import keras
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.data.dataset_builders import build_dataset_for_model
-from src.data.rul_labels import compute_twostage_rul
+from src.data.rul_labels import compute_twostage_rul, generate_rul_for_bearing
 from src.models.registry import build_model, get_model_info, list_models
 from src.onset.labels import load_onset_labels
 from src.training.config import MLflowCallback, TrainingConfig, build_callbacks, compile_model
-from src.training.cv import CVFold, leave_one_bearing_out
+from src.training.cv import CVFold, generate_cv_folds
 from src.training.metrics import evaluate_predictions
 from src.utils.tracking import ExperimentTracker
 
@@ -148,6 +149,12 @@ def parse_args() -> argparse.Namespace:
         help="Directory containing .npy spectrogram files.",
     )
     parser.add_argument(
+        "--cwt-dir",
+        type=str,
+        default="outputs/spectrograms/cwt",
+        help="Directory containing .npy CWT scaleogram files.",
+    )
+    parser.add_argument(
         "--output-dir",
         type=str,
         default="outputs/evaluation",
@@ -172,6 +179,15 @@ def parse_args() -> argparse.Namespace:
         help="Enable two-stage training mode: load onset labels, filter pre-onset "
         "samples (if config has training.filter_pre_onset=true), and use "
         "onset-relative RUL labels. Requires onset section in config YAML.",
+    )
+    parser.add_argument(
+        "--cv-strategy",
+        type=str,
+        default="leave_one_bearing_out",
+        choices=["leave_one_bearing_out", "jin_fixed", "li_fixed"],
+        help="Cross-validation strategy. Default: leave_one_bearing_out (15-fold LOBO). "
+        "jin_fixed: Jin et al. 2025 protocol (2 train, 13 test). "
+        "li_fixed: Li et al. 2024 protocol (4 train, 6 test, Conds 1-2 only).",
     )
     return parser.parse_args()
 
@@ -268,10 +284,12 @@ def train_single_fold(
     training_config: TrainingConfig,
     data_root: Path,
     spectrogram_dir: Path,
+    cwt_dir: Path,
     output_dir: Path,
     config_path: Path | None = None,
     tracking_mode: str = "mlflow",
     two_stage: bool = False,
+    eval_mode: str = "default",
 ) -> dict:
     """Train a model on one CV fold. Returns dict with metrics and predictions.
 
@@ -286,7 +304,8 @@ def train_single_fold(
         metadata_df: Full metadata DataFrame (features_v2.csv).
         training_config: TrainingConfig loaded from YAML.
         data_root: Root directory of raw bearing CSV data.
-        spectrogram_dir: Directory containing .npy spectrogram files.
+        spectrogram_dir: Directory containing .npy STFT spectrogram files.
+        cwt_dir: Directory containing .npy CWT scaleogram files.
         output_dir: Directory for saving checkpoints and results.
         config_path: Path to the YAML config file (for artifact logging).
         tracking_mode: Experiment tracking backend(s): "mlflow", "vertex", "both", or "none".
@@ -317,6 +336,7 @@ def train_single_fold(
         shuffle=True,
         data_root=str(data_root),
         spectrogram_dir=str(spectrogram_dir),
+        cwt_dir=str(cwt_dir),
         augment=True,
     )
     val_ds = build_dataset_for_model(
@@ -327,6 +347,7 @@ def train_single_fold(
         shuffle=False,
         data_root=str(data_root),
         spectrogram_dir=str(spectrogram_dir),
+        cwt_dir=str(cwt_dir),
         augment=False,
     )
 
@@ -386,6 +407,7 @@ def train_single_fold(
         "train_samples": len(fold.train_indices),
         "val_samples": len(fold.val_indices),
         "two_stage": two_stage,
+        "eval_mode": eval_mode,
     }
     if two_stage:
         onset_config = training_config.get_onset_config()
@@ -436,6 +458,9 @@ def train_single_fold(
 
         y_true = np.concatenate(y_true_list)
         y_pred = np.concatenate(y_pred_list)
+        # Clip predictions: [0, 1] for full-life normalized, [0, inf) otherwise
+        y_pred_max = 1.0 if eval_mode == "full_life" else None
+        y_pred = np.clip(y_pred, 0, y_pred_max)
 
         # 8. Compute metrics
         metrics = evaluate_predictions(y_true, y_pred)
@@ -589,6 +614,8 @@ def main() -> None:
     print(f"  Folds:           {args.folds or 'all'}")
     print(f"  Dry run:         {args.dry_run}")
     print(f"  Two-stage:       {two_stage}")
+    print(f"  CV strategy:     {args.cv_strategy}")
+    print(f"  Eval mode:       (resolved after config load)")
     print(f"  Data root:       {args.data_root}")
     print(f"  Spectrogram dir: {args.spectrogram_dir}")
     print(f"  Output dir:      {args.output_dir}")
@@ -602,17 +629,38 @@ def main() -> None:
     metadata_df = pd.read_csv(features_csv)
     print(f"  Loaded {len(metadata_df)} rows, {len(metadata_df.columns)} columns")
 
+    # --- Determine eval_mode from config ---
+    model_names_for_config = resolve_model_names(args.model)
+    first_config_path = resolve_config_path(model_names_for_config[0], args.config)
+    raw_config = yaml.safe_load(open(first_config_path))
+    config_eval_mode = raw_config.get("training", {}).get("eval_mode", None)
+    eval_mode = "post_onset" if two_stage else "default"
+    if config_eval_mode == "full_life":
+        eval_mode = "full_life"
+
+    # --- Full-life mode: normalize RUL to [0, 1] per bearing ---
+    if eval_mode == "full_life":
+        print(f"\n  Full-life mode enabled (config: {first_config_path})")
+        for bearing_id in metadata_df["bearing_id"].unique():
+            mask = metadata_df["bearing_id"] == bearing_id
+            num_files = mask.sum()
+            metadata_df.loc[mask, "rul"] = generate_rul_for_bearing(
+                num_files, strategy="linear", normalize=True
+            )
+        print(f"  Full-life mode: RUL normalized to [{metadata_df['rul'].min():.4f}, {metadata_df['rul'].max():.4f}]")
+        print(f"  Total samples: {len(metadata_df)}")
+
     # --- Two-stage: prepare data before CV split (filtered indices must align) ---
-    if two_stage:
+    elif two_stage:
         # Need a config to read onset/training sections — use the first model's config
         # (two-stage params are shared, not per-model)
-        model_names_for_config = resolve_model_names(args.model)
-        twostage_config_path = resolve_config_path(model_names_for_config[0], args.config)
+        twostage_config_path = first_config_path
         twostage_training_config = TrainingConfig.from_yaml(twostage_config_path)
         print(f"\n  Two-stage mode enabled (config: {twostage_config_path})")
         metadata_df = prepare_twostage_data(metadata_df, twostage_training_config)
 
-    cv_split = leave_one_bearing_out(metadata_df)
+    cv_strategy = args.cv_strategy
+    cv_split = generate_cv_folds(metadata_df, strategy=cv_strategy)
     print(f"  Generated {len(cv_split)} CV folds ({cv_split.strategy})")
 
     # Filter folds if --folds specified
@@ -672,6 +720,7 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     data_root = Path(args.data_root)
     spectrogram_dir = Path(args.spectrogram_dir)
+    cwt_dir = Path(args.cwt_dir)
 
     all_results: list[dict] = []
 
@@ -702,10 +751,12 @@ def main() -> None:
                 training_config=training_config,
                 data_root=data_root,
                 spectrogram_dir=spectrogram_dir,
+                cwt_dir=cwt_dir,
                 output_dir=output_dir,
                 config_path=config_path,
                 tracking_mode=tracking_mode,
                 two_stage=two_stage,
+                eval_mode=eval_mode,
             )
             model_results.append(result)
             all_results.append(result)
