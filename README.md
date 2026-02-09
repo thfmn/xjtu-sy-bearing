@@ -19,22 +19,11 @@ This project takes raw vibration signals from accelerometers mounted on bearings
 
 ## Architecture Overview
 
-```
-Raw Vibration CSVs (25.6 kHz, 2-channel)
-    │
-    ├─→ Feature Extraction (65 features)  ─→  LightGBM      ─→  RUL Prediction
-    │       └─→ Sliding Windows (10-step)  ─→  Feature LSTM  ─→  RUL
-    │
-    ├─→ 1D Signal Windowing (32768×2)     ─→  1D CNN         ─→  RUL
-    │                                      ─→  MDSCT          ─→  RUL
-    │                                      ─→  DTA-MLP        ─→  RUL
-    │
-    ├─→ STFT Spectrograms (128×128×2)     ─→  2D CNN         ─→  RUL
-    │
-    └─→ Health Indicators (kurtosis, RMS)  ─→  Onset Detection  ─→  Two-Stage RUL
-```
+<p align="center">
+  <img src="docs/xjtu-bench-arch.png" alt="Benchmark architecture: four parallel processing paths from raw vibration CSVs to RUL prediction" width="800">
+</p>
 
-Three parallel input representations feed different model families, from gradient-boosted trees on hand-crafted features to deep learning on raw signals and spectrograms. A two-stage onset detection pipeline identifies the transition from healthy to degraded operation.
+Four parallel input representations feed different model families, from gradient-boosted trees on hand-crafted features to deep learning on raw signals and spectrograms. A two-stage onset detection pipeline identifies the transition from healthy to degraded operation.
 
 ## Dataset
 
@@ -61,10 +50,10 @@ Six model architectures are benchmarked. Four are original designs; two reproduc
 | **1D CNN** | 32768 × 2 raw signal | Conv1D → BatchNorm → GlobalAvgPool → Dense | Original |
 | **CNN2D** | 128 × 128 × 2 spectrogram | 2D CNN with progressive downsampling | Original |
 | **DTA-MLP** | 32768 × 2 raw signal | CNN encoder → Dual Temporal Attention → MLP | Reproduction of [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4) |
-| **MDSCT** | 32768 × 2 raw signal | Multi-scale dilated conv → ProbSparse attention → ECA | Reproduction of [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) |
+| **MDSCT** | 32768 × 2 raw signal | Multi-scale depthwise separable conv → ProbSparse attention → ECA | Reproduction of [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) |
 
 > **Replication notes:**
-> - **MDSCT** is a faithful reproduction of Sun et al. 2024, implementing the ProbSparse self-attention, ECA (Efficient Channel Attention) blocks, and multi-scale dilated separable convolutions as described in the paper.
+> - **MDSCT** reproduces Sun et al. 2024 with parallel MDSC attention + PPSformer (ProbSparse self-attention) mixer blocks, ECA (Efficient Channel Attention), and per-sample min-max normalization. Architecture was corrected in v2 to faithfully match the paper's parallel topology (Fig. 7) and component details. Results are pending retraining.
 > - **DTA-MLP** reproduces the Dual Temporal Attention mechanism and MLP head from Jin et al. 2025. The paper does not fully specify the CNN frontend architecture used to extract temporal features from raw signals; our implementation uses a standard 1D convolutional encoder.
 > - **CNN1D, CNN2D, Feature LSTM, LightGBM** are original architectures designed for this project and are not reproductions of any published method.
 
@@ -94,13 +83,13 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 | Model | LOBO (15-fold CV) | Jin (fixed split) | Li (fixed split) |
 |---|---|---|---|
 | **Feature LSTM** | **0.160** | 0.302 | **0.156** |
-| **MDSCT** | 0.193 | TBD | 0.188 |
+| **MDSCT** | -- | -- | -- |
 | **LightGBM** | 0.234 | 0.284 | 0.227 |
 | **1D CNN** | 0.251 | 0.280 | 0.199 |
 | **CNN2D** | 0.289 | **0.262** | 0.229 |
 | **DTA-MLP** | 0.402 | 0.445 | 0.353 |
 
-> **Note:** MDSCT LOBO currently reports 10/15 folds (Conditions 1-2). Condition 3 folds and the Jin split are still training on Vertex AI. Results will be updated when complete.
+> **Note:** MDSCT architecture was corrected in v2 to faithfully match Sun et al. 2024 (parallel MDSC + PPSformer topology). Previous results are invalid. Retraining is pending.
 
 <!-- TODO: Add bar chart comparing models across protocols -->
 
@@ -116,15 +105,15 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 | TCN-SA | [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.194 | 10 (Cond 1-2) | fixed split |
 | DAN | [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.268 | 10 (Cond 1-2) | fixed split |
 | **Feature LSTM (ours)** | this work | **0.156** | **10 (Cond 1-2)** | **Li split** |
-| **MDSCT (ours)** | this work | **0.188** | **10 (Cond 1-2)** | **Li split** |
+| **MDSCT (ours)** | this work | -- | 10 (Cond 1-2) | Li split |
 | **Feature LSTM (ours)** | this work | **0.160** | **15 (all)** | **15-fold LOBO CV** |
-| **MDSCT (ours)** | this work | **0.193** | **15 (all)** | **15-fold LOBO CV** |
+| **MDSCT (ours)** | this work | -- | 15 (all) | 15-fold LOBO CV |
 
 > **Comparison caveats:**
 > - Published papers typically use fixed train/test splits that train on more data and test on fewer bearings. Our LOBO protocol is harder since each fold trains on only 4 bearings and must generalize to an unseen degradation pattern.
 > - Sun et al. 2024 evaluates only on Conditions 1-2 (10 bearings). Our LOBO includes the challenging Condition 3 bearings (Bearing3_1: 2,538 files, Bearing3_2: 2,496 files).
 > - Our Feature LSTM uses per-bearing z-score normalization (first 20% of each bearing as healthy baseline), which is a form of test-time adaptation, a legitimate but methodologically different approach compared to end-to-end models that learn features from raw signals.
-> - Our MDSCT reproduction achieves 0.188 on the Li split vs. the published 0.160. This gap may be due to differences in the exact train/test split (not specified in the paper), hyperparameter tuning, or implementation details.
+> - Our MDSCT implementation (v2) has been corrected to faithfully match the paper architecture. Results are pending retraining.
 > - Results use a single random seed. Variance across seeds is not reported.
 
 <!-- TODO: Add per-bearing RMSE heatmap across models and conditions -->
@@ -133,24 +122,22 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 
 | Bearing | Cond | Files | Feature LSTM | MDSCT | LightGBM | 1D CNN | CNN2D | DTA-MLP |
 |---|---|---|---|---|---|---|---|---|
-| Bearing1_1 | 1 | 123 | 0.127 | 0.145 | 0.166 | 0.141 | 0.482 | 0.440 |
-| Bearing1_2 | 1 | 161 | 0.219 | 0.228 | 0.231 | 0.204 | 0.367 | 0.477 |
-| Bearing1_3 | 1 | 158 | 0.090 | 0.161 | 0.201 | 0.207 | 0.337 | 0.542 |
-| Bearing1_4 | 1 | 122 | 0.149 | 0.267 | 0.294 | 0.272 | 0.303 | 0.298 |
-| Bearing1_5 | 1 | 52 | 0.120 | 0.137 | 0.215 | 0.219 | 0.271 | 0.303 |
-| Bearing2_1 | 2 | 491 | 0.188 | 0.301 | 0.272 | 0.280 | 0.258 | 0.289 |
-| Bearing2_2 | 2 | 161 | 0.227 | 0.138 | 0.149 | 0.210 | 0.149 | 0.417 |
-| Bearing2_3 | 2 | 533 | 0.189 | 0.139 | 0.094 | 0.068 | 0.129 | 0.515 |
-| Bearing2_4 | 2 | 42 | 0.067 | 0.176 | 0.183 | 0.175 | 0.194 | 0.355 |
-| Bearing2_5 | 2 | 339 | 0.143 | 0.236 | 0.291 | 0.194 | 0.138 | 0.342 |
-| Bearing3_1 | 3 | 2538 | 0.175 | n/a | 0.274 | 0.289 | 0.312 | 0.370 |
-| Bearing3_2 | 3 | 2496 | 0.162 | n/a | 0.271 | 0.290 | 0.347 | 0.535 |
-| Bearing3_3 | 3 | 371 | 0.219 | n/a | 0.284 | 0.502 | 0.310 | 0.352 |
-| Bearing3_4 | 3 | 1515 | 0.184 | n/a | 0.288 | 0.224 | 0.244 | 0.520 |
-| Bearing3_5 | 3 | 114 | 0.141 | n/a | 0.292 | 0.491 | 0.502 | 0.281 |
-| **Mean** | | | **0.160** | **0.193*** | **0.234** | **0.251** | **0.289** | **0.402** |
-
-*MDSCT mean is over 10 folds (Conditions 1-2 only). Condition 3 folds still training.
+| Bearing1_1 | 1 | 123 | 0.127 | -- | 0.166 | 0.141 | 0.482 | 0.440 |
+| Bearing1_2 | 1 | 161 | 0.219 | -- | 0.231 | 0.204 | 0.367 | 0.477 |
+| Bearing1_3 | 1 | 158 | 0.090 | -- | 0.201 | 0.207 | 0.337 | 0.542 |
+| Bearing1_4 | 1 | 122 | 0.149 | -- | 0.294 | 0.272 | 0.303 | 0.298 |
+| Bearing1_5 | 1 | 52 | 0.120 | -- | 0.215 | 0.219 | 0.271 | 0.303 |
+| Bearing2_1 | 2 | 491 | 0.188 | -- | 0.272 | 0.280 | 0.258 | 0.289 |
+| Bearing2_2 | 2 | 161 | 0.227 | -- | 0.149 | 0.210 | 0.149 | 0.417 |
+| Bearing2_3 | 2 | 533 | 0.189 | -- | 0.094 | 0.068 | 0.129 | 0.515 |
+| Bearing2_4 | 2 | 42 | 0.067 | -- | 0.183 | 0.175 | 0.194 | 0.355 |
+| Bearing2_5 | 2 | 339 | 0.143 | -- | 0.291 | 0.194 | 0.138 | 0.342 |
+| Bearing3_1 | 3 | 2538 | 0.175 | -- | 0.274 | 0.289 | 0.312 | 0.370 |
+| Bearing3_2 | 3 | 2496 | 0.162 | -- | 0.271 | 0.290 | 0.347 | 0.535 |
+| Bearing3_3 | 3 | 371 | 0.219 | -- | 0.284 | 0.502 | 0.310 | 0.352 |
+| Bearing3_4 | 3 | 1515 | 0.184 | -- | 0.288 | 0.224 | 0.244 | 0.520 |
+| Bearing3_5 | 3 | 114 | 0.141 | -- | 0.292 | 0.491 | 0.502 | 0.281 |
+| **Mean** | | | **0.160** | -- | **0.234** | **0.251** | **0.289** | **0.402** |
 
 ### Onset Detection
 
