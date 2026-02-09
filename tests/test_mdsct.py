@@ -544,12 +544,12 @@ class TestFullMDSCT:
         assert len(mixer_layers) == 3
 
     def test_single_fc_output(self):
-        """Table 2: single Dense(1, sigmoid) at the end."""
+        """Table 2: single Dense(1, linear) — paper Fig. 10/14 show sub-zero predictions."""
         model = build_mdsct()
         output_layer = model.get_layer("rul_output")
         assert isinstance(output_layer, tf.keras.layers.Dense)
         assert output_layer.units == 1
-        assert output_layer.activation.__name__ == "sigmoid"
+        assert output_layer.activation.__name__ == "linear"
 
     def test_default_build(self):
         """Default config builds with correct I/O shapes."""
@@ -567,7 +567,7 @@ class TestFullMDSCT:
         batch = np.random.randn(2, 2048, 2).astype(np.float32)
         preds = model.predict(batch, verbose=0)
         assert preds.shape == (2, 1)
-        assert (preds >= 0).all() and (preds <= 1).all()
+        # Linear output — predictions are unbounded (no sigmoid)
 
     def test_training_step(self, small_config):
         model = build_mdsct(small_config)

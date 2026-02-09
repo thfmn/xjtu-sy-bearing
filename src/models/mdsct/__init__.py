@@ -29,7 +29,7 @@ Architecture (Table 2, Fig. 7):
         └─ PPSformer: AAP2(96) → Conv1D(16) → PatchEmbed → ProbSparse MHA
             → FFN(256→128) → AAP3(1024)
         → Concatenate (200ch)
-    → AAP4(64) → Flatten → Dense(1, sigmoid) → RUL
+    → AAP4(64) → Flatten → Dense(1, linear) → RUL
 """
 
 from .model import MDSCTConfig, build_mdsct, create_default_mdsct

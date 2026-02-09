@@ -30,7 +30,7 @@ Architecture (Table 2, Fig. 7):
       │        → FFN(256→128) → AAP3(1024)
       │   → Concatenate → (1024, 200)
       → AAP4(64)                                       → (64, 200)
-      → Flatten → Dense(1, sigmoid)
+      → Flatten → Dense(1, linear)
 
 Key corrections from v1 (see PRD for details):
     - AdaptH_Swish: δx * relu6(δx+3)/6 with δ=1.0 (scaling, not shifting)
@@ -156,12 +156,30 @@ class AdaptiveAvgPool1D(layers.Layer):
 
     def call(self, x):
         # x: (batch, seq_len, channels)
-        # Reshape to 4D for tf.image.resize: (batch, seq_len, 1, channels)
-        x_4d = tf.expand_dims(x, axis=2)
-        # Resize temporal dimension (bilinear is differentiable; area is not)
-        x_4d = tf.image.resize(x_4d, [self.target_size, 1], method="bilinear")
-        # Squeeze back to 3D: (batch, target_size, channels)
-        return tf.squeeze(x_4d, axis=2)
+        seq_len = tf.shape(x)[1]
+
+        def _downsample():
+            # Pad input so it's evenly divisible by target_size, then use
+            # reshape + reduce_mean to compute bin averages (equivalent to
+            # PyTorch's nn.AdaptiveAvgPool1d).
+            pad_len = (self.target_size - seq_len % self.target_size) % self.target_size
+            x_padded = tf.pad(x, [[0, 0], [0, pad_len], [0, 0]])
+            new_len = seq_len + pad_len
+            bin_size = new_len // self.target_size
+            # (batch, target_size, bin_size, channels) → mean over bin
+            reshaped = tf.reshape(
+                x_padded,
+                [tf.shape(x)[0], self.target_size, bin_size, tf.shape(x)[2]],
+            )
+            return tf.reduce_mean(reshaped, axis=2)
+
+        def _upsample():
+            # Bilinear resize for upsampling (differentiable)
+            x_4d = tf.expand_dims(x, axis=2)
+            x_4d = tf.image.resize(x_4d, [self.target_size, 1], method="bilinear")
+            return tf.squeeze(x_4d, axis=2)
+
+        return tf.cond(seq_len > self.target_size, _downsample, _upsample)
 
     def get_config(self):
         config = super().get_config()
@@ -693,7 +711,7 @@ def build_mdsct(config: MDSCTConfig | None = None) -> keras.Model:
         config: Model configuration. Uses paper defaults if None.
 
     Returns:
-        Keras model: input (None, L, 2) → output (None, 1) in [0, 1].
+        Keras model: input (None, L, 2) → output (None, 1) (linear).
     """
     if config is None:
         config = MDSCTConfig()
@@ -728,7 +746,10 @@ def build_mdsct(config: MDSCTConfig | None = None) -> keras.Model:
 
     # Flatten → Dense → sigmoid
     x = layers.Flatten(name="flatten")(x)
-    x = layers.Dense(1, activation="sigmoid", name="rul_output")(x)
+    # Linear output — paper Fig. 10/14 show predictions below 0,
+    # confirming no sigmoid.  Linear avoids gradient saturation that
+    # caused the v2 model collapse.
+    x = layers.Dense(1, name="rul_output")(x)
 
     model = keras.Model(inputs=inputs, outputs=x, name="mdsct")
     return model
