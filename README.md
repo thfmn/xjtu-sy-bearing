@@ -43,7 +43,7 @@ Each CSV file contains 32,768 samples (1.28 s recording) captured at regular int
 
 ## Models
 
-Six model architectures are benchmarked. Four are original designs; two reproduce published methods.
+Six model architectures are benchmarked. Four are original designs; two are attempts to reproduce published methods.
 
 | Model | Input | Architecture | Source |
 |---|---|---|---|
@@ -55,8 +55,8 @@ Six model architectures are benchmarked. Four are original designs; two reproduc
 | **MDSCT** | 32768 × 2 raw signal | Multi-scale depthwise separable conv → ProbSparse attention → ECA | Reproduction of [Sun et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) |
 
 > **Replication notes:**
-> - **MDSCT** reproduces Sun et al. 2024 with parallel MDSC attention + PPSformer (ProbSparse self-attention) mixer blocks, ECA (Efficient Channel Attention), and per-sample min-max normalization. Architecture was corrected in v2 to faithfully match the paper's parallel topology (Fig. 7) and component details. Results are pending retraining.
-> - **DTA-MLP** reproduces the Dual Temporal Attention mechanism and MLP head from Jin et al. 2025. The paper does not fully specify the CNN frontend architecture used to extract temporal features from raw signals; our implementation uses a standard 1D convolutional encoder.
+> - **MDSCT** reproduces Sun et al. 2024 with parallel MDSC attention + PPSformer (ProbSparse self-attention) mixer blocks, ECA (Efficient Channel Attention), and per-sample min-max normalization. Using the paper's parallel topology (Fig. 7) and component details. Results are pending retraining.
+> - **DTA-MLP** reproduces the Dual Temporal Attention mechanism and MLP head from Jin et al. 2025. The paper does not fully specify the CNN frontend architecture used to extract temporal features from raw signals; our implementation uses a standard 1D convolutional encoder. The results are not comparable and serve only an experimentation purpose.
 > - **CNN1D, CNN2D, Feature LSTM, LightGBM** are original architectures designed for this project and are not reproductions of any published method.
 
 <!-- TODO: Add model architecture diagrams -->
@@ -91,7 +91,7 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 | **CNN2D** | 0.289 | **0.262** | 0.229 |
 | **DTA-MLP** | 0.402 | 0.445 | 0.353 |
 
-> **Note:** MDSCT architecture was corrected in v2 to faithfully match Sun et al. 2024 (parallel MDSC + PPSformer topology). Previous results are invalid. Retraining is pending.
+> **Note:** MDSCT retraining is in pending.
 
 <!-- TODO: Add bar chart comparing models across protocols -->
 
@@ -114,8 +114,7 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 > **Comparison caveats:**
 > - Published papers typically use fixed train/test splits that train on more data and test on fewer bearings. Our LOBO protocol is harder since each fold trains on only 4 bearings and must generalize to an unseen degradation pattern.
 > - Sun et al. 2024 evaluates only on Conditions 1-2 (10 bearings). Our LOBO includes the challenging Condition 3 bearings (Bearing3_1: 2,538 files, Bearing3_2: 2,496 files).
-> - Our Feature LSTM uses per-bearing z-score normalization (first 20% of each bearing as healthy baseline), which is a form of test-time adaptation, a legitimate but methodologically different approach compared to end-to-end models that learn features from raw signals.
-> - Our MDSCT implementation (v2) has been corrected to faithfully match the paper architecture. Results are pending retraining.
+> - Our Feature LSTM uses per-bearing z-score normalization (first 20% of each bearing as healthy baseline), which is a form of test-time adaptation. As such it is a methodologically different approach compared to end-to-end models that learn features from raw signals.
 > - Results use a single random seed. Variance across seeds is not reported.
 
 <!-- TODO: Add per-bearing RMSE heatmap across models and conditions -->
