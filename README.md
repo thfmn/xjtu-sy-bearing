@@ -13,7 +13,7 @@ A reproducible benchmark for **Remaining Useful Life (RUL)** prediction of rolli
 
 ## The Problem
 
-Bearings are among the most critical, and most failure-prone, components in rotating machinery. A single unexpected bearing failure in a wind turbine, industrial pump, or rail axle can halt production for days and cost tens of thousands of dollars.
+Bearings are among the most critical, and most failure-prone, components in rotating machinery. A single unexpected bearing failure in a wind turbine, industrial pump, or rail axle can halt production for days and cost tens of thousands of euros.
 
 Traditional maintenance strategies are either **reactive** (fix it when it breaks, causing expensive downtime) or **time-based** (replace on a schedule, wasting perfectly good parts). **Predictive maintenance** uses sensor data to estimate how much useful life remains, enabling repairs at exactly the right time.
 
