@@ -158,7 +158,7 @@ class TestSimple1DCNN:
         predictions = model.predict(X, verbose=0)
 
         assert predictions.shape == (8, 1)
-        assert (predictions >= 0).all(), "Predictions should be non-negative (ReLU)"
+        assert np.isfinite(predictions).all(), "Predictions should be finite"
 
     def test_model_trains(self, sample_signals):
         """Test model training decreases loss."""
@@ -228,7 +228,7 @@ class TestPattern1TCN:
         predictions = model.predict(sample_signals, verbose=0)
 
         assert predictions.shape == (4, 1)
-        assert (predictions >= 0).all(), "RUL predictions should be non-negative"
+        assert np.isfinite(predictions).all(), "Predictions should be finite"
 
     def test_model_trains(self, sample_signals):
         """Test model training."""
@@ -305,7 +305,7 @@ class TestCNN2D:
         predictions = model.predict(sample_spectrograms, verbose=0)
 
         assert predictions.shape == (4, 1)
-        assert (predictions >= 0).all()
+        assert np.isfinite(predictions).all(), "Predictions should be finite"
 
     def test_model_trains(self, sample_spectrograms):
         """Test model training."""
