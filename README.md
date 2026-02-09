@@ -11,11 +11,11 @@ An MLOps pipeline that predicts the **Remaining Useful Life (RUL)** of rolling e
 
 ## The Problem
 
-Bearings are among the most critical — and most failure-prone — components in rotating machinery. A single unexpected bearing failure in a wind turbine, industrial pump, or rail axle can halt production for days and cost tens of thousands of dollars.
+Bearings are among the most critical, and most failure-prone, components in rotating machinery. A single unexpected bearing failure in a wind turbine, industrial pump, or rail axle can halt production for days and cost tens of thousands of dollars.
 
-Traditional maintenance strategies are either **reactive** (fix it when it breaks — expensive downtime) or **time-based** (replace on a schedule — wastes perfectly good parts). **Predictive maintenance** uses sensor data to estimate how much useful life remains, enabling repairs at exactly the right time.
+Traditional maintenance strategies are either **reactive** (fix it when it breaks, causing expensive downtime) or **time-based** (replace on a schedule, wasting perfectly good parts). **Predictive maintenance** uses sensor data to estimate how much useful life remains, enabling repairs at exactly the right time.
 
-This project takes raw vibration signals from accelerometers mounted on bearings and predicts how many minutes of operation remain before failure — the **Remaining Useful Life**.
+This project takes raw vibration signals from accelerometers mounted on bearings and predicts how many minutes of operation remain before failure, known as the **Remaining Useful Life**.
 
 ## Architecture Overview
 
@@ -34,11 +34,11 @@ Raw Vibration CSVs (25.6 kHz, 2-channel)
     └─→ Health Indicators (kurtosis, RMS)  ─→  Onset Detection  ─→  Two-Stage RUL
 ```
 
-Three parallel input representations feed different model families — from gradient-boosted trees on hand-crafted features to deep learning on raw signals and spectrograms. A two-stage onset detection pipeline identifies the transition from healthy to degraded operation.
+Three parallel input representations feed different model families, from gradient-boosted trees on hand-crafted features to deep learning on raw signals and spectrograms. A two-stage onset detection pipeline identifies the transition from healthy to degraded operation.
 
 ## Dataset
 
-**XJTU-SY Bearing Dataset** — a widely-used benchmark for bearing prognostics research.
+**XJTU-SY Bearing Dataset**, a widely-used benchmark for bearing prognostics research.
 
 | Property | Value |
 |---|---|
@@ -66,7 +66,7 @@ Six model architectures are benchmarked. Four are original designs; two reproduc
 > **Replication notes:**
 > - **MDSCT** is a faithful reproduction of Li et al. 2024, implementing the ProbSparse self-attention, ECA (Efficient Channel Attention) blocks, and multi-scale dilated separable convolutions as described in the paper.
 > - **DTA-MLP** reproduces the Dual Temporal Attention mechanism and MLP head from Jin et al. 2025. The paper does not fully specify the CNN frontend architecture used to extract temporal features from raw signals; our implementation uses a standard 1D convolutional encoder.
-> - **CNN1D, CNN2D, Feature LSTM, LightGBM** are original architectures designed for this project — not reproductions of any published method.
+> - **CNN1D, CNN2D, Feature LSTM, LightGBM** are original architectures designed for this project and are not reproductions of any published method.
 
 <!-- TODO: Add model architecture diagrams -->
 
@@ -85,7 +85,7 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 | **Li** | Bearing1_1 + Bearing1_2 + Bearing2_1 + Bearing2_2 | 6 test bearings | 10 (Cond 1-2 only) | 6,388 | [Li et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) |
 
 > **Protocol notes:**
-> - **LOBO** (Leave-One-Bearing-Out) is a 15-fold cross-validation where each fold trains on 4 bearings from the same operating condition and tests on the held-out bearing. This is the strictest protocol — the model must generalize to a completely unseen bearing's degradation pattern.
+> - **LOBO** (Leave-One-Bearing-Out) is a 15-fold cross-validation where each fold trains on 4 bearings from the same operating condition and tests on the held-out bearing. This is the strictest protocol: the model must generalize to a completely unseen bearing's degradation pattern.
 > - **Jin split** is inferred from the results tables in Jin et al. 2025 which exclude Bearing1_4 and Bearing3_2 from test evaluation, suggesting these were used for training.
 > - **Li split**: Li et al. 2024 do not describe their exact train/test split. We follow the standard XJTU-SY convention (train on Bearing1_1, Bearing1_2, Bearing2_1, Bearing2_2; test on the remaining 6 bearings from Conditions 1-2).
 
@@ -108,7 +108,7 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 
 | Method | Source | RMSE | Bearings | Protocol |
 |---|---|---|---|---|
-| Bi-LSTM-Transformer | [Wang et al. 2025](https://www.mdpi.com/2076-3417/15/17/9529) | 0.056 | — | fixed split |
+| Bi-LSTM-Transformer | [Wang et al. 2025](https://www.mdpi.com/2076-3417/15/17/9529) | 0.056 | n/a | fixed split |
 | MDSCT | [Li et al. 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC11481647/) | 0.160 | 10 (Cond 1-2) | fixed split |
 | DTA-MLP | [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4) | 0.169 | 13 (all cond) | fixed split |
 | CNN-ResNet | [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4) | 0.173 | 13 (all cond) | fixed split |
@@ -121,9 +121,9 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 | **MDSCT (ours)** | this work | **0.193** | **15 (all)** | **15-fold LOBO CV** |
 
 > **Comparison caveats:**
-> - Published papers typically use fixed train/test splits that train on more data and test on fewer bearings. Our LOBO protocol is harder — each fold trains on only 4 bearings and must generalize to an unseen degradation pattern.
+> - Published papers typically use fixed train/test splits that train on more data and test on fewer bearings. Our LOBO protocol is harder since each fold trains on only 4 bearings and must generalize to an unseen degradation pattern.
 > - Li et al. 2024 evaluates only on Conditions 1-2 (10 bearings). Our LOBO includes the challenging Condition 3 bearings (Bearing3_1: 2,538 files, Bearing3_2: 2,496 files).
-> - Our Feature LSTM uses per-bearing z-score normalization (first 20% of each bearing as healthy baseline), which is a form of test-time adaptation — a legitimate but methodologically different approach compared to end-to-end models that learn features from raw signals.
+> - Our Feature LSTM uses per-bearing z-score normalization (first 20% of each bearing as healthy baseline), which is a form of test-time adaptation, a legitimate but methodologically different approach compared to end-to-end models that learn features from raw signals.
 > - Our MDSCT reproduction achieves 0.188 on the Li split vs. the published 0.160. This gap may be due to differences in the exact train/test split (not specified in the paper), hyperparameter tuning, or implementation details.
 > - Results use a single random seed. Variance across seeds is not reported.
 
@@ -143,11 +143,11 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 | Bearing2_3 | 2 | 533 | 0.189 | 0.139 | 0.094 | 0.068 | 0.129 | 0.515 |
 | Bearing2_4 | 2 | 42 | 0.067 | 0.176 | 0.183 | 0.175 | 0.194 | 0.355 |
 | Bearing2_5 | 2 | 339 | 0.143 | 0.236 | 0.291 | 0.194 | 0.138 | 0.342 |
-| Bearing3_1 | 3 | 2538 | 0.175 | — | 0.274 | 0.289 | 0.312 | 0.370 |
-| Bearing3_2 | 3 | 2496 | 0.162 | — | 0.271 | 0.290 | 0.347 | 0.535 |
-| Bearing3_3 | 3 | 371 | 0.219 | — | 0.284 | 0.502 | 0.310 | 0.352 |
-| Bearing3_4 | 3 | 1515 | 0.184 | — | 0.288 | 0.224 | 0.244 | 0.520 |
-| Bearing3_5 | 3 | 114 | 0.141 | — | 0.292 | 0.491 | 0.502 | 0.281 |
+| Bearing3_1 | 3 | 2538 | 0.175 | n/a | 0.274 | 0.289 | 0.312 | 0.370 |
+| Bearing3_2 | 3 | 2496 | 0.162 | n/a | 0.271 | 0.290 | 0.347 | 0.535 |
+| Bearing3_3 | 3 | 371 | 0.219 | n/a | 0.284 | 0.502 | 0.310 | 0.352 |
+| Bearing3_4 | 3 | 1515 | 0.184 | n/a | 0.288 | 0.224 | 0.244 | 0.520 |
+| Bearing3_5 | 3 | 114 | 0.141 | n/a | 0.292 | 0.491 | 0.502 | 0.281 |
 | **Mean** | | | **0.160** | **0.193*** | **0.234** | **0.251** | **0.289** | **0.402** |
 
 *MDSCT mean is over 10 folds (Conditions 1-2 only). Condition 3 folds still training.
@@ -172,11 +172,11 @@ uv run python app.py
 ```
 
 **Tabs:**
-- **EDA** — Degradation trends with onset markers, feature distributions
-- **Model Results** — Cross-model comparison (LightGBM + DL), feature importance, training curves
-- **Predictions** — Per-bearing RUL curves, residual analysis
-- **Onset Detection** — Health indicator explorer, classifier performance, detector comparison
-- **Audio Analysis** — Vibration signals sonified to audio (healthy → degrading → failed)
+- **EDA:** Degradation trends with onset markers, feature distributions
+- **Model Results:** Cross-model comparison (LightGBM + DL), feature importance, training curves
+- **Predictions:** Per-bearing RUL curves, residual analysis
+- **Onset Detection:** Health indicator explorer, classifier performance, detector comparison
+- **Audio Analysis:** Vibration signals sonified to audio (healthy → degrading → failed)
 
 ## Getting Started
 
@@ -184,8 +184,8 @@ uv run python app.py
 
 - **Python 3.11+**
 - **[uv](https://docs.astral.sh/uv/)** package manager
-- **GPU** (optional) — required only for deep learning model training (scripts 05, 09, 10-12)
-- **GCP credentials** (optional) — required only for scripts 01-02 (data upload/preprocessing via GCS)
+- **GPU** (optional): only needed for deep learning model training (scripts 05, 09, 10-12)
+- **GCP credentials** (optional): only needed for scripts 01-02 (data upload/preprocessing via GCS)
 
 ### 1. Clone and install
 
@@ -318,7 +318,7 @@ The dashboard **requires** these files to start (will error without them):
 | `outputs/evaluation/lgbm_feature_importance.csv` | `notebooks/30_evaluation.ipynb` |
 | `outputs/evaluation/lgbm_per_bearing.csv` | `notebooks/30_evaluation.ipynb` |
 
-All other output files are **optional** — the dashboard gracefully degrades when they are missing.
+All other output files are optional. The dashboard gracefully degrades when they are missing.
 
 ## Project Structure
 
@@ -384,8 +384,8 @@ All other output files are **optional** — the dashboard gracefully degrades wh
 
 Dual-backend setup for local development and cloud reproducibility:
 
-- **MLflow** (local) — `bash scripts/mlflow_server.sh` launches the UI at `localhost:5000`
-- **Vertex AI Experiments** (cloud) — automatic logging when running on GCP with `--tracking vertex`
+- **MLflow** (local): `bash scripts/mlflow_server.sh` launches the UI at `localhost:5000`
+- **Vertex AI Experiments** (cloud): automatic logging when running on GCP with `--tracking vertex`
 
 ## Tech Stack
 
