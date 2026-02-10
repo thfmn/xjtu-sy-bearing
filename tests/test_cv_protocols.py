@@ -31,6 +31,7 @@ from src.training.cv import (
     fixed_split_sun,
     generate_cv_folds,
     leave_one_bearing_out,
+    loco_per_bearing,
     validate_no_leakage,
 )
 
@@ -212,6 +213,110 @@ class TestFixedSplitSun:
             fixed_split_sun(df)
 
 
+class TestLOCOPerBearing:
+    """Tests for LOCO-LOBO hybrid cross-validation protocol.
+
+    Validates that loco_per_bearing() produces 15 folds where each fold
+    trains on all bearings from the other 2 conditions and evaluates on
+    a single bearing from the held-out condition.
+    """
+
+    def test_fold_count(self, bearing_df):
+        cv = loco_per_bearing(bearing_df)
+        assert len(cv) == 15
+
+    def test_strategy_name(self, bearing_df):
+        cv = loco_per_bearing(bearing_df)
+        assert cv.strategy == "loco_per_bearing"
+
+    def test_each_fold_has_one_val_bearing(self, bearing_df):
+        cv = loco_per_bearing(bearing_df)
+        for fold in cv:
+            assert len(fold.val_bearings) == 1
+
+    def test_train_bearings_from_other_conditions(self, bearing_df):
+        """No bearing from the same condition should appear in the train set."""
+        cv = loco_per_bearing(bearing_df)
+        for fold in cv:
+            val_bearing = fold.val_bearings[0]
+            val_condition = bearing_df[
+                bearing_df["bearing_id"] == val_bearing
+            ]["condition"].iloc[0]
+            train_conditions = bearing_df.iloc[fold.train_indices]["condition"].unique()
+            assert val_condition not in train_conditions
+
+    def test_train_set_has_10_bearings(self, bearing_df):
+        """Each fold trains on 10 bearings (5 from each of the other 2 conditions)."""
+        cv = loco_per_bearing(bearing_df)
+        for fold in cv:
+            assert len(fold.train_bearings) == 10
+
+    def test_no_data_leakage(self, bearing_df):
+        cv = loco_per_bearing(bearing_df)
+        for fold in cv:
+            assert validate_no_leakage(fold, bearing_df)
+
+    def test_val_bearing_condition_matches_fold_condition(self, bearing_df):
+        """The fold's condition field should match the val bearing's actual condition."""
+        cv = loco_per_bearing(bearing_df)
+        for fold in cv:
+            val_bearing = fold.val_bearings[0]
+            actual_condition = bearing_df[
+                bearing_df["bearing_id"] == val_bearing
+            ]["condition"].iloc[0]
+            assert fold.condition == actual_condition
+
+    def test_all_bearings_appear_as_val(self, bearing_df):
+        """Every bearing should be validated exactly once across all folds."""
+        cv = loco_per_bearing(bearing_df)
+        val_bearings = [fold.val_bearings[0] for fold in cv]
+        assert len(val_bearings) == 15
+        assert len(set(val_bearings)) == 15
+
+    def test_val_indices_cover_entire_bearing(self, bearing_df):
+        """All samples from the validation bearing should be in val_indices."""
+        cv = loco_per_bearing(bearing_df)
+        for fold in cv:
+            val_bearing = fold.val_bearings[0]
+            expected = set(bearing_df[bearing_df["bearing_id"] == val_bearing].index.tolist())
+            actual = set(fold.val_indices.tolist())
+            assert actual == expected
+
+    def test_train_indices_cover_other_conditions(self, bearing_df):
+        """Train indices should contain all samples from the other 2 conditions."""
+        cv = loco_per_bearing(bearing_df)
+        for fold in cv:
+            expected = set(
+                bearing_df[bearing_df["condition"] != fold.condition].index.tolist()
+            )
+            actual = set(fold.train_indices.tolist())
+            assert actual == expected
+
+    def test_same_condition_folds_share_train_indices(self, bearing_df):
+        """All 5 folds within the same held-out condition share identical train indices."""
+        cv = loco_per_bearing(bearing_df)
+        by_condition: dict[str, list] = {}
+        for fold in cv:
+            by_condition.setdefault(fold.condition, []).append(fold)
+        for condition, condition_folds in by_condition.items():
+            assert len(condition_folds) == 5
+            reference = set(condition_folds[0].train_indices.tolist())
+            for f in condition_folds[1:]:
+                assert set(f.train_indices.tolist()) == reference
+
+    def test_no_same_condition_bearings_in_train(self, bearing_df):
+        """Strict condition separation: no bearing from held-out condition in train."""
+        cv = loco_per_bearing(bearing_df)
+        for fold in cv:
+            train_bearings_in_data = set(
+                bearing_df.iloc[fold.train_indices]["bearing_id"].unique()
+            )
+            val_condition_bearings = set(
+                bearing_df[bearing_df["condition"] == fold.condition]["bearing_id"].unique()
+            )
+            assert train_bearings_in_data & val_condition_bearings == set()
+
+
 class TestGenerateCVFoldsDispatch:
     """Test that generate_cv_folds() correctly dispatches to new strategies."""
 
@@ -224,6 +329,11 @@ class TestGenerateCVFoldsDispatch:
         cv = generate_cv_folds(bearing_df, strategy="sun_fixed")
         assert cv.strategy == "sun_fixed"
         assert len(cv) == 1
+
+    def test_loco_per_bearing_dispatch(self, bearing_df):
+        cv = generate_cv_folds(bearing_df, strategy="loco_per_bearing")
+        assert cv.strategy == "loco_per_bearing"
+        assert len(cv) == 15
 
     def test_lobo_still_works(self, bearing_df):
         cv = generate_cv_folds(bearing_df, strategy="leave_one_bearing_out")

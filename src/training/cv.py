@@ -293,6 +293,72 @@ def leave_one_condition_out(
     )
 
 
+def loco_per_bearing(
+    df: pd.DataFrame,
+    condition_col: str = "condition",
+    bearing_col: str = "bearing_id",
+) -> CVSplit:
+    """Generate LOCO-LOBO hybrid cross-validation folds.
+
+    Leave-One-Condition-Out training with per-bearing evaluation:
+    trains on all bearings from the other 2 conditions (10 bearings)
+    and validates on a single bearing from the held-out condition.
+
+    This produces 15 folds (same granularity as LOBO) but tests
+    cross-condition generalization — whether degradation patterns
+    transfer across operating conditions.
+
+    Args:
+        df: DataFrame with bearing data (must have condition and bearing_id columns)
+        condition_col: Name of the condition column
+        bearing_col: Name of the bearing ID column
+
+    Returns:
+        CVSplit with 15 folds (5 per condition, cross-condition training)
+
+    Example:
+        >>> features_df = pd.read_csv("outputs/features/features_v2.csv")
+        >>> cv = loco_per_bearing(features_df)
+        >>> # Each fold trains on 10 bearings from 2 other conditions
+        >>> # and validates on 1 bearing from the held-out condition
+    """
+    folds = []
+    fold_id = 0
+
+    for condition in df[condition_col].unique():
+        # Training: all bearings from other conditions
+        train_mask = df[condition_col] != condition
+        train_indices = df.index[train_mask].values
+        train_bearings = sorted(df.loc[train_mask, bearing_col].unique().tolist())
+
+        # Validation: one bearing at a time from this condition
+        condition_mask = df[condition_col] == condition
+        bearings = df.loc[condition_mask, bearing_col].unique()
+
+        for val_bearing in bearings:
+            val_mask = (df[condition_col] == condition) & (df[bearing_col] == val_bearing)
+            val_indices = df.index[val_mask].values
+
+            fold = CVFold(
+                fold_id=fold_id,
+                train_indices=train_indices,
+                val_indices=val_indices,
+                train_bearings=train_bearings,
+                val_bearings=[val_bearing],
+                condition=condition,
+                description=f"LOCO-LOBO: train on other conditions, validate {val_bearing} ({condition})",
+            )
+            folds.append(fold)
+            fold_id += 1
+
+    return CVSplit(
+        folds=folds,
+        strategy="loco_per_bearing",
+        n_samples=len(df),
+        description="LOCO-LOBO hybrid: cross-condition training, per-bearing evaluation (15 folds)",
+    )
+
+
 def stratified_split(
     df: pd.DataFrame,
     test_size: float = 0.2,
@@ -612,7 +678,7 @@ def generate_cv_folds(
     Args:
         df: DataFrame with bearing data
         strategy: One of 'leave_one_bearing_out', 'leave_one_condition_out',
-                 'stratified', 'time_series'
+                 'loco_per_bearing', 'stratified', 'time_series'
         output_path: Optional path to save fold indices for reproducibility
         **kwargs: Additional arguments passed to the strategy function
 
@@ -625,6 +691,7 @@ def generate_cv_folds(
     strategies = {
         "leave_one_bearing_out": leave_one_bearing_out,
         "leave_one_condition_out": leave_one_condition_out,
+        "loco_per_bearing": loco_per_bearing,
         "stratified": stratified_split,
         "time_series": time_series_split,
         "jin_fixed": fixed_split_jin,

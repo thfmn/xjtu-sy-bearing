@@ -49,6 +49,7 @@ BENCHMARK_DIR = Path("outputs/benchmark")
 # Protocol name → --cv-strategy value
 PROTOCOL_MAP = {
     "lobo": "leave_one_bearing_out",
+    "loco": "loco_per_bearing",
     "jin": "jin_fixed",
     "sun": "sun_fixed",
 }

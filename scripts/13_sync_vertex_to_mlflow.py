@@ -58,10 +58,11 @@ MLFLOW_EXPERIMENT_NAME = "bearing_rul_fulllife"
 
 # Model × protocol matrix
 BENCHMARK_MODELS = ["cnn1d_baseline", "cnn2d_simple", "dta_mlp"]
-PROTOCOLS = ["lobo", "jin", "sun"]
+PROTOCOLS = ["lobo", "loco", "jin", "sun"]
 
 CV_STRATEGY_MAP = {
     "lobo": "leave_one_bearing_out",
+    "loco": "loco_per_bearing",
     "jin": "jin_fixed",
     "sun": "sun_fixed",
 }

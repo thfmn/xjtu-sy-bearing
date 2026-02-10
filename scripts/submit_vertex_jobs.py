@@ -78,6 +78,7 @@ GCS_OUTPUT_BASE = f"/gcs/{STAGING_BUCKET_NAME}/outputs/vertex_training"
 # CV strategy name → --cv-strategy value
 CV_STRATEGY_MAP = {
     "lobo": "leave_one_bearing_out",
+    "loco": "loco_per_bearing",
     "jin": "jin_fixed",
     "sun": "sun_fixed",
 }
@@ -85,6 +86,7 @@ CV_STRATEGY_MAP = {
 # Number of folds per CV strategy
 FOLDS_PER_STRATEGY = {
     "lobo": 15,
+    "loco": 15,
     "jin": 1,
     "sun": 1,
 }
