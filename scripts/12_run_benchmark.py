@@ -96,6 +96,12 @@ MODEL_SPECS: dict[str, ModelSpec] = {
         config="configs/fulllife_cnn2d.yaml",
         extra_args=["--model", "cnn2d_simple"],
     ),
+    "tcn_transformer_lstm": ModelSpec(
+        name="tcn_transformer_lstm",
+        script="scripts/05_train_dl_models.py",
+        config="configs/benchmark_tcn_transformer_lstm.yaml",
+        extra_args=["--model", "tcn_transformer_lstm"],
+    ),
 }
 
 

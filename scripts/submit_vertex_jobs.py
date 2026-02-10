@@ -94,6 +94,7 @@ BENCHMARK_MODELS = {
     "cnn1d_baseline": ("configs/fulllife_cnn1d.yaml", ["--model", "cnn1d_baseline"]),
     "cnn2d_simple": ("configs/fulllife_cnn2d.yaml", ["--model", "cnn2d_simple"]),
     "dta_mlp": ("configs/benchmark_dta_mlp.yaml", ["--model", "dta_mlp"]),
+    "tcn_transformer_lstm": ("configs/benchmark_tcn_transformer_lstm.yaml", ["--model", "tcn_transformer_lstm"]),
 }
 
 # Hourly costs (approximate, asia-southeast1)
