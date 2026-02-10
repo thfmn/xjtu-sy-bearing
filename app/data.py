@@ -25,7 +25,6 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-from src.models.baselines.lgbm_baseline import train_with_cv, get_feature_columns
 from src.onset.labels import load_onset_labels
 
 # ---------------------------------------------------------------------------
@@ -34,38 +33,74 @@ from src.onset.labels import load_onset_labels
 BASE_DIR = Path(__file__).resolve().parent.parent
 OUTPUTS = BASE_DIR / "outputs"
 FEATURES_CSV = OUTPUTS / "features" / "features_v2.csv"
-MODEL_COMPARISON_CSV = OUTPUTS / "evaluation" / "model_comparison.csv"
 FEATURE_IMPORTANCE_CSV = OUTPUTS / "evaluation" / "lgbm_feature_importance.csv"
 PER_BEARING_CSV = OUTPUTS / "evaluation" / "lgbm_per_bearing.csv"
 MODELS_DIR = OUTPUTS / "models"
 AUDIO_DIR = OUTPUTS / "audio"
-PREDICTIONS_DIR = OUTPUTS / "evaluation" / "predictions"
-DL_SUMMARY_CSV = OUTPUTS / "evaluation" / "dl_model_summary.csv"
+BENCHMARK_DIR = OUTPUTS / "benchmark"
 ONSET_AUTO_CSV = OUTPUTS / "onset" / "onset_labels_auto.csv"
 ONSET_CV_CSV = OUTPUTS / "models" / "onset_classifier_cv_results.csv"
 ONSET_LABELS_YAML = BASE_DIR / "configs" / "onset_labels.yaml"
 
 # ---------------------------------------------------------------------------
-# Display name mapping for DL models
+# Canonical 6-model registry (all normalized [0,1] RUL, 15-fold LOBO)
 # ---------------------------------------------------------------------------
-MODEL_DISPLAY_NAMES: dict[str, str] = {
-    "LightGBM": "LightGBM (CV)",
-    "cnn1d_baseline": "1D CNN",
-    "tcn_transformer_lstm": "TCN-LSTM",
-    "tcn_transformer_transformer": "TCN-Transformer",
-    "pattern2_simple": "CNN2D Simple",
-    "cnn2d_lstm": "CNN2D-LSTM",
-    "cnn2d_simple": "CNN2D Simple",
+BENCHMARK_MODELS: dict[str, dict] = {
+    "feature_lstm_fulllife": {
+        "display_name": "Feature LSTM",
+        "fold_results": BENCHMARK_DIR / "feature_lstm_lobo" / "feature_lstm_fulllife_fold_results.csv",
+        "predictions_dir": BENCHMARK_DIR / "feature_lstm_lobo" / "predictions",
+    },
+    "lgbm_fulllife": {
+        "display_name": "LightGBM",
+        "fold_results": BENCHMARK_DIR / "lgbm_lobo" / "lgbm_fulllife_fold_results.csv",
+        "predictions_dir": BENCHMARK_DIR / "lgbm_lobo" / "predictions",
+    },
+    "cnn1d_baseline": {
+        "display_name": "1D CNN",
+        "fold_results": OUTPUTS / "evaluation" / "cnn1d_baseline_fold_results.csv",
+        "predictions_dir": OUTPUTS / "evaluation" / "predictions",
+    },
+    "cnn2d_simple": {
+        "display_name": "CNN2D",
+        "fold_results": BENCHMARK_DIR / "cnn2d_simple_lobo" / "dl_model_results.csv",
+        "predictions_dir": BENCHMARK_DIR / "cnn2d_simple_lobo" / "predictions",
+    },
+    "dta_mlp": {
+        "display_name": "DTA-MLP",
+        "fold_results": BENCHMARK_DIR / "dta_mlp_lobo" / "dl_model_results.csv",
+        "predictions_dir": BENCHMARK_DIR / "dta_mlp_lobo" / "predictions",
+    },
+    "tcn_transformer_lstm": {
+        "display_name": "TCN-Transformer",
+        "fold_results": BENCHMARK_DIR / "tcn_transformer_lstm_lobo" / "tcn_transformer_lstm_fold_results.csv",
+        "predictions_dir": BENCHMARK_DIR / "tcn_transformer_lstm_lobo" / "predictions",
+    },
 }
-VERTEX_TRAINING_DIR = OUTPUTS / "vertex_training"
+
+MODEL_DISPLAY_NAMES: dict[str, str] = {
+    key: cfg["display_name"] for key, cfg in BENCHMARK_MODELS.items()
+}
+
+# Reverse mapping: display name → internal model key
+DISPLAY_NAME_TO_KEY: dict[str, str] = {v: k for k, v in MODEL_DISPLAY_NAMES.items()}
+
+# Metadata columns excluded when determining feature columns
+_METADATA_COLS = {
+    "condition", "bearing_id", "filename", "file_idx",
+    "total_files", "rul", "rul_original", "rul_twostage", "is_post_onset",
+}
+
+
+def get_feature_columns(df: pd.DataFrame) -> list[str]:
+    """Get feature column names from DataFrame, excluding metadata columns."""
+    return [col for col in df.columns if col not in _METADATA_COLS]
 
 
 def load_data() -> dict:
     """Load all pre-computed data at startup. Called once."""
-    # Check required CSV files exist before loading
     required_files = {
         FEATURES_CSV: "scripts/03_extract_features.py",
-        MODEL_COMPARISON_CSV: "notebooks/30_evaluation.ipynb",
         FEATURE_IMPORTANCE_CSV: "notebooks/30_evaluation.ipynb",
         PER_BEARING_CSV: "notebooks/30_evaluation.ipynb",
     }
@@ -85,109 +120,52 @@ def load_data() -> dict:
 
     data: dict = {}
 
-    # 1. Load features CSV (main dataset)
+    # 1. Load features CSV (main dataset for EDA)
     data["features_df"] = pd.read_csv(FEATURES_CSV)
     data["feature_cols"] = get_feature_columns(data["features_df"])
 
-    # 2. Load evaluation CSVs
-    data["model_comparison"] = pd.read_csv(MODEL_COMPARISON_CSV)
+    # 2. Load LightGBM-specific evaluation artifacts (feature importance, SHAP)
     data["feature_importance"] = pd.read_csv(FEATURE_IMPORTANCE_CSV)
     data["per_bearing"] = pd.read_csv(PER_BEARING_CSV)
 
-    # 2b. Dynamically merge DL fold results into model_comparison
-    #     Scan both outputs/evaluation/ and outputs/vertex_training/
-    eval_dir = OUTPUTS / "evaluation"
-    dl_fold_dfs: dict[str, pd.DataFrame] = {}  # model_name -> combined fold_df
-
-    # Scan evaluation dir for *_fold_results.csv
-    for csv_path in sorted(eval_dir.glob("*_fold_results.csv")):
-        if csv_path.name.startswith("all_models"):
+    # 3. Build model_comparison from the 5 benchmark fold result files
+    comparison_rows = []
+    for model_key, cfg in BENCHMARK_MODELS.items():
+        csv_path = cfg["fold_results"]
+        if not csv_path.exists():
+            logger.warning("Fold results not found: %s", csv_path)
             continue
         fold_df = pd.read_csv(csv_path)
-        if fold_df.empty:
-            continue
-        model_name = fold_df["model_name"].iloc[0]
-        dl_fold_dfs[model_name] = fold_df
-
-    # Scan vertex_training dir for dl_model_results.csv (per model subdir)
-    if VERTEX_TRAINING_DIR.exists():
-        for csv_path in sorted(VERTEX_TRAINING_DIR.glob("*/dl_model_results.csv")):
-            fold_df = pd.read_csv(csv_path)
-            if fold_df.empty:
-                continue
-            model_name = fold_df["model_name"].iloc[0]
-            if model_name in dl_fold_dfs:
-                # Vertex results have more folds — prefer them
-                if len(fold_df) > len(dl_fold_dfs[model_name]):
-                    dl_fold_dfs[model_name] = fold_df
-            else:
-                dl_fold_dfs[model_name] = fold_df
-
-    dl_fold_rows = []
-    for model_name, fold_df in dl_fold_dfs.items():
-        base_display = MODEL_DISPLAY_NAMES.get(model_name, model_name)
-        n_folds = len(fold_df)
-        fold_label = "Fold 0" if n_folds == 1 else f"{n_folds}-fold CV"
-        display = f"{base_display} ({fold_label})"
-        dl_fold_rows.append({
-            "Model": display,
-            "Type": f"DL - Fold 0 only" if n_folds == 1 else f"DL - {n_folds}-fold CV",
+        comparison_rows.append({
+            "Model": cfg["display_name"],
             "RMSE": fold_df["rmse"].mean(),
             "MAE": fold_df["mae"].mean(),
-            "MAPE (%)": fold_df["mape"].mean(),
-            "PHM08 Score": fold_df["phm08_score"].mean(),
-            "PHM08 (norm)": fold_df["phm08_score_normalized"].mean(),
         })
-    if dl_fold_rows:
-        data["model_comparison"] = pd.concat(
-            [data["model_comparison"], pd.DataFrame(dl_fold_rows)],
-            ignore_index=True,
-        )
-        logger.info("Merged %d DL model(s) into model comparison", len(dl_fold_rows))
+    data["model_comparison"] = pd.DataFrame(comparison_rows)
+    logger.info("Model comparison: %d models loaded", len(comparison_rows))
 
-    # 3. Retrain LightGBM with CV for interactive predictions
-    data["predictions"] = {}
-    data["has_model"] = False
-    try:
-        cv_results, _ = train_with_cv(
-            data["features_df"], data["feature_cols"], verbose=False
-        )
-        for result in cv_results:
-            bearing = result.val_bearing[0]  # one bearing per fold
-            data["predictions"][bearing] = {
-                "y_true": result.y_true,
-                "y_pred": result.y_pred,
-            }
-        data["has_model"] = True
-    except Exception as e:
-        logger.warning("LightGBM retraining failed: %s", e)
+    # 4. Load predictions from the 5 benchmark prediction directories
+    data["predictions"] = {}  # {model_key: {bearing_id: {"y_true": [...], "y_pred": [...]}}}
+    for model_key, cfg in BENCHMARK_MODELS.items():
+        pred_dir = cfg["predictions_dir"]
+        if not pred_dir.exists():
+            logger.warning("Predictions dir not found: %s", pred_dir)
+            continue
+        model_preds = {}
+        for csv_path in sorted(pred_dir.glob(f"{model_key}_fold*_predictions.csv")):
+            pred_df = pd.read_csv(csv_path)
+            for bearing_id, group in pred_df.groupby("bearing_id"):
+                model_preds[bearing_id] = {
+                    "y_true": group["y_true"].values,
+                    "y_pred": group["y_pred"].values,
+                }
+        if model_preds:
+            data["predictions"][model_key] = model_preds
+            logger.info("  %s: %d bearing predictions", cfg["display_name"], len(model_preds))
 
-    # 4. Load DL model predictions (if available)
-    #    Scan both outputs/evaluation/predictions/ and outputs/vertex_training/*/predictions/
-    data["dl_predictions"] = {}  # {model_name: {bearing_id: {"y_true": [...], "y_pred": [...]}}}
-    prediction_dirs = []
-    if PREDICTIONS_DIR.exists():
-        prediction_dirs.append(PREDICTIONS_DIR)
-    if VERTEX_TRAINING_DIR.exists():
-        prediction_dirs.extend(sorted(VERTEX_TRAINING_DIR.glob("*/predictions")))
-    for pred_dir in prediction_dirs:
-        for csv_path in sorted(pred_dir.glob("*_predictions.csv")):
-            # filename pattern: {model_name}_fold{N}_predictions.csv
-            parts = csv_path.stem.rsplit("_fold", 1)
-            if len(parts) == 2:
-                model_name = parts[0]
-                pred_df = pd.read_csv(csv_path)
-                if model_name not in data["dl_predictions"]:
-                    data["dl_predictions"][model_name] = {}
-                for bearing_id, group in pred_df.groupby("bearing_id"):
-                    data["dl_predictions"][model_name][bearing_id] = {
-                        "y_true": group["y_true"].values,
-                        "y_pred": group["y_pred"].values,
-                    }
-
-    # 5. Build DL per-bearing metrics from prediction CSVs (in-memory)
-    data["dl_per_bearing"] = {}  # {model_name: DataFrame}
-    for model_name, bearings in data["dl_predictions"].items():
+    # 5. Build per-bearing metrics from predictions (all models)
+    data["dl_per_bearing"] = {}
+    for model_key, bearings in data["predictions"].items():
         rows = []
         for bearing_id, preds in sorted(bearings.items()):
             y_true = np.array(preds["y_true"])
@@ -201,30 +179,14 @@ def load_data() -> dict:
                 "mae": mae,
             })
         if rows:
-            data["dl_per_bearing"][model_name] = pd.DataFrame(rows)
+            data["dl_per_bearing"][model_key] = pd.DataFrame(rows)
 
-    # Also load any pre-existing per-bearing CSVs (excluding lgbm)
-    for csv_path in sorted(eval_dir.glob("*_per_bearing.csv")):
-        model_name = csv_path.stem.replace("_per_bearing", "")
-        if model_name != "lgbm" and model_name not in data["dl_per_bearing"]:
-            data["dl_per_bearing"][model_name] = pd.read_csv(csv_path)
-
-    # 6. Load DL model summary (if available)
-    if DL_SUMMARY_CSV.exists():
-        data["dl_summary"] = pd.read_csv(DL_SUMMARY_CSV)
-        logger.info("DL summary: %d models loaded from %s", len(data["dl_summary"]), DL_SUMMARY_CSV.name)
-    else:
-        data["dl_summary"] = None
-
-    # 7. Load DL training history (if available)
-    #    Scan both outputs/evaluation/history/ and outputs/vertex_training/*/*/history/
-    data["dl_history"] = {}  # {model_name: [fold0_df, fold1_df, ...]}
+    # 6. Load DL training history (if available)
+    data["dl_history"] = {}
     history_dirs = []
     history_dir = OUTPUTS / "evaluation" / "history"
     if history_dir.exists():
         history_dirs.append(history_dir)
-    if VERTEX_TRAINING_DIR.exists():
-        history_dirs.extend(sorted(VERTEX_TRAINING_DIR.glob("*/*/history")))
     for h_dir in history_dirs:
         for csv_path in sorted(h_dir.glob("*_history.csv")):
             parts = csv_path.stem.rsplit("_fold", 1)
@@ -237,7 +199,7 @@ def load_data() -> dict:
         total_folds = sum(len(v) for v in data["dl_history"].values())
         logger.info("DL history: %d models, %d fold histories loaded", len(data["dl_history"]), total_folds)
 
-    # 8. Load onset detection data
+    # 7. Load onset detection data
     data["onset_labels_curated"] = {}
     try:
         data["onset_labels_curated"] = load_onset_labels(ONSET_LABELS_YAML)

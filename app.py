@@ -17,8 +17,8 @@
 """XJTU-SY Bearing RUL Prediction Dashboard.
 
 Interactive Gradio dashboard for showcasing the bearing RUL prediction pipeline.
-Displays pre-computed results and retrains a fast LightGBM model at startup
-for interactive per-bearing predictions.
+Displays pre-computed benchmark results from 5 models evaluated on normalized
+[0, 1] RUL with 15-fold leave-one-bearing-out cross-validation.
 """
 
 from __future__ import annotations
@@ -28,6 +28,8 @@ import gradio as gr
 
 from app.data import (
     MODELS_DIR,
+    MODEL_DISPLAY_NAMES,
+    DISPLAY_NAME_TO_KEY,
     load_data,
 )
 from app.plots import (
@@ -59,6 +61,9 @@ from src.data.loader import CONDITIONS, BEARINGS_PER_CONDITION
 # Global data store (populated once at startup)
 # ---------------------------------------------------------------------------
 DATA: dict = {}
+
+# Display name list for model dropdowns (ordered by performance)
+_DISPLAY_NAMES = list(MODEL_DISPLAY_NAMES.values())
 
 
 def _update_bearing_dd(condition: str):
@@ -131,28 +136,16 @@ def create_app() -> gr.Blocks:
                 )
             with gr.Tab("Model Results"):
                 gr.Markdown("### Model Comparison")
-                # Build a dynamic note based on which models have full CV
-                _fold0_models = [
-                    row["Model"] for _, row in DATA["model_comparison"].iterrows()
-                    if row.get("Type") == "DL - Fold 0 only"
-                ]
-                if _fold0_models:
-                    _fold0_list = ", ".join(_fold0_models)
-                    gr.Markdown(
-                        f"> *Note: {_fold0_list} evaluated on Fold 0 only "
-                        "(Bearing1_1, 123 samples). LightGBM and models marked "
-                        "'CV' use full 15-fold leave-one-bearing-out cross-validation.*"
-                    )
-                else:
-                    gr.Markdown(
-                        "> *All models evaluated with 15-fold leave-one-bearing-out CV.*"
-                    )
+                gr.Markdown(
+                    "> *All models evaluated with 15-fold leave-one-bearing-out CV "
+                    "on normalized [0, 1] RUL scale.*"
+                )
                 comparison_df = DATA["model_comparison"][
-                    ["Model", "Type", "RMSE", "MAE", "PHM08 (norm)"]
-                ].round(2)
+                    ["Model", "RMSE", "MAE"]
+                ].round(3)
                 gr.Dataframe(
                     value=comparison_df,
-                    label="Model Comparison (all models)",
+                    label="Model Comparison (5 benchmark models)",
                     interactive=False,
                 )
 
@@ -186,16 +179,6 @@ def create_app() -> gr.Blocks:
                     outputs=fi_plot,
                 )
 
-                gr.Markdown("### Per-Bearing Performance (LightGBM CV)")
-                per_bearing_df = DATA["per_bearing"][
-                    ["bearing_id", "n_samples", "rmse", "mae"]
-                ].round(2)
-                gr.Dataframe(
-                    value=per_bearing_df,
-                    label="Per-Bearing Metrics",
-                    interactive=False,
-                )
-
                 gr.Markdown("### Training Convergence")
                 dl_history_models = sorted(DATA.get("dl_history", {}).keys())
                 if dl_history_models:
@@ -216,12 +199,14 @@ def create_app() -> gr.Blocks:
                 else:
                     gr.Markdown("*No training history available. Train DL models first.*")
 
+                gr.Markdown("### Per-Bearing Model Comparison")
                 if DATA.get("dl_per_bearing"):
-                    gr.Markdown("### Per-Bearing Model Comparison")
                     gr.Plot(
                         value=plot_per_bearing_comparison(),
                         label="Per-Bearing RMSE Comparison",
                     )
+                else:
+                    gr.Markdown("*No per-bearing data available.*")
 
                 gr.Markdown("### SHAP Feature Importance")
                 shap_path = MODELS_DIR / "lgbm_shap_bar.png"
@@ -234,41 +219,45 @@ def create_app() -> gr.Blocks:
                     gr.Markdown("*SHAP image not found.*")
             with gr.Tab("Predictions"):
                 gr.Markdown("### RUL Predictions")
-                if not DATA.get("has_model", False) and not DATA.get("dl_predictions"):
+
+                # Explanation callout
+                gr.Markdown(
+                    "> **Reading the prediction curves:** The RMSE shown "
+                    "(e.g., Feature LSTM = 0.160) is the mean error across all "
+                    "15 bearings and all timesteps on a 0-to-1 normalized scale. "
+                    "Individual per-bearing curves vary in quality — some track "
+                    "nearly perfectly (Bearing1\_3: 0.090 RMSE), while harder "
+                    "cases (Bearing3\_1: 2,538 files, gradual degradation) show "
+                    "more deviation. This is expected and consistent across all "
+                    "models. Use the model dropdown to compare models on the "
+                    "same bearing."
+                )
+
+                predictions = DATA.get("predictions", {})
+                if not predictions:
                     gr.Markdown(
-                        "⚠️ **No model predictions available.** "
-                        "Displaying pre-generated prediction plots instead."
+                        "No model predictions available. "
+                        "Run the benchmark scripts first."
                     )
-                    pred_png = MODELS_DIR / "lgbm_predictions.png"
-                    scatter_png = MODELS_DIR / "lgbm_scatter.png"
-                    if pred_png.exists():
-                        gr.Image(value=str(pred_png), label="LightGBM Predictions")
-                    if scatter_png.exists():
-                        gr.Image(value=str(scatter_png), label="Predicted vs Actual")
                 else:
-                    model_choices = []
-                    if DATA.get("has_model", False):
-                        model_choices.append("LightGBM")
-                    if DATA.get("dl_predictions"):
-                        model_choices += sorted(DATA["dl_predictions"].keys())
-                    default_model = model_choices[0] if model_choices else None
+                    default_model = _DISPLAY_NAMES[0]
+                    default_model_key = DISPLAY_NAME_TO_KEY[default_model]
 
-                    def _bearings_for_model(name: str) -> list[str]:
-                        if name == "LightGBM":
-                            return sorted(DATA.get("predictions", {}).keys())
-                        return sorted(DATA.get("dl_predictions", {}).get(name, {}).keys())
+                    def _bearings_for_model(display_name: str) -> list[str]:
+                        key = DISPLAY_NAME_TO_KEY.get(display_name, display_name)
+                        return sorted(predictions.get(key, {}).keys())
 
-                    def _update_pred_bearing_dd(model_name: str):
-                        bearings = _bearings_for_model(model_name)
+                    def _update_pred_bearing_dd(display_name: str):
+                        bearings = _bearings_for_model(display_name)
                         return gr.Dropdown(choices=bearings, value=bearings[0] if bearings else None)
 
-                    default_bearings_pred = _bearings_for_model(default_model) if default_model else []
+                    default_bearings_pred = _bearings_for_model(default_model)
 
                     model_metrics_md = gr.Markdown(
-                        value=get_model_metrics_summary(default_model) if default_model else "",
+                        value=get_model_metrics_summary(default_model),
                     )
                     pred_model_dd = gr.Dropdown(
-                        choices=model_choices, value=default_model, label="Model",
+                        choices=_DISPLAY_NAMES, value=default_model, label="Model",
                     )
                     pred_bearing_dd = gr.Dropdown(
                         choices=default_bearings_pred,
@@ -291,7 +280,7 @@ def create_app() -> gr.Blocks:
                     rul_curve_plot = gr.Plot(
                         value=plot_rul_curve(
                             default_bearings_pred[0], default_model
-                        ) if default_bearings_pred and default_model else None,
+                        ) if default_bearings_pred else None,
                         label="RUL Prediction Curve",
                     )
 
@@ -340,7 +329,7 @@ def create_app() -> gr.Blocks:
 
                     gr.Markdown("### Per-Bearing Error Breakdown")
                     per_bearing_table = gr.Dataframe(
-                        value=get_per_bearing_table(default_model) if default_model else pd.DataFrame(),
+                        value=get_per_bearing_table(default_model),
                         label="Per-Bearing Metrics",
                         interactive=False,
                     )
@@ -504,13 +493,11 @@ if __name__ == "__main__":
     DATA = load_data()
     init_plots(DATA)
     print(f"  Features: {len(DATA['features_df'])} rows, {len(DATA['feature_cols'])} feature columns")
-    print(f"  Model trained: {DATA['has_model']}")
-    if DATA["has_model"]:
-        print(f"  Predictions for {len(DATA['predictions'])} bearings")
-    dl_preds = DATA.get("dl_predictions", {})
-    if dl_preds:
-        total_bearings = sum(len(v) for v in dl_preds.values())
-        print(f"  DL predictions: {len(dl_preds)} models, {total_bearings} bearings total")
+    print(f"  Models: {len(DATA['model_comparison'])} benchmark models")
+    preds = DATA.get("predictions", {})
+    if preds:
+        total_bearings = sum(len(v) for v in preds.values())
+        print(f"  Predictions: {len(preds)} models, {total_bearings} bearings total")
 
     app = create_app()
     app.launch(server_name="127.0.0.1", server_port=7860, theme=gr.themes.Soft())
