@@ -5,7 +5,7 @@
 ![Tests](https://img.shields.io/badge/tests-556%20passed-brightgreen)
 ![uv](https://img.shields.io/badge/package%20manager-uv-blueviolet)
 
-A reproducible benchmark for **Remaining Useful Life (RUL)** prediction of rolling element bearings on the XJTU-SY dataset. Compares 5 models across 3 evaluation protocols with a two-stage onset detection pipeline, a reproduction of [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4), an interactive Gradio dashboard, and experiment tracking via MLflow and Vertex AI. Our best model -- a bidirectional **Feature LSTM with just 5,793 parameters** -- achieves **0.160 LOBO RMSE**, outperforming all deep learning baselines trained on raw signals.
+A reproducible benchmark for **Remaining Useful Life (RUL)** prediction of rolling element bearings on the XJTU-SY dataset. Compares 6 models across 3 evaluation protocols with a two-stage onset detection pipeline, a reproduction of [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4), an interactive Gradio dashboard, and experiment tracking via MLflow and Vertex AI. Our best model -- a bidirectional **Feature LSTM with just 5,793 parameters** -- achieves **0.160 LOBO RMSE**, outperforming all deep learning baselines trained on raw signals.
 
 <p align="center">
   <img src="docs/Demonstration-of-test-best-setup-for-XJTU-SY-experimental-study-58.png" alt="XJTU-SY bearing test rig: AC motor driving a shaft with support bearings under hydraulic loading, with horizontal and vertical accelerometers mounted on the tested bearing" width="700">
@@ -25,7 +25,7 @@ This project takes raw vibration signals from accelerometers mounted on bearings
   <img src="docs/xjtu-bench-arch.png" alt="Benchmark architecture: four parallel processing paths from raw vibration CSVs to RUL prediction" width="800">
 </p>
 
-Four parallel input representations feed different model families, from gradient-boosted trees on hand-crafted features to deep learning on raw signals and spectrograms. A two-stage onset detection pipeline identifies the transition from healthy to degraded operation.
+Four parallel input representations feed different model families, from gradient-boosted trees on hand-crafted features to deep learning on raw signals and spectrograms, including a TCN-Transformer architecture that explores dilated causal convolutions with cross-channel attention. A two-stage onset detection pipeline identifies the transition from healthy to degraded operation.
 
 ## Dataset
 
@@ -43,7 +43,7 @@ Each CSV file contains 32,768 samples (1.28 s recording) captured at regular int
 
 ## Models
 
-Five model architectures are benchmarked. Four are original designs; one is an attempt to reproduce a published method.
+Six model architectures are benchmarked. Five are original designs; one is an attempt to reproduce a published method.
 
 | Model | Input | Architecture | Params | Source |
 |---|---|---|---|---|
@@ -51,17 +51,19 @@ Five model architectures are benchmarked. Four are original designs; one is an a
 | **LightGBM** | 65 features | Gradient-boosted trees | ~1,200 leaves | Original |
 | **1D CNN** | 32768 × 2 raw signal | Conv1D → BatchNorm → GlobalAvgPool → Dense | ~50K | Original |
 | **CNN2D** | 128 × 128 × 2 spectrogram | 2D CNN with progressive downsampling | ~80K | Original |
+| **TCN-Transformer** | 32768 × 2 raw signal | TCN → Cross-Attention → BiLSTM → Dense | ~77K | Inspired by [1, 2, 3] below |
 | **DTA-MLP** | 32768 × 2 raw signal | CNN encoder → Dual Temporal Attention → MLP | ~120K | Reproduction of [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4) |
 
 For a deep dive into the Feature LSTM architecture and design decisions, see the **[Feature LSTM Design Guide](docs/feature_lstm_guide.md)**.
 
 > **Replication notes:**
 > - **DTA-MLP** reproduces the Dual Temporal Attention mechanism and MLP head from Jin et al. 2025. The paper does not fully specify the CNN frontend architecture used to extract temporal features from raw signals; our implementation uses a standard 1D convolutional encoder. The results are not comparable and serve only an experimentation purpose.
+> - **TCN-Transformer** combines ideas from several published approaches into a single architecture for personal experimentation. The TCN backbone uses dilated causal convolutions from [Bai et al. 2018](https://arxiv.org/abs/1803.01271) [1]; the TCN-LSTM combination for bearing RUL follows work such as [Hsu et al. 2022](https://doi.org/10.1049/icp.2024.3578) [2]; and the parallel TCN-Transformer design draws from [Tong et al. 2024](https://doi.org/10.1088/1361-6501/ad73ee) [3]. Our variant adds bidirectional cross-attention between the two vibration channels and a BiLSTM aggregator. It is not a reproduction of any single paper but a personal testbench to study how TCN-based temporal feature extraction compares to standard convolutions and attention-only approaches on this dataset.
 > - **CNN1D, CNN2D, Feature LSTM, LightGBM** are original architectures designed for this project and are not reproductions of any published method.
 
 ## Results
 
-### Benchmark: 5 Models × 3 Evaluation Protocols
+### Benchmark: 6 Models × 3 Evaluation Protocols
 
 All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL is linearly normalized from 1.0 (start of life) to 0.0 (failure), making results comparable across bearings of different lifetimes and across published papers.
 
@@ -258,7 +260,7 @@ python scripts/03b_enrich_temporal_features.py
 #   → outputs/spectrograms/  (128×128×2 .npy files, Hive-partitioned)
 python scripts/04_generate_spectrograms.py
 
-# Step 5: Train deep learning models (1D CNN, CNN2D, DTA-MLP)
+# Step 5: Train deep learning models (1D CNN, CNN2D, DTA-MLP, TCN-Transformer)
 #   → outputs/models/  (saved Keras models)
 #   → outputs/evaluation/  (*_fold_results.csv, predictions/, history/)
 python scripts/05_train_dl_models.py --model cnn1d_baseline --folds 0
@@ -333,7 +335,7 @@ All other output files are optional. The dashboard gracefully degrades when they
 │   ├── 03_extract_features.py
 │   ├── 03b_enrich_temporal_features.py
 │   ├── 04_generate_spectrograms.py
-│   ├── 05_train_dl_models.py #   Train CNN1D, CNN2D, DTA-MLP
+│   ├── 05_train_dl_models.py #   Train CNN1D, CNN2D, DTA-MLP, TCN-Transformer
 │   ├── 06_evaluate_dl_models.py
 │   ├── 07_create_audio.py
 │   ├── 08_generate_onset_labels.py

@@ -1,0 +1,64 @@
+# Benchmark: TCN-Transformer LSTM (Pattern 1 — regularized v2)
+#
+# Temporal Convolutional Network + Transformer cross-attention + LSTM decoder
+# for bearing RUL prediction on raw vibration signal input.
+#
+# Architecture: TCN (dilated causal conv) → Transformer encoder → LSTM decoder → Dense(1)
+# ~77K params. Processes raw dual-channel vibration (32768, 2).
+#
+# Key changes from tcn_transformer.yaml for benchmark:
+#   - Huber delta: 10.0 → 0.08 (scaled for [0,1] normalized RUL)
+#   - training.max_rul: 1.0 (normalized full-life RUL)
+#   - vertex.enabled: false (local CPU run)
+#   - mlflow_experiment_name: bearing_rul_benchmark
+#
+# Usage:
+#   python scripts/05_train_dl_models.py --model tcn_transformer_lstm \
+#       --config configs/benchmark_tcn_transformer_lstm.yaml \
+#       --cv-strategy leave_one_bearing_out
+
+# --- Standard training parameters ---
+model_version: "v2"  # v2=regularized + reduced capacity + augmentation
+batch_size: 8
+epochs: 100
+seed: 9
+
+optimizer:
+  name: adamw
+  learning_rate: 0.0005
+  weight_decay: 0.005  # 50× increase: heavy L2 reg for small dataset
+
+loss:
+  name: huber
+  delta: 0.08
+
+callbacks:
+  checkpoint_dir: outputs/models/checkpoints
+  save_best_only: true
+  monitor: val_loss
+  mode: min
+  lr_reduce_factor: 0.5
+  lr_reduce_patience: 10
+  lr_min: 0.000001
+  early_stop_patience: 20
+  restore_best_weights: true
+  mlflow_tracking: true
+  mlflow_tracking_uri: mlruns
+  mlflow_experiment_name: bearing_rul_benchmark
+
+# --- Model ---
+model:
+  name: tcn_transformer
+  input_type: raw_signal
+
+# --- Full-life training settings ---
+training:
+  eval_mode: full_life
+  filter_pre_onset: false
+  max_rul: 1.0
+
+vertex:
+  enabled: false
+  experiment_name: bearing-rul-benchmark
+  project_id: xjtu-bearing-failure
+  location: asia-southeast1
