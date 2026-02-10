@@ -6,11 +6,12 @@
 <script lang="ts">
   import TabBar from "./lib/components/TabBar.svelte";
   import BearingSelector from "./lib/components/BearingSelector.svelte";
+  import BearingOverview from "./lib/components/BearingOverview.svelte";
   import HealthExplorer from "./lib/components/HealthExplorer.svelte";
   import ScalogramViewer from "./lib/components/ScalogramViewer.svelte";
   import AudioAnalysis from "./lib/components/AudioAnalysis.svelte";
 
-  let activeTab = $state("Health Explorer");
+  let activeTab = $state("Overview");
   let selectedCondition = $state("");
   let selectedBearing = $state("");
 
@@ -33,7 +34,9 @@
 </header>
 
 <main>
-  {#if activeTab === "Health Explorer"}
+  {#if activeTab === "Overview"}
+    <BearingOverview />
+  {:else if activeTab === "Health Explorer"}
     <HealthExplorer condition={selectedCondition} bearing={selectedBearing} />
   {:else if activeTab === "Scalogram Viewer"}
     <ScalogramViewer condition={selectedCondition} bearing={selectedBearing} />

@@ -46,6 +46,7 @@ class OnsetLabelEntry:
         onset_file_idx: File index where degradation begins (0-indexed)
         confidence: Labeling confidence ('high', 'medium', 'low')
         detection_method: Health indicator used ('kurtosis', 'rms', 'composite')
+        failure_mode: Documented failure mode (e.g., 'Outer race', 'Cage')
         onset_range: Optional [min_idx, max_idx] for ambiguous cases
         notes: Additional observations
     """
@@ -55,6 +56,7 @@ class OnsetLabelEntry:
     onset_file_idx: int
     confidence: str
     detection_method: str
+    failure_mode: str = ""
     onset_range: tuple[int, int] | None = None
     notes: str = ""
 
@@ -117,6 +119,7 @@ def load_onset_labels(
             onset_file_idx=entry["onset_file_idx"],
             confidence=entry["confidence"],
             detection_method=entry["detection_method"],
+            failure_mode=entry.get("failure_mode", ""),
             onset_range=onset_range,
             notes=entry.get("notes", ""),
         )

@@ -43,6 +43,8 @@ pub struct OnsetEntry {
     pub onset_file_idx: u32,
     pub confidence: String,
     pub detection_method: String,
+    #[serde(default)]
+    pub failure_mode: Option<String>,
     pub onset_range: Option<Vec<u32>>,
     pub notes: Option<String>,
 }
@@ -163,6 +165,21 @@ pub struct WaveformData {
 pub struct AudioData {
     pub base64: String,
     pub mime_type: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BearingOverviewRow {
+    pub bearing_id: String,
+    pub condition: String,
+    pub failure_mode: String,
+    pub onset_file_idx: u32,
+    pub confidence: String,
+    pub detection_method: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BearingOverviewResponse {
+    pub rows: Vec<BearingOverviewRow>,
 }
 
 // ---------------------------------------------------------------------------

@@ -95,6 +95,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::health::get_dataset_info,
             commands::health::get_health_indicators,
+            commands::health::get_bearing_overview,
             commands::scalogram::get_scalogram,
             commands::scalogram::get_scalogram_file_count,
             commands::scalogram::get_panoramic_scalogram,

@@ -12,7 +12,7 @@
     onTabChange: (tab: string) => void;
   } = $props();
 
-  const tabs = ["Health Explorer", "Scalogram Viewer", "Audio Analysis"];
+  const tabs = ["Overview", "Health Explorer", "Scalogram Viewer", "Audio Analysis"];
 </script>
 
 <nav class="tab-bar">

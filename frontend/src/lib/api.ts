@@ -18,6 +18,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   DatasetInfo,
   HealthIndicatorData,
+  BearingOverviewResponse,
   ScalogramData,
   PanoramicScalogramData,
   AudioFilesResponse,
@@ -27,6 +28,10 @@ import type {
 
 export async function getDatasetInfo(): Promise<DatasetInfo> {
   return invoke<DatasetInfo>("get_dataset_info");
+}
+
+export async function getBearingOverview(): Promise<BearingOverviewResponse> {
+  return invoke<BearingOverviewResponse>("get_bearing_overview");
 }
 
 export async function getHealthIndicators(

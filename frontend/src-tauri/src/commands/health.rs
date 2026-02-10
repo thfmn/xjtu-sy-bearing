@@ -15,7 +15,8 @@
 //  Package:   xjtu-sy-bearing onset and RUL prediction ML Pipeline
 
 use crate::models::{
-    AppData, ConditionInfo, DatasetInfo, HealthIndicatorData, OnsetMarker,
+    AppData, BearingOverviewResponse, BearingOverviewRow, ConditionInfo, DatasetInfo,
+    HealthIndicatorData, OnsetMarker,
 };
 
 /// Return dataset structure: 3 operating conditions with 5 bearings each.
@@ -124,4 +125,30 @@ pub fn get_health_indicators(
         onset_manual,
         onset_auto,
     })
+}
+
+/// Return an overview table of all bearings with failure modes and onset info.
+///
+/// Iterates over the manual onset labels, sorted by bearing_id, and collects
+/// each bearing's condition, failure mode, onset index, confidence, and method.
+#[tauri::command]
+pub fn get_bearing_overview(
+    state: tauri::State<'_, AppData>,
+) -> Result<BearingOverviewResponse, String> {
+    let mut rows: Vec<BearingOverviewRow> = state
+        .onset_manual
+        .iter()
+        .map(|(_, entry)| BearingOverviewRow {
+            bearing_id: entry.bearing_id.clone(),
+            condition: entry.condition.clone(),
+            failure_mode: entry.failure_mode.clone().unwrap_or_default(),
+            onset_file_idx: entry.onset_file_idx,
+            confidence: entry.confidence.clone(),
+            detection_method: entry.detection_method.clone(),
+        })
+        .collect();
+
+    rows.sort_by(|a, b| a.bearing_id.cmp(&b.bearing_id));
+
+    Ok(BearingOverviewResponse { rows })
 }

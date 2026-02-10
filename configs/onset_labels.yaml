@@ -29,6 +29,7 @@
 #   onset_file_idx: File index where degradation begins (0-indexed)
 #   confidence: Labeling confidence (high/medium/low)
 #   detection_method: Which health indicator was used (kurtosis/rms/composite)
+#   failure_mode: Documented failure mode from Wang et al. 2020 (e.g., 'Outer race', 'Cage')
 #   onset_range: [min_idx, max_idx] for ambiguous cases (optional)
 #   notes: Additional observations
 #
@@ -47,6 +48,7 @@ bearings:
     onset_file_idx: 65
     confidence: high
     detection_method: composite
+    failure_mode: Outer race
     notes: >
       Onset at file 65 based on visual inspection of v_kurtosis transition zone
       (steps from 0.25-0.33 baseline to 0.38-0.70 over files 65-69) combined with
@@ -58,6 +60,7 @@ bearings:
     onset_file_idx: 31
     confidence: high
     detection_method: rms
+    failure_mode: Outer race
     notes: >
       Dramatic v_rms step-change at file 31 (0.590 → 0.827, +40%), never returns
       to baseline. Original kurtosis-based detection at 43 missed this by 12 files.
@@ -68,6 +71,7 @@ bearings:
     onset_file_idx: 58
     confidence: high
     detection_method: rms
+    failure_mode: Outer race
     notes: >
       Very stable baseline (h_rms ~0.51, v_rms ~0.52). RMS jump at file 58
       (v_rms 0.523 → 0.614, +17%). Kurtosis detector caught it one file late
@@ -78,6 +82,7 @@ bearings:
     onset_file_idx: 79
     confidence: high
     detection_method: kurtosis
+    failure_mode: Cage
     notes: >
       Stable baseline (0.02±0.03), then dramatic kurtosis increase to 141.44
       at failure. Clear onset at file 79. High confidence.
@@ -87,6 +92,7 @@ bearings:
     onset_file_idx: 34
     confidence: high
     detection_method: rms
+    failure_mode: Outer race + Inner race
     notes: >
       Short life (52 files). Original algorithmic onset at 27 was a false positive —
       file 27 (h_rms=0.996) is indistinguishable from neighbors. First real deviation
@@ -102,6 +108,7 @@ bearings:
     onset_file_idx: 452
     confidence: high
     detection_method: kurtosis
+    failure_mode: Inner race
     notes: >
       Very long healthy life (452/491 files healthy = 92%). Stable baseline
       (0.02±0.04), clear kurtosis spike at 452. High confidence - classic
@@ -112,6 +119,7 @@ bearings:
     onset_file_idx: 46
     confidence: high
     detection_method: rms
+    failure_mode: Outer race
     notes: >
       RMS jump at file 46 (h_rms 0.490 → 0.640, +31%; v_rms 0.452 → 0.565, +25%).
       Kurtosis detector caught it one file late at 47. File 46 is the first
@@ -122,6 +130,7 @@ bearings:
     onset_file_idx: 122
     confidence: high
     detection_method: kurtosis
+    failure_mode: Cage
     notes: >
       Long life (533 files). Stable baseline (0.02±0.03), sustained kurtosis
       increase starting at file 122. Clear degradation pattern. High confidence.
@@ -131,6 +140,7 @@ bearings:
     onset_file_idx: 30
     confidence: high
     detection_method: rms
+    failure_mode: Outer race
     notes: >
       Short life (42 files). Original onset at 9 was a false positive — files 0-29
       are noisy but stable baseline (h_rms 0.51-0.65, kurtosis 0.2-1.8). Catastrophic
@@ -142,6 +152,7 @@ bearings:
     onset_file_idx: 121
     confidence: high
     detection_method: rms
+    failure_mode: Outer race
     notes: >
       Long life (339 files). Kurtosis never exceeds baseline threshold and
       actually DECREASES toward failure (-0.51). RMS shows clear onset at
@@ -157,6 +168,7 @@ bearings:
     onset_file_idx: 748
     confidence: high
     detection_method: composite
+    failure_mode: Outer race
     onset_range: [748, 870]
     notes: >
       Very long life (2538 files). Stable baseline (0.03±0.03). Kurtosis-based
@@ -168,6 +180,7 @@ bearings:
     onset_file_idx: 1020
     confidence: medium
     detection_method: composite
+    failure_mode: Outer race + Ball + Cage + Inner race
     onset_range: [1020, 1441]
     notes: >
       Very long life (2496 files). High initial v_kurtosis baseline (~1.7-1.9).
@@ -181,6 +194,7 @@ bearings:
     onset_file_idx: 339
     confidence: high
     detection_method: kurtosis
+    failure_mode: Inner race
     notes: >
       Clear stable baseline (0.05±0.03), sharp kurtosis increase at file 339.
       Well-defined onset point with sustained degradation. High confidence.
@@ -190,19 +204,22 @@ bearings:
     onset_file_idx: 1417
     confidence: medium
     detection_method: rms
-    onset_range: [1012, 1417]
+    failure_mode: Inner race
+    onset_range: [710, 1417]
     notes: >
-      Very long life (1515 files). Initial high kurtosis (1.66 at file 0)
-      causes composite to show very early "onset" at file 3, which is
-      misleading. RMS shows sustained increase only at file 1417 (2.5σ) with
-      100% post-onset above threshold. Earlier RMS change at 1012 (2σ) shows
-      only 10.8% sustained. Used conservative 1417 as onset. SNR=320.8.
+      Very long life (1515 files). Kurtosis regime change at ~710 (baseline
+      shifts permanently), first detectable v_rms drift at ~940. RMS shows
+      sustained increase at file 1417 (2.5σ) with 100% post-onset above
+      threshold. Earlier RMS change at 1012 (2σ) shows only 10.8% sustained.
+      Used conservative 1417 as onset. SNR=320.8. Onset range widened to
+      [710, 1417] to capture the earliest kurtosis regime change.
 
   - bearing_id: Bearing3_5
     condition: 40Hz10kN
     onset_file_idx: 5
     confidence: high
     detection_method: rms
+    failure_mode: Outer race
     notes: >
       Short-medium life (114 files). Bearing failed almost immediately. v_rms
       accelerates from file 5 (0.995) and jumps to 1.773 at file 6 (+78%).

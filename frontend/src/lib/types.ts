@@ -97,3 +97,18 @@ export interface AudioData {
   base64: string;
   mime_type: string;
 }
+
+/** Mirrors Rust BearingOverviewRow */
+export interface BearingOverviewRow {
+  bearing_id: string;
+  condition: string;
+  failure_mode: string;
+  onset_file_idx: number;
+  confidence: string;
+  detection_method: string;
+}
+
+/** Mirrors Rust BearingOverviewResponse */
+export interface BearingOverviewResponse {
+  rows: BearingOverviewRow[];
+}

@@ -23,7 +23,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from app.data import AUDIO_DIR, MODEL_DISPLAY_NAMES, MODELS_DIR
+from app.data import AUDIO_DIR, MODEL_DISPLAY_NAMES, DISPLAY_NAME_TO_KEY, MODELS_DIR
 from src.onset.health_indicators import load_bearing_health_series
 
 # ---------------------------------------------------------------------------
@@ -44,6 +44,19 @@ def init_plots(data: dict) -> None:
     """Bind the global data store. Called once at startup from app.py."""
     global DATA
     DATA = data
+
+
+def _resolve_model_key(model_name: str) -> str:
+    """Resolve a display name or internal key to the internal model key."""
+    if model_name in DISPLAY_NAME_TO_KEY:
+        return DISPLAY_NAME_TO_KEY[model_name]
+    return model_name
+
+
+def _get_model_predictions(model_name: str) -> dict:
+    """Get predictions dict for a model (by display name or internal key)."""
+    key = _resolve_model_key(model_name)
+    return DATA.get("predictions", {}).get(key, {})
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +211,10 @@ def plot_model_comparison_bars() -> go.Figure:
         marker_color="#ff7f0e", orientation="h",
     ))
     fig.update_layout(
-        title="Model Comparison — RMSE and MAE (lower is better)",
+        title=(
+            "Model Comparison — RMSE and MAE (lower is better)"
+            "<br><sup>Normalized RMSE on [0, 1] RUL scale — 15-fold LOBO CV</sup>"
+        ),
         barmode="group", xaxis_title="Error",
         yaxis=dict(autorange="reversed"),
         height=max(400, len(df) * 60),
@@ -209,26 +225,13 @@ def plot_model_comparison_bars() -> go.Figure:
 def compute_model_architecture_table() -> pd.DataFrame:
     """Summary of all model architectures: name, type, input, params."""
     rows = [
+        {"Model": "Feature LSTM", "Family": "LSTM", "Input": "65 features (sequence)", "Input Shape": "(seq_len, 65)"},
         {"Model": "LightGBM", "Family": "Gradient Boosting", "Input": "65 features", "Input Shape": "65"},
-        {"Model": "RMS Threshold", "Family": "Statistical", "Input": "RMS signal", "Input Shape": "N/A"},
-        {"Model": "Kurtosis Trending", "Family": "Statistical", "Input": "Kurtosis", "Input Shape": "N/A"},
-        {"Model": "Health Indicator Fusion", "Family": "Statistical", "Input": "RMS + Kurtosis", "Input Shape": "N/A"},
+        {"Model": "1D CNN", "Family": "Deep Learning", "Input": "Raw vibration (1D)", "Input Shape": "(32768, 2)"},
+        {"Model": "CNN2D", "Family": "Deep Learning", "Input": "Spectrogram (2D)", "Input Shape": "(128, 128, 2)"},
+        {"Model": "DTA-MLP", "Family": "Deep Learning", "Input": "65 features", "Input Shape": "65"},
+        {"Model": "TCN-Transformer", "Family": "TCN + Cross-Attention + LSTM", "Input": "Raw vibration (1D)", "Input Shape": "(32768, 2)"},
     ]
-    try:
-        from src.models.registry import list_models, get_model_info
-        for name in list_models():
-            try:
-                info = get_model_info(name)
-                rows.append({
-                    "Model": _MODEL_DISPLAY_NAMES.get(name, name),
-                    "Family": "Deep Learning",
-                    "Input": info.input_type.replace("_", " ").title(),
-                    "Input Shape": str(info.default_input_shape),
-                })
-            except Exception:
-                pass
-    except ImportError:
-        pass
     return pd.DataFrame(rows)
 
 
@@ -268,25 +271,17 @@ def plot_per_bearing_comparison() -> go.Figure:
     """Grouped bar chart: per-bearing RMSE for each model."""
     fig = go.Figure()
 
-    # LightGBM
-    lgbm_df = DATA.get("per_bearing")
-    if lgbm_df is not None:
-        lgbm_sorted = lgbm_df.sort_values("bearing_id")
-        fig.add_trace(go.Bar(
-            name="LightGBM", x=lgbm_sorted["bearing_id"], y=lgbm_sorted["rmse"],
-        ))
-
-    # DL models
-    for model_name, df in sorted(DATA.get("dl_per_bearing", {}).items()):
+    for model_key, df in sorted(DATA.get("dl_per_bearing", {}).items()):
         df_sorted = df.sort_values("bearing_id")
+        display_name = _MODEL_DISPLAY_NAMES.get(model_key, model_key)
         fig.add_trace(go.Bar(
-            name=model_name, x=df_sorted["bearing_id"], y=df_sorted["rmse"],
+            name=display_name, x=df_sorted["bearing_id"], y=df_sorted["rmse"],
         ))
 
     fig.update_layout(
         title="Per-Bearing RMSE Comparison Across Models",
         barmode="group", xaxis_title="Bearing",
-        yaxis_title="RMSE", height=500,
+        yaxis_title="RMSE (normalized RUL)", height=500,
     )
     return fig
 
@@ -295,12 +290,9 @@ def plot_per_bearing_comparison() -> go.Figure:
 # Prediction plots
 # ---------------------------------------------------------------------------
 
-def plot_rul_curve(bearing_id: str, model_name: str = "LightGBM") -> go.Figure:
+def plot_rul_curve(bearing_id: str, model_name: str = "Feature LSTM") -> go.Figure:
     """Line chart: predicted vs actual RUL over file index for one bearing."""
-    if model_name == "LightGBM":
-        preds = DATA.get("predictions", {}).get(bearing_id)
-    else:
-        preds = DATA.get("dl_predictions", {}).get(model_name, {}).get(bearing_id)
+    preds = _get_model_predictions(model_name).get(bearing_id)
 
     if preds is None:
         fig = go.Figure()
@@ -331,18 +323,15 @@ def plot_rul_curve(bearing_id: str, model_name: str = "LightGBM") -> go.Figure:
     fig.update_layout(
         title=f"RUL Prediction — {bearing_id} ({model_name})",
         xaxis_title="File Index (≈ minutes)",
-        yaxis_title="Remaining Useful Life",
+        yaxis_title="Normalized RUL (1 = start of life, 0 = failure)",
         hovermode="x unified",
     )
     return fig
 
 
-def plot_scatter_all_predictions(model_name: str = "LightGBM") -> go.Figure:
+def plot_scatter_all_predictions(model_name: str = "Feature LSTM") -> go.Figure:
     """Scatter: all predicted vs actual RUL from all 15 CV folds, colored by bearing."""
-    if model_name == "LightGBM":
-        predictions = DATA.get("predictions", {})
-    else:
-        predictions = DATA.get("dl_predictions", {}).get(model_name, {})
+    predictions = _get_model_predictions(model_name)
 
     if not predictions:
         fig = go.Figure()
@@ -380,25 +369,23 @@ def plot_scatter_all_predictions(model_name: str = "LightGBM") -> go.Figure:
 
     fig.update_layout(
         title=f"Predicted vs Actual RUL — {model_name} (all bearings)",
-        xaxis_title="Actual RUL",
-        yaxis_title="Predicted RUL",
+        xaxis_title="Actual Normalized RUL",
+        yaxis_title="Predicted Normalized RUL",
         height=550,
     )
     return fig
 
 
-def get_per_bearing_table(model_name: str = "LightGBM") -> pd.DataFrame:
+def get_per_bearing_table(model_name: str = "Feature LSTM") -> pd.DataFrame:
     """Return per-bearing metrics table for the selected model."""
-    if model_name == "LightGBM":
-        df = DATA.get("per_bearing")
-    else:
-        df = DATA.get("dl_per_bearing", {}).get(model_name)
+    key = _resolve_model_key(model_name)
+    df = DATA.get("dl_per_bearing", {}).get(key)
 
     if df is None or df.empty:
         return pd.DataFrame({"Info": ["No per-bearing data available for this model"]})
 
     cols = [c for c in ["bearing_id", "n_samples", "rmse", "mae"] if c in df.columns]
-    return df[cols].round(2)
+    return df[cols].round(3)
 
 
 def get_model_metrics_summary(model_name: str) -> str:
@@ -407,6 +394,7 @@ def get_model_metrics_summary(model_name: str) -> str:
     if comp_df is None or comp_df.empty:
         return f"**{model_name}** — No aggregate metrics available"
 
+    # model_name may be a display name or internal key
     display_name = _MODEL_DISPLAY_NAMES.get(model_name, model_name)
     row = comp_df[comp_df["Model"] == display_name]
     if row.empty:
@@ -414,18 +402,14 @@ def get_model_metrics_summary(model_name: str) -> str:
     row = row.iloc[0]
     return (
         f"**{row['Model']}** — "
-        f"RMSE: {row['RMSE']:.2f} | "
-        f"MAE: {row['MAE']:.2f} | "
-        f"Type: {row['Type']}"
+        f"RMSE: {row['RMSE']:.3f} | "
+        f"MAE: {row['MAE']:.3f}"
     )
 
 
-def plot_prediction_intervals(model_name: str = "LightGBM") -> go.Figure:
+def plot_prediction_intervals(model_name: str = "Feature LSTM") -> go.Figure:
     """Prediction intervals from CV residuals: predicted +/- empirical CI, sorted by true RUL."""
-    if model_name == "LightGBM":
-        predictions = DATA.get("predictions", {})
-    else:
-        predictions = DATA.get("dl_predictions", {}).get(model_name, {})
+    predictions = _get_model_predictions(model_name)
 
     if not predictions:
         fig = go.Figure()
@@ -476,17 +460,14 @@ def plot_prediction_intervals(model_name: str = "LightGBM") -> go.Figure:
     fig.update_layout(
         title=f"Prediction Intervals — {model_name} (empirical from CV residuals)",
         xaxis_title="Sample Index (sorted by true RUL)",
-        yaxis_title="RUL", height=450, hovermode="x unified",
+        yaxis_title="Normalized RUL", height=450, hovermode="x unified",
     )
     return fig
 
 
-def plot_residuals_vs_rul(model_name: str = "LightGBM") -> go.Figure:
+def plot_residuals_vs_rul(model_name: str = "Feature LSTM") -> go.Figure:
     """Scatter: residual (pred - true) vs true RUL, colored by bearing."""
-    if model_name == "LightGBM":
-        predictions = DATA.get("predictions", {})
-    else:
-        predictions = DATA.get("dl_predictions", {}).get(model_name, {})
+    predictions = _get_model_predictions(model_name)
 
     if not predictions:
         fig = go.Figure()
@@ -523,7 +504,8 @@ def plot_residuals_vs_rul(model_name: str = "LightGBM") -> go.Figure:
 
     fig.update_layout(
         title=f"Residuals vs True RUL — {model_name}",
-        xaxis_title="True RUL", yaxis_title="Residual (Predicted − Actual)",
+        xaxis_title="True Normalized RUL",
+        yaxis_title="Residual (Predicted − Actual)",
         height=450,
     )
     return fig
@@ -543,6 +525,7 @@ def build_onset_overview_table() -> pd.DataFrame:
         row = {
             "Bearing": bearing_id,
             "Condition": entry.condition,
+            "Failure Mode": entry.failure_mode,
             "Curated Onset": entry.onset_file_idx,
             "Confidence": entry.confidence,
             "Method": entry.detection_method,
