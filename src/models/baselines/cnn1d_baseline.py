@@ -33,8 +33,8 @@ from typing import Any, Literal
 
 import numpy as np
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
+import keras
+from keras import layers
 
 
 # Constants matching the data loader

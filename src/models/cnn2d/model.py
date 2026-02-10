@@ -32,9 +32,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 
+import keras
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
+from keras import layers
 
 from .backbone import CNN2DBackboneConfig, CNN2DBackbone, DualChannelCNN2DBackbone
 from .aggregator import (

@@ -29,8 +29,8 @@ small per-condition training sets in XJTU-SY.
 from dataclasses import dataclass, asdict
 from typing import Any
 
-from tensorflow import keras
-from tensorflow.keras import layers
+import keras
+from keras import layers
 
 
 @dataclass

@@ -24,8 +24,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
+import keras
+from keras import layers
 
 
 @dataclass
@@ -73,7 +73,7 @@ class CrossAttentionBlock(keras.layers.Layer):
 
     def build(self, input_shape):
         # input_shape is tuple of (query_shape, key_value_shape)
-        query_shape, kv_shape = input_shape
+        query_shape, _kv_shape = input_shape
         input_dim = query_shape[-1]
 
         output_dim = self.config.output_dim or input_dim
@@ -282,9 +282,9 @@ class ChannelFusion(keras.layers.Layer):
         v_dim = v_shape[-1]
 
         if self.fusion_mode == "concat":
-            fused_dim = h_dim + v_dim
+            _fused_dim = h_dim + v_dim
         else:
-            fused_dim = h_dim  # assume equal dims for add/avg/weighted
+            _fused_dim = h_dim  # assume equal dims for add/avg/weighted
 
         # Output projection if specified
         if self.output_dim is not None:

@@ -27,8 +27,8 @@ from dataclasses import dataclass
 from typing import Literal, Optional
 
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
+import keras
+from keras import layers
 
 
 @dataclass
@@ -368,7 +368,7 @@ class TransformerAggregator(keras.layers.Layer):
             Aggregated tensor of shape (batch, output_dim).
         """
         batch_size = tf.shape(inputs)[0]
-        seq_len = tf.shape(inputs)[1]
+        _seq_len = tf.shape(inputs)[1]
 
         x = inputs
 
@@ -419,7 +419,7 @@ class TransformerAggregator(keras.layers.Layer):
 def create_lstm_aggregator(
     units: int = 64,
     bidirectional: bool = True,
-    pooling: str = "last"
+    pooling: Literal["last", "mean", "max", "attention"] = "last"
 ) -> LSTMAggregator:
     """Create LSTM aggregator with specified configuration.
 
@@ -445,7 +445,7 @@ def create_lstm_aggregator(
 def create_transformer_aggregator(
     num_layers: int = 2,
     num_heads: int = 4,
-    pooling: str = "cls"
+    pooling: Literal["cls", "mean", "max", "first", "last"] = "cls"
 ) -> TransformerAggregator:
     """Create Transformer aggregator with specified configuration.
 

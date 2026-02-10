@@ -32,9 +32,9 @@ from enum import Enum
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
+import keras
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
+from keras import layers
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray

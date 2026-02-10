@@ -26,8 +26,8 @@ from dataclasses import dataclass, field
 from typing import Literal, Optional
 
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
+import keras
+from keras import layers
 
 from .stem import DualChannelStem, StemConfig
 from .tcn import DualChannelTCN, TCNConfig
@@ -323,7 +323,7 @@ def build_tcn_transformer_model(
 def create_tcn_transformer_lstm(
     input_length: int = 32768,
     filters: int = 32,
-    dilations: list[int] = None,
+    dilations: list[int] | None = None,
     lstm_units: int = 32,
 ) -> keras.Model:
     """Create TCN-Transformer model with LSTM aggregator.
@@ -368,7 +368,7 @@ def create_tcn_transformer_lstm(
 def create_tcn_transformer_transformer(
     input_length: int = 32768,
     filters: int = 64,
-    dilations: list[int] = None,
+    dilations: list[int] | None = None,
     num_transformer_layers: int = 2,
     num_heads: int = 4,
 ) -> keras.Model:

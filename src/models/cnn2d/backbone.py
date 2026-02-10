@@ -29,9 +29,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+import keras
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
+from keras import layers
 
 
 @dataclass

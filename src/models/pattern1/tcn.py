@@ -23,9 +23,8 @@ in bearing vibration signals. The receptive field grows exponentially with depth
 from dataclasses import dataclass, field
 from typing import Optional
 
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
+import keras
+from keras import layers
 
 
 @dataclass
@@ -187,7 +186,7 @@ class TCNEncoder(keras.layers.Layer):
 
     def build(self, input_shape):
         # Create dilated conv blocks
-        for i, dilation in enumerate(self.config.dilations):
+        for _i, dilation in enumerate(self.config.dilations):
             block = DilatedConvBlock(
                 filters=self.config.filters,
                 kernel_size=self.config.kernel_size,
