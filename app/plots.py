@@ -150,18 +150,18 @@ def compute_dataset_overview() -> pd.DataFrame:
 
 
 def plot_feature_distribution(feature_name: str) -> go.Figure:
-    """Box plot of a selected feature across the 3 operating conditions."""
+    """Horizontal box plot of a selected feature across the 3 operating conditions."""
     df = DATA["features_df"]
     fig = px.box(
         df,
-        x="condition",
-        y=feature_name,
+        x=feature_name,
+        y="condition",
         color="condition",
         title=f"Distribution of {feature_name} by Condition",
     )
     fig.update_layout(
-        xaxis_title="Operating Condition",
-        yaxis_title=feature_name,
+        xaxis_title=feature_name,
+        yaxis_title="Operating Condition",
         showlegend=False,
     )
     return fig
