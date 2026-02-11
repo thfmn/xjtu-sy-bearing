@@ -57,7 +57,10 @@ MLFLOW_TRACKING_URI = "mlruns"
 MLFLOW_EXPERIMENT_NAME = "bearing_rul_fulllife"
 
 # Model × protocol matrix
-BENCHMARK_MODELS = ["cnn1d_baseline", "cnn2d_simple", "dta_mlp"]
+BENCHMARK_MODELS = [
+    "cnn1d_baseline", "cnn2d_simple", "dta_mlp",
+    "mdsct", "tcn_transformer_lstm",
+]
 PROTOCOLS = ["lobo", "loco", "jin", "sun"]
 
 CV_STRATEGY_MAP = {
@@ -91,7 +94,19 @@ def download_from_gcs(model: str, protocol: str) -> Path:
 
 
 def find_fold_results(output_dir: Path) -> list[dict]:
-    """Parse fold results CSV from a benchmark output directory."""
+    """Parse fold results CSV from a benchmark output directory.
+
+    Prefers dl_model_results.csv (append-mode, survives parallel job
+    overwrites) and falls back to *_fold_results.csv.
+    """
+    # Prefer the append-mode results file (reliable with parallel jobs)
+    dl_results = output_dir / "dl_model_results.csv"
+    if dl_results.exists():
+        df = pd.read_csv(dl_results)
+        if len(df) > 1:
+            return df.to_dict("records")
+
+    # Fallback to per-model fold results
     csvs = list(output_dir.glob("*_fold_results.csv"))
     if not csvs:
         return []

@@ -73,7 +73,7 @@ BENCHMARK_MODELS: dict[str, dict] = {
     },
     "tcn_transformer_lstm": {
         "display_name": "TCN-Transformer",
-        "fold_results": BENCHMARK_DIR / "tcn_transformer_lstm_lobo" / "tcn_transformer_lstm_fold_results.csv",
+        "fold_results": BENCHMARK_DIR / "tcn_transformer_lstm_lobo" / "dl_model_results.csv",
         "predictions_dir": BENCHMARK_DIR / "tcn_transformer_lstm_lobo" / "predictions",
     },
 }
@@ -183,10 +183,14 @@ def load_data() -> dict:
 
     # 6. Load DL training history (if available)
     data["dl_history"] = {}
-    history_dirs = []
+    history_dirs: list[Path] = []
     history_dir = OUTPUTS / "evaluation" / "history"
     if history_dir.exists():
         history_dirs.append(history_dir)
+    for cfg in BENCHMARK_MODELS.values():
+        bench_history = cfg["fold_results"].parent / "history"
+        if bench_history.exists() and bench_history not in history_dirs:
+            history_dirs.append(bench_history)
     for h_dir in history_dirs:
         for csv_path in sorted(h_dir.glob("*_history.csv")):
             parts = csv_path.stem.rsplit("_fold", 1)

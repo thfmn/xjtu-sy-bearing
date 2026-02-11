@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/thfmn/xjtu-sy-bearing/actions/workflows/ci.yml/badge.svg)](https://github.com/thfmn/xjtu-sy-bearing/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
-![Tests](https://img.shields.io/badge/tests-556%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-566%20passed-brightgreen)
 ![uv](https://img.shields.io/badge/package%20manager-uv-blueviolet)
 
 A reproducible benchmark for **Remaining Useful Life (RUL)** prediction of rolling element bearings on the XJTU-SY dataset. Compares 6 models across 3 evaluation protocols with a two-stage onset detection pipeline, a reproduction of [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4), an interactive Gradio dashboard, and experiment tracking via MLflow and Vertex AI. Our best model -- a bidirectional **Feature LSTM with just 5,793 parameters** -- achieves **0.160 LOBO RMSE**, outperforming all deep learning baselines trained on raw signals.
@@ -86,6 +86,7 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 |---|---|---|---|
 | **Feature LSTM** | **0.160** | 0.302 | **0.156** |
 | **LightGBM** | 0.234 | 0.284 | 0.227 |
+| **TCN-Transformer** | 0.237 | — | — |
 | **1D CNN** | 0.251 | 0.280 | 0.199 |
 | **CNN2D** | 0.289 | **0.262** | 0.229 |
 | **DTA-MLP** | 0.402 | 0.445 | 0.353 |
@@ -112,31 +113,34 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 
 #### Per-Bearing Results (LOBO, Normalized RMSE)
 
-| Bearing | Cond | Files | Feature LSTM | LightGBM | 1D CNN | CNN2D | DTA-MLP |
-|---|---|---|---|---|---|---|---|
-| Bearing1_1 | 1 | 123 | **0.127** | 0.166 | 0.141 | 0.482 | 0.440 |
-| Bearing1_2 | 1 | 161 | 0.219 | 0.231 | **0.204** | 0.367 | 0.477 |
-| Bearing1_3 | 1 | 158 | **0.090** | 0.201 | 0.207 | 0.337 | 0.542 |
-| Bearing1_4 | 1 | 122 | **0.149** | 0.294 | 0.272 | 0.303 | 0.298 |
-| Bearing1_5 | 1 | 52 | **0.120** | 0.215 | 0.219 | 0.271 | 0.303 |
-| Bearing2_1 | 2 | 491 | **0.188** | 0.272 | 0.280 | 0.258 | 0.289 |
-| Bearing2_2 | 2 | 161 | 0.227 | **0.149** | 0.210 | **0.149** | 0.417 |
-| Bearing2_3 | 2 | 533 | 0.189 | 0.094 | **0.068** | 0.129 | 0.515 |
-| Bearing2_4 | 2 | 42 | **0.067** | 0.183 | 0.175 | 0.194 | 0.355 |
-| Bearing2_5 | 2 | 339 | 0.143 | 0.291 | 0.194 | **0.138** | 0.342 |
-| Bearing3_1 | 3 | 2538 | **0.175** | 0.274 | 0.289 | 0.312 | 0.370 |
-| Bearing3_2 | 3 | 2496 | **0.162** | 0.271 | 0.290 | 0.347 | 0.535 |
-| Bearing3_3 | 3 | 371 | **0.219** | 0.284 | 0.502 | 0.310 | 0.352 |
-| Bearing3_4 | 3 | 1515 | **0.184** | 0.288 | 0.224 | 0.244 | 0.281 |
-| Bearing3_5 | 3 | 114 | **0.141** | 0.292 | 0.491 | 0.502 | 0.520 |
-| **Mean** | | | **0.160** | **0.234** | **0.251** | **0.289** | **0.402** |
+| Bearing | Cond | Files | Feature LSTM | LightGBM | TCN-Transf. | 1D CNN | CNN2D | DTA-MLP |
+|---|---|---|---|---|---|---|---|---|
+| Bearing1_1 | 1 | 123 | **0.127** | 0.166 | 0.129 | 0.141 | 0.482 | 0.440 |
+| Bearing1_2 | 1 | 161 | 0.219 | 0.231 | **0.199** | 0.204 | 0.367 | 0.477 |
+| Bearing1_3 | 1 | 158 | **0.090** | 0.201 | 0.154 | 0.207 | 0.337 | 0.542 |
+| Bearing1_4 | 1 | 122 | **0.149** | 0.294 | 0.306 | 0.272 | 0.303 | 0.298 |
+| Bearing1_5 | 1 | 52 | **0.120** | 0.215 | 0.164 | 0.219 | 0.271 | 0.303 |
+| Bearing2_1 | 2 | 491 | **0.188** | 0.272 | 0.315 | 0.280 | 0.258 | 0.289 |
+| Bearing2_2 | 2 | 161 | 0.227 | 0.149 | **0.114** | 0.210 | 0.149 | 0.417 |
+| Bearing2_3 | 2 | 533 | 0.189 | 0.094 | 0.114 | **0.068** | 0.129 | 0.515 |
+| Bearing2_4 | 2 | 42 | **0.067** | 0.183 | 0.185 | 0.175 | 0.194 | 0.355 |
+| Bearing2_5 | 2 | 339 | 0.143 | 0.291 | 0.156 | 0.194 | **0.138** | 0.342 |
+| Bearing3_1 | 3 | 2538 | **0.175** | 0.274 | 0.253 | 0.289 | 0.312 | 0.370 |
+| Bearing3_2 | 3 | 2496 | **0.162** | 0.271 | 0.334 | 0.290 | 0.347 | 0.535 |
+| Bearing3_3 | 3 | 371 | **0.219** | 0.284 | 0.431 | 0.502 | 0.310 | 0.352 |
+| Bearing3_4 | 3 | 1515 | **0.184** | 0.288 | 0.228 | 0.224 | 0.244 | 0.281 |
+| Bearing3_5 | 3 | 114 | **0.141** | 0.292 | 0.476 | 0.491 | 0.502 | 0.520 |
+| **Mean** | | | **0.160** | **0.234** | **0.237** | **0.251** | **0.289** | **0.402** |
 
 #### Key Findings
 
-- **Feature LSTM (5,793 parameters) is the best model overall.** It achieves 0.160 LOBO RMSE and 0.156 on the Sun split, outperforming all deep learning models that are 10-20x larger and trained on raw signals or spectrograms. Feature LSTM wins on 11 of 15 individual bearings in the per-bearing LOBO evaluation.
-- **Engineered features + temporal modeling > end-to-end deep learning** for this dataset. A sliding window of 65 hand-crafted time/frequency features fed into a small bidirectional LSTM captures degradation dynamics more effectively than CNNs or attention models operating on raw 25.6 kHz signals.
+- **Feature LSTM (5,793 parameters) is the best model overall.** It achieves 0.160 LOBO RMSE and 0.156 on the Sun split, outperforming all deep learning models that are 10-20× larger and trained on raw signals or spectrograms. Feature LSTM wins on 11 of 15 individual bearings in the per-bearing LOBO evaluation.
+- **TCN-Transformer (77K params) ranks 3rd overall at 0.237 LOBO RMSE**, just behind LightGBM (0.234). It is the best-performing raw-signal deep learning model and wins on 2 bearings (Bearing1_2, Bearing2_2). Its strongest results come from Condition 2 bearings (mean RMSE 0.177), while Condition 3 is its weakest (mean RMSE 0.345) — long-lived bearings with heterogeneous degradation patterns are difficult to learn from only 4 same-condition training bearings.
+- **Engineered features + temporal modeling > end-to-end deep learning** for this dataset. A sliding window of 65 hand-crafted time/frequency features fed into a small bidirectional LSTM captures degradation dynamics more effectively than CNNs or attention models operating on raw 25.6 kHz signals. The Feature LSTM's per-bearing z-score normalization provides test-time adaptation that raw-signal models lack.
 - **Per-bearing z-score normalization is critical for cross-condition generalization.** The XJTU-SY dataset has 3 operating conditions with vastly different feature scales (e.g., kurtosis ranges from ~5 to ~141 across conditions). Normalizing each bearing's features against its own healthy baseline (first 20%) enables the model to generalize across conditions.
 - **Two-stage onset detection improves predictions** for bearings with a clear degradation onset by focusing the model on the degraded region of the bearing's lifetime, rather than fitting a monotonic curve over an extended healthy period.
+
+> **Future work:** LOCO (Leave-One-Condition-Out) and LOCO-LOBO hybrid evaluation protocols are implemented in `src/training/cv.py` and planned for future benchmarking. These protocols test cross-condition generalization by training on two operating conditions and evaluating on the third — a harder task than within-condition LOBO.
 
 ### Onset Detection
 
@@ -208,7 +212,7 @@ For local-only work (scripts 03+), no `.env` is needed.
 ### 4. Run tests
 
 ```bash
-uv run pytest tests/    # 556 tests
+uv run pytest tests/    # 566 tests
 ```
 
 ### 5. Launch the dashboard
