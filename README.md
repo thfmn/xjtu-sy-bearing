@@ -51,14 +51,14 @@ Six model architectures are benchmarked. Five are original designs; one is inspi
 | **LightGBM** | 65 features | Gradient-boosted trees | ~1,200 leaves | Original |
 | **1D CNN** | 32768 × 2 raw signal | Conv1D → BatchNorm → GlobalAvgPool → Dense | ~50K | Original |
 | **CNN2D** | 128 × 128 × 2 spectrogram | 2D CNN with progressive downsampling | ~80K | Original |
-| **TCN-Transformer** | 32768 × 2 raw signal | TCN → Cross-Attention → BiLSTM → Dense | ~77K | Inspired by [1, 2, 3] below |
+| **TCN-Transformer** | 32768 × 2 raw signal | TCN → Cross-Attention → BiLSTM → Dense | ~77K | Inspired by [1, 2] below |
 | **DTA-MLP** | 64 × 128 × 2 CWT scaleogram | CNN → Transformer (attention rectification) → CT-MLP → Linear | ~5.7M | Inspired by [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4) |
 
 For a deep dive into the Feature LSTM architecture and design decisions, see the **[Feature LSTM Design Guide](docs/feature_lstm_guide.md)**.
 
 > **Replication notes:**
 > - **DTA-MLP** is loosely inspired by Jin et al. 2025. The paper describes a CWT → CNN → Dynamic Attention → CT-MLP pipeline. Our implementation follows the paper's high-level architecture but interprets underspecified details: the attention rectification mechanism (we use soft-threshold gating), CNN frontend structure, and integration pattern. It is included as an experimental baseline showing how CWT + Transformer compares to feature engineering on this dataset.
-> - **TCN-Transformer** combines ideas from several published approaches into a single architecture for personal experimentation. The TCN backbone uses dilated causal convolutions from [Bai et al. 2018](https://arxiv.org/abs/1803.01271) [1]; the TCN-LSTM combination for bearing RUL follows work such as [Hsu et al. 2022](https://doi.org/10.1049/icp.2024.3578) [2]; and the parallel TCN-Transformer design draws from [Tong et al. 2024](https://doi.org/10.1088/1361-6501/ad73ee) [3]. Our variant adds bidirectional cross-attention between the two vibration channels and a BiLSTM aggregator. It is not a reproduction of any single paper but a personal testbench to study how TCN-based temporal feature extraction compares to standard convolutions and attention-only approaches on this dataset.
+> - **TCN-Transformer** is an experimental architecture drawing general inspiration from work on temporal convolutional networks ([Bai et al. 2018](https://arxiv.org/abs/1803.01271)) and TCN-LSTM combinations for bearing RUL prediction ([Liu et al. 2025](https://doi.org/10.1038/s41598-025-98845-9)). It is not a reproduction of any single paper but a personal experiment to study how TCN-based temporal feature extraction with cross-channel attention compares to standard convolutions and attention-only approaches on this dataset.
 > - **CNN1D, CNN2D, Feature LSTM, LightGBM** are original architectures designed for this project and are not reproductions of any published method.
 
 ## Results
