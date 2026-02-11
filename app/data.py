@@ -128,7 +128,7 @@ def load_data() -> dict:
     data["feature_importance"] = pd.read_csv(FEATURE_IMPORTANCE_CSV)
     data["per_bearing"] = pd.read_csv(PER_BEARING_CSV)
 
-    # 3. Build model_comparison from the 5 benchmark fold result files
+    # 3. Build model_comparison from the 6 benchmark fold result files
     comparison_rows = []
     for model_key, cfg in BENCHMARK_MODELS.items():
         csv_path = cfg["fold_results"]
@@ -144,7 +144,7 @@ def load_data() -> dict:
     data["model_comparison"] = pd.DataFrame(comparison_rows)
     logger.info("Model comparison: %d models loaded", len(comparison_rows))
 
-    # 4. Load predictions from the 5 benchmark prediction directories
+    # 4. Load predictions from the 6 benchmark prediction directories
     data["predictions"] = {}  # {model_key: {bearing_id: {"y_true": [...], "y_pred": [...]}}}
     for model_key, cfg in BENCHMARK_MODELS.items():
         pred_dir = cfg["predictions_dir"]

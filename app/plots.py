@@ -229,7 +229,7 @@ def compute_model_architecture_table() -> pd.DataFrame:
         {"Model": "LightGBM", "Family": "Gradient Boosting", "Input": "65 features", "Input Shape": "65"},
         {"Model": "1D CNN", "Family": "Deep Learning", "Input": "Raw vibration (1D)", "Input Shape": "(32768, 2)"},
         {"Model": "CNN2D", "Family": "Deep Learning", "Input": "Spectrogram (2D)", "Input Shape": "(128, 128, 2)"},
-        {"Model": "DTA-MLP", "Family": "Deep Learning", "Input": "65 features", "Input Shape": "65"},
+        {"Model": "DTA-MLP", "Family": "Deep Learning", "Input": "CWT scaleogram (2D)", "Input Shape": "(64, 128, 2)"},
         {"Model": "TCN-Transformer", "Family": "TCN + Cross-Attention + LSTM", "Input": "Raw vibration (1D)", "Input Shape": "(32768, 2)"},
     ]
     return pd.DataFrame(rows)

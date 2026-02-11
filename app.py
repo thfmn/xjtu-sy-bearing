@@ -17,7 +17,7 @@
 """XJTU-SY Bearing RUL Prediction Dashboard.
 
 Interactive Gradio dashboard for showcasing the bearing RUL prediction pipeline.
-Displays pre-computed benchmark results from 5 models evaluated on normalized
+Displays pre-computed benchmark results from 6 models evaluated on normalized
 [0, 1] RUL with 15-fold leave-one-bearing-out cross-validation.
 """
 
@@ -145,7 +145,7 @@ def create_app() -> gr.Blocks:
                 ].round(3)
                 gr.Dataframe(
                     value=comparison_df,
-                    label="Model Comparison (5 benchmark models)",
+                    label="Model Comparison (6 benchmark models)",
                     interactive=False,
                 )
 
