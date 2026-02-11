@@ -5,7 +5,7 @@
 ![Tests](https://img.shields.io/badge/tests-566%20passed-brightgreen)
 ![uv](https://img.shields.io/badge/package%20manager-uv-blueviolet)
 
-A reproducible benchmark for **Remaining Useful Life (RUL)** prediction of rolling element bearings on the XJTU-SY dataset. Compares 6 models across 3 evaluation protocols with a two-stage onset detection pipeline, an implementation inspired by [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4), an interactive Gradio dashboard, and experiment tracking via MLflow and Vertex AI. Our best model -- a bidirectional **Feature LSTM with just 5,793 parameters** -- achieves **0.160 LOBO RMSE**, outperforming all deep learning baselines trained on raw signals.
+A reproducible benchmark for **Remaining Useful Life (RUL)** prediction of rolling element bearings on the XJTU-SY dataset. Compares 6 models across 3 evaluation protocols with a two-stage onset detection pipeline, an implementation inspired by [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4), a native Tauri desktop explorer for interactive data browsing, a Gradio dashboard for model analysis, and experiment tracking via MLflow and Vertex AI. Our best model -- a bidirectional **Feature LSTM with just 5,793 parameters** -- achieves **0.160 LOBO RMSE**, outperforming all deep learning baselines trained on raw signals.
 
 <p align="center">
   <img src="docs/Demonstration-of-test-best-setup-for-XJTU-SY-experimental-study-58.png" alt="XJTU-SY bearing test rig: AC motor driving a shaft with support bearings under hydraulic loading, with horizontal and vertical accelerometers mounted on the tested bearing" width="700">
@@ -154,9 +154,27 @@ Two-stage pipeline that first identifies when degradation begins, then predicts 
 | LSTM classifier | 8-feature z-score input (5,793 params) | F1 = 0.844 ± 0.243 (15-fold LOBO CV) |
 | Curated labels | Algorithmically derived onset indices with per-bearing analysis | 13 high, 2 medium, 0 low confidence |
 
-## Interactive Dashboard
+## Bearing Explorer
 
-A Gradio dashboard (`app.py`) provides interactive visualization of all results:
+A native desktop application (`frontend/`) built with Svelte 5 and Tauri v2 for browsing bearing health data interactively -- no trained models required.
+
+**Tabs:**
+- **Overview:** Dataset summary and bearing metadata
+- **Health Explorer:** Interactive health indicator plots with Plotly
+- **Scalogram Viewer:** CWT scalogram visualization
+- **Audio Analysis:** Sonified vibration signals for auditory inspection
+
+```bash
+cd frontend
+npm install
+npm run tauri dev
+```
+
+> **Note:** Requires [Rust toolchain](https://www.rust-lang.org/tools/install) and [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/).
+
+## Gradio Dashboard
+
+A developer-focused Gradio dashboard (`app.py`) for inspecting model benchmark results, training convergence, predictions, and onset detection analysis:
 
 ```bash
 uv run python app.py
@@ -169,8 +187,6 @@ uv run python app.py
 - **Predictions:** Per-bearing RUL curves, residual analysis
 - **Onset Detection:** Health indicator explorer, classifier performance, detector comparison
 - **Audio Analysis:** Vibration signals sonified to audio (healthy → degrading → failed)
-
-A separate **Svelte + Tauri** desktop application (`frontend/`) provides a native bearing health explorer with interactive Plotly charts, scalogram viewing, and audio analysis.
 
 ## Getting Started
 
@@ -374,7 +390,7 @@ All other output files are optional. The dashboard gracefully degrades when they
 │   │   ├── cv.py             #   LOBO, Jin, Sun split implementations
 │   │   └── metrics.py        #   RMSE, MAE, PHM08 score
 │   └── utils/                # Experiment tracking, helpers
-├── tests/                    # pytest suite (556 tests)
+├── tests/                    # pytest suite (566 tests)
 └── pyproject.toml
 ```
 
