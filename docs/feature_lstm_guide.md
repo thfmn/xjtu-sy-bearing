@@ -13,7 +13,7 @@ With only **11,041 trainable parameters**, it achieves a normalized RMSE of **0.
 15-fold Leave-One-Bearing-Out (LOBO) cross-validation -- the strictest evaluation protocol in
 this benchmark, where the model must generalize to a completely unseen bearing's degradation
 pattern. It outperforms all four deep learning baselines tested (1D CNN: 0.251, CNN2D: 0.289,
-DTA-MLP: 0.402) and a LightGBM baseline (0.234).
+DTA-MLP: 0.278) and a LightGBM baseline (0.234).
 
 The core insight is that on the XJTU-SY dataset (15 bearings, 3 operating conditions, ~9,216
 samples), **domain-informed feature engineering combined with per-bearing normalization
@@ -313,29 +313,29 @@ entire lifetime.
 | **Feature LSTM**|      **0.160** |       0.302 |   **0.156** |
 | LightGBM        |          0.234 |       0.284 |       0.227 |
 | 1D CNN           |          0.251 |       0.280 |       0.199 |
+| DTA-MLP          |          0.278 |           — |           — |
 | CNN2D            |          0.289 |   **0.262** |       0.229 |
-| DTA-MLP          |          0.402 |       0.445 |       0.353 |
 
 #### Per-Bearing LOBO Results (Normalized RMSE)
 
 | Bearing     | Cond | Files | Feature LSTM | LightGBM | 1D CNN | CNN2D | DTA-MLP |
 |-------------|------|------:|-------------:|---------:|-------:|------:|--------:|
-| Bearing1_1  | 1    |   123 |        0.127 |    0.166 |  0.141 | 0.482 |   0.440 |
-| Bearing1_2  | 1    |   161 |        0.219 |    0.231 |  0.204 | 0.367 |   0.477 |
-| Bearing1_3  | 1    |   158 |        0.090 |    0.201 |  0.207 | 0.337 |   0.542 |
-| Bearing1_4  | 1    |   122 |        0.149 |    0.294 |  0.272 | 0.303 |   0.298 |
-| Bearing1_5  | 1    |    52 |        0.120 |    0.215 |  0.219 | 0.271 |   0.303 |
-| Bearing2_1  | 2    |   491 |        0.188 |    0.272 |  0.280 | 0.258 |   0.289 |
-| Bearing2_2  | 2    |   161 |        0.227 |    0.149 |  0.210 | 0.149 |   0.417 |
-| Bearing2_3  | 2    |   533 |        0.189 |    0.094 |  0.068 | 0.129 |   0.515 |
-| Bearing2_4  | 2    |    42 |        0.067 |    0.183 |  0.175 | 0.194 |   0.355 |
-| Bearing2_5  | 2    |   339 |        0.143 |    0.291 |  0.194 | 0.138 |   0.342 |
-| Bearing3_1  | 3    | 2,538 |        0.175 |    0.274 |  0.289 | 0.312 |   0.370 |
-| Bearing3_2  | 3    | 2,496 |        0.162 |    0.271 |  0.290 | 0.347 |   0.535 |
-| Bearing3_3  | 3    |   371 |        0.219 |    0.284 |  0.502 | 0.310 |   0.352 |
-| Bearing3_4  | 3    | 1,515 |        0.184 |    0.288 |  0.224 | 0.244 |   0.281 |
-| Bearing3_5  | 3    |   114 |        0.141 |    0.292 |  0.491 | 0.502 |   0.520 |
-| **Mean**    |      |       |    **0.160** |**0.234** |**0.251**|**0.289**|**0.402**|
+| Bearing1_1  | 1    |   123 |        0.127 |    0.166 |  0.141 | 0.482 |   0.144 |
+| Bearing1_2  | 1    |   161 |        0.219 |    0.231 |  0.204 | 0.367 |   0.231 |
+| Bearing1_3  | 1    |   158 |        0.090 |    0.201 |  0.207 | 0.337 |   0.230 |
+| Bearing1_4  | 1    |   122 |        0.149 |    0.294 |  0.272 | 0.303 |   0.210 |
+| Bearing1_5  | 1    |    52 |        0.120 |    0.215 |  0.219 | 0.271 |   0.209 |
+| Bearing2_1  | 2    |   491 |        0.188 |    0.272 |  0.280 | 0.258 |   0.266 |
+| Bearing2_2  | 2    |   161 |        0.227 |    0.149 |  0.210 | 0.149 |   0.260 |
+| Bearing2_3  | 2    |   533 |        0.189 |    0.094 |  0.068 | 0.129 |   0.246 |
+| Bearing2_4  | 2    |    42 |        0.067 |    0.183 |  0.175 | 0.194 |   0.304 |
+| Bearing2_5  | 2    |   339 |        0.143 |    0.291 |  0.194 | 0.138 |   0.329 |
+| Bearing3_1  | 3    | 2,538 |        0.175 |    0.274 |  0.289 | 0.312 |   0.332 |
+| Bearing3_2  | 3    | 2,496 |        0.162 |    0.271 |  0.290 | 0.347 |   0.328 |
+| Bearing3_3  | 3    |   371 |        0.219 |    0.284 |  0.502 | 0.310 |   0.328 |
+| Bearing3_4  | 3    | 1,515 |        0.184 |    0.288 |  0.224 | 0.244 |   0.322 |
+| Bearing3_5  | 3    |   114 |        0.141 |    0.292 |  0.491 | 0.502 |   0.423 |
+| **Mean**    |      |       |    **0.160** |**0.234** |**0.251**|**0.289**|**0.278**|
 
 The Feature LSTM achieves the best RMSE on 9 out of 15 bearings. Its performance is
 notably consistent: the worst-case bearing (Bearing2_2: 0.227) is still better than
