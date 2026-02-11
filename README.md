@@ -25,7 +25,7 @@ This project takes raw vibration signals from accelerometers mounted on bearings
   <img src="docs/xjtu-bench-arch.png" alt="Benchmark architecture: four parallel processing paths from raw vibration CSVs to RUL prediction" width="800">
 </p>
 
-Four parallel input representations feed different model families, from gradient-boosted trees on hand-crafted features to deep learning on raw signals and spectrograms, including a TCN-Transformer architecture that explores dilated causal convolutions with cross-channel attention. A two-stage onset detection pipeline identifies the transition from healthy to degraded operation.
+Four parallel input representations feed different model families, from gradient-boosted trees on hand-crafted features to deep learning on raw signals and spectrograms, including a TCN-LSTM architecture with cross-attention that explores dilated causal convolutions with cross-channel fusion. A two-stage onset detection pipeline identifies the transition from healthy to degraded operation.
 
 ## Dataset
 
@@ -51,14 +51,14 @@ Six model architectures are benchmarked. Five are original designs; one is inspi
 | **LightGBM** | 65 features | Gradient-boosted trees | ~1,200 leaves | Original |
 | **1D CNN** | 32768 × 2 raw signal | Conv1D → BatchNorm → GlobalAvgPool → Dense | ~50K | Original |
 | **CNN2D** | 128 × 128 × 2 spectrogram | 2D CNN with progressive downsampling | ~80K | Original |
-| **TCN-Transformer** | 32768 × 2 raw signal | TCN → Cross-Attention → BiLSTM → Dense | ~77K | Inspired by [1, 2] below |
+| **TCN-LSTM** | 32768 × 2 raw signal | TCN → Cross-Attention → BiLSTM → Dense | ~77K | Inspired by [1, 2] below |
 | **DTA-MLP** | 64 × 128 × 2 CWT scaleogram | CNN → Transformer (attention rectification) → CT-MLP → Linear | ~5.7M | Inspired by [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4) |
 
 For a deep dive into the Feature LSTM architecture and design decisions, see the **[Feature LSTM Design Guide](docs/feature_lstm_guide.md)**.
 
 > **Replication notes:**
 > - **DTA-MLP** is loosely inspired by Jin et al. 2025. The paper describes a CWT → CNN → Dynamic Attention → CT-MLP pipeline. Our implementation follows the paper's high-level architecture but interprets underspecified details: the attention rectification mechanism (we use soft-threshold gating), CNN frontend structure, and integration pattern. It is included as an experimental baseline showing how CWT + Transformer compares to feature engineering on this dataset.
-> - **TCN-Transformer** is an experimental architecture drawing general inspiration from work on temporal convolutional networks ([Bai et al. 2018](https://arxiv.org/abs/1803.01271)) and TCN-LSTM combinations for bearing RUL prediction ([Liu et al. 2025](https://doi.org/10.1038/s41598-025-98845-9)). It is not a reproduction of any single paper but a personal experiment to study how TCN-based temporal feature extraction with cross-channel attention compares to standard convolutions and attention-only approaches on this dataset.
+> - **TCN-LSTM** is an experimental architecture drawing general inspiration from work on temporal convolutional networks ([Bai et al. 2018](https://arxiv.org/abs/1803.01271)) and TCN-LSTM combinations for bearing RUL prediction ([Liu et al. 2025](https://doi.org/10.1038/s41598-025-98845-9)). It is not a reproduction of any single paper but a personal experiment to study how TCN-based temporal feature extraction with cross-channel attention compares to standard convolutions and attention-only approaches on this dataset.
 > - **CNN1D, CNN2D, Feature LSTM, LightGBM** are original architectures designed for this project and are not reproductions of any published method.
 
 ## Results
@@ -86,7 +86,7 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 |---|---|---|---|
 | **Feature LSTM** | **0.160** | 0.302 | **0.156** |
 | **LightGBM** | 0.234 | 0.284 | 0.227 |
-| **TCN-Transformer** | 0.237 | — | — |
+| **TCN-LSTM** | 0.237 | — | — |
 | **1D CNN** | 0.251 | 0.280 | 0.199 |
 | **CNN2D** | 0.289 | **0.262** | 0.229 |
 | **DTA-MLP** ¹ | 0.402 | 0.445 | 0.353 |
@@ -115,7 +115,7 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 
 #### Per-Bearing Results (LOBO, Normalized RMSE)
 
-| Bearing | Cond | Files | Feature LSTM | LightGBM | TCN-Transf. | 1D CNN | CNN2D | DTA-MLP ¹ |
+| Bearing | Cond | Files | Feature LSTM | LightGBM | TCN-LSTM | 1D CNN | CNN2D | DTA-MLP ¹ |
 |---|---|---|---|---|---|---|---|---|
 | Bearing1_1 | 1 | 123 | **0.127** | 0.166 | 0.129 | 0.141 | 0.482 | 0.440 |
 | Bearing1_2 | 1 | 161 | 0.219 | 0.231 | **0.199** | 0.204 | 0.367 | 0.477 |
@@ -137,7 +137,7 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 #### Key Findings
 
 - **Feature LSTM (5,793 parameters) is the best model overall.** It achieves 0.160 LOBO RMSE and 0.156 on the Sun split, outperforming all deep learning models that are 10-20× larger and trained on raw signals or spectrograms. Feature LSTM wins on 11 of 15 individual bearings in the per-bearing LOBO evaluation.
-- **TCN-Transformer (77K params) ranks 3rd overall at 0.237 LOBO RMSE**, just behind LightGBM (0.234). It is the best-performing raw-signal deep learning model and wins on 2 bearings (Bearing1_2, Bearing2_2). Its strongest results come from Condition 2 bearings (mean RMSE 0.177), while Condition 3 is its weakest (mean RMSE 0.345) — long-lived bearings with heterogeneous degradation patterns are difficult to learn from only 4 same-condition training bearings.
+- **TCN-LSTM (77K params) ranks 3rd overall at 0.237 LOBO RMSE**, just behind LightGBM (0.234). It is the best-performing raw-signal deep learning model and wins on 2 bearings (Bearing1_2, Bearing2_2). Its strongest results come from Condition 2 bearings (mean RMSE 0.177), while Condition 3 is its weakest (mean RMSE 0.345) — long-lived bearings with heterogeneous degradation patterns are difficult to learn from only 4 same-condition training bearings.
 - **Engineered features + temporal modeling > end-to-end deep learning** for this dataset. A sliding window of 65 hand-crafted time/frequency features fed into a small bidirectional LSTM captures degradation dynamics more effectively than CNNs or attention models operating on raw 25.6 kHz signals. The Feature LSTM's per-bearing z-score normalization provides test-time adaptation that raw-signal models lack.
 - **Per-bearing z-score normalization is critical for cross-condition generalization.** The XJTU-SY dataset has 3 operating conditions with vastly different feature scales (e.g., kurtosis ranges from ~5 to ~141 across conditions). Normalizing each bearing's features against its own healthy baseline (first 20%) enables the model to generalize across conditions.
 - **Two-stage onset detection improves predictions** for bearings with a clear degradation onset by focusing the model on the degraded region of the bearing's lifetime, rather than fitting a monotonic curve over an extended healthy period.
@@ -282,7 +282,7 @@ python scripts/03b_enrich_temporal_features.py
 #   → outputs/spectrograms/  (128×128×2 .npy files, Hive-partitioned)
 python scripts/04_generate_spectrograms.py
 
-# Step 5: Train deep learning models (1D CNN, CNN2D, DTA-MLP, TCN-Transformer)
+# Step 5: Train deep learning models (1D CNN, CNN2D, DTA-MLP, TCN-LSTM)
 #   → outputs/models/  (saved Keras models)
 #   → outputs/evaluation/  (*_fold_results.csv, predictions/, history/)
 python scripts/05_train_dl_models.py --model cnn1d_baseline --folds 0
@@ -357,7 +357,7 @@ All other output files are optional. The dashboard gracefully degrades when they
 │   ├── 03_extract_features.py
 │   ├── 03b_enrich_temporal_features.py
 │   ├── 04_generate_spectrograms.py
-│   ├── 05_train_dl_models.py #   Train CNN1D, CNN2D, DTA-MLP, TCN-Transformer
+│   ├── 05_train_dl_models.py #   Train CNN1D, CNN2D, DTA-MLP, TCN-LSTM
 │   ├── 06_evaluate_dl_models.py
 │   ├── 07_create_audio.py
 │   ├── 08_generate_onset_labels.py
@@ -378,7 +378,7 @@ All other output files are optional. The dashboard gracefully degrades when they
 │   │   ├── baselines/        #   LightGBM, 1D CNN, Feature LSTM
 │   │   ├── cnn2d/            #   Spectrogram-based 2D CNN
 │   │   ├── dta_mlp/          #   DTA-MLP (inspired by Jin et al. 2025)
-│   │   ├── pattern1/         #   TCN-Transformer variants
+│   │   ├── pattern1/         #   TCN-LSTM variants
 │   │   └── registry.py       #   Unified model registry
 │   ├── onset/                # Degradation onset detection pipeline
 │   │   ├── detectors.py      #   4 statistical detectors + ensemble
