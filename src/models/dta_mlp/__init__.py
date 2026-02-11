@@ -16,15 +16,16 @@
 
 """DTA-MLP: Dynamic Temporal Attention with Mixed MLP for bearing RUL prediction.
 
-Reproduction of the architecture described in:
+Loosely inspired by the architecture described in:
     Jin et al. (2025) "Enhanced bearing RUL prediction based on dynamic temporal
     attention and mixed MLP", Autonomous Intelligent Systems.
 
 Architecture: CWT Input → CNN Frontend → Transformer (DTA) → CT-MLP → RUL
 
 Note: The paper does not provide complete architectural details. This
-implementation fills in missing details with standard choices and documents
-all assumptions. See model.py for specifics.
+implementation follows the high-level architecture but interprets
+underspecified details (attention rectification mechanism, CNN frontend
+structure, block integration pattern). See model.py for specifics.
 """
 
 from .model import DTAMLPConfig, build_dta_mlp, create_default_dta_mlp

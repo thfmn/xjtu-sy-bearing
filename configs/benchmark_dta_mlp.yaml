@@ -1,4 +1,4 @@
-# Benchmark: DTA-MLP (Jin et al. 2025 reproduction)
+# Benchmark: DTA-MLP (inspired by Jin et al. 2025)
 #
 # Dynamic Temporal Attention + Mixed MLP for bearing RUL prediction.
 # CWT scaleogram input (64×128×2) → CNN → Transformer (DTA) → CT-MLP → RUL
@@ -6,7 +6,7 @@
 # Paper: "Enhanced bearing RUL prediction based on dynamic temporal attention
 #         and mixed MLP" (Jin et al., Autonomous Intelligent Systems, 2025)
 #
-# Hyperparameters from paper: Adam lr=0.0005, batch=64, dropout=0.1, 100 epochs
+# Training hyperparameters inspired by paper: Adam lr=0.0005, batch=64, dropout=0.1
 #
 # Usage:
 #   python scripts/05_train_dl_models.py --model dta_mlp \
@@ -14,7 +14,7 @@
 #   python scripts/05_train_dl_models.py --model dta_mlp \
 #       --config configs/benchmark_dta_mlp.yaml --cv-strategy leave_one_bearing_out
 
-# --- Standard training parameters (from paper) ---
+# --- Training parameters ---
 model_version: "v1"
 batch_size: 64
 epochs: 100

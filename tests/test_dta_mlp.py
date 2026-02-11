@@ -36,11 +36,11 @@ class TestCWTFeatureExtractor:
     """Test the CNN frontend for CWT scaleograms."""
 
     def test_output_shape(self):
-        frontend = CWTFeatureExtractor(filters=(32, 64, 128, 256))
+        frontend = CWTFeatureExtractor(filters=(32, 64, 128))
         x = tf.random.normal((2, 64, 128, 2))
         out = frontend(x)
-        # After 4 MaxPool2D(2,2): 64/16=4, 128/16=8 → 32 patches, 256 channels
-        assert out.shape == (2, 32, 256)
+        # After 3 MaxPool2D(2,2): 64/8=8, 128/8=16 → 128 patches, 128 channels
+        assert out.shape == (2, 128, 128)
 
     def test_custom_filters(self):
         frontend = CWTFeatureExtractor(filters=(16, 32, 64))
@@ -67,21 +67,25 @@ class TestDynamicTemporalAttention:
         out = dta(x)
         assert out.shape == (2, 16, 64)
 
-    def test_temporal_bias_parameter_exists(self):
-        dta = DynamicTemporalAttention(model_dim=64, num_heads=4, use_temporal_bias=True)
+    def test_attention_rectification_parameter_exists(self):
+        dta = DynamicTemporalAttention(model_dim=64, num_heads=4, use_attention_rectification=True)
         x = tf.random.normal((2, 16, 64))
         _ = dta(x)  # build
-        slope_vars = [v for v in dta.trainable_variables if "temporal_slopes" in v.name]
-        assert len(slope_vars) == 1
-        assert slope_vars[0].shape == (4,)
+        threshold_vars = [v for v in dta.trainable_variables if "learned_threshold" in v.name]
+        sharpness_vars = [v for v in dta.trainable_variables if "gate_sharpness" in v.name]
+        assert len(threshold_vars) == 1
+        assert threshold_vars[0].shape == (4,)
+        assert len(sharpness_vars) == 1
+        assert sharpness_vars[0].shape == (4,)
 
-    def test_no_temporal_bias(self):
-        dta = DynamicTemporalAttention(model_dim=64, num_heads=4, use_temporal_bias=False)
+    def test_no_attention_rectification(self):
+        dta = DynamicTemporalAttention(model_dim=64, num_heads=4, use_attention_rectification=False)
         x = tf.random.normal((2, 16, 64))
         out = dta(x)
         assert out.shape == (2, 16, 64)
-        slope_vars = [v for v in dta.trainable_variables if "temporal_slopes" in v.name]
-        assert len(slope_vars) == 0
+        rect_vars = [v for v in dta.trainable_variables
+                     if "learned_threshold" in v.name or "gate_sharpness" in v.name]
+        assert len(rect_vars) == 0
 
     def test_gradient_flow(self):
         """Verify gradients flow through DTA."""
@@ -154,13 +158,13 @@ class TestFullDTAMLP:
         batch = np.random.randn(2, 64, 128, 2).astype(np.float32)
         preds = model.predict(batch, verbose=0)
         assert preds.shape == (2, 1)
-        assert (preds >= 0).all() and (preds <= 1).all()
+        # Linear output — predictions are NOT constrained to [0, 1]
 
     def test_parameter_count(self):
         model = build_dta_mlp()
         params = model.count_params()
-        # Paper reports ~5.9M, we target within 20% tolerance
-        assert 4_000_000 < params < 8_000_000, f"Expected ~5.9M params, got {params:,}"
+        # With 3-block CNN, 4 interleaved transformer+CT-MLP, expect ~5.7M
+        assert 4_000_000 < params < 8_000_000, f"Expected ~5.7M params, got {params:,}"
 
     def test_training_step(self):
         """Verify the model can complete a single training step."""
@@ -169,8 +173,7 @@ class TestFullDTAMLP:
             model_dim=32,
             num_heads=4,
             ff_dim=64,
-            num_transformer_layers=1,
-            num_ct_mlp_layers=1,
+            num_layers=1,
             input_height=16,
             input_width=32,
         )
@@ -192,8 +195,7 @@ class TestFullDTAMLP:
             model_dim=64,
             num_heads=4,
             ff_dim=128,
-            num_transformer_layers=2,
-            num_ct_mlp_layers=2,
+            num_layers=2,
         )
         model = build_dta_mlp(config)
         assert model.input_shape == (None, 32, 64, 2)

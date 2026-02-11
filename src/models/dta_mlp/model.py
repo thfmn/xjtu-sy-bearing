@@ -16,17 +16,24 @@
 
 """DTA-MLP model implementation.
 
-Reproduces the architecture from Jin et al. (2025):
+Loosely inspired by the architecture from Jin et al. (2025):
     CWT Scaleogram → CNN Frontend → Patch Embedding → Transformer (DTA) → CT-MLP → RUL
 
-Implementation assumptions (paper does not specify):
-    - CNN frontend: 4 Conv2D blocks with filter doubling (32/64/128/256),
-      3×3 kernels, BatchNorm, GELU activation, 2×2 MaxPool
-    - DTA: Standard multi-head attention + learned temporal decay bias
-      (inspired by ALiBi but with trainable slope parameters)
-    - CT-MLP: MLP-Mixer style channel+temporal mixing with GELU and skip connections
-    - Patch embedding: Flatten spatial dims from CNN → project to model_dim
-    - Total target: ~5.9M parameters (as reported in paper)
+The paper describes a CWT → CNN → Dynamic Attention → CT-MLP pipeline. Our
+implementation follows the high-level architecture but interprets underspecified
+details with the following deviations:
+
+    - CNN frontend: 3 single-conv blocks (Conv2D → BN → ReLU → MaxPool),
+      filters (32, 64, 128). Paper shows 3-5 conv layers with ReLU.
+    - Attention rectification: soft-threshold gating on attention weights
+      (learn a per-head threshold, smoothly zero out weights below it).
+      The paper describes "attenuating less important features by weakening
+      their attention or masking through zeroing out" but does not specify
+      the exact mechanism.
+    - CT-MLP interleaved inside each transformer block (Attention → FFN →
+      CT-MLP repeated ×N), matching Figure 3 of the paper.
+    - Linear output layer (no sigmoid), consistent with paper Fig. 10/14
+      where predictions go negative.
 """
 
 from __future__ import annotations
@@ -51,37 +58,35 @@ class DTAMLPConfig:
         model_dim: Transformer/MLP model dimension.
         num_heads: Number of attention heads.
         ff_dim: Feed-forward dimension in Transformer blocks.
-        num_transformer_layers: Number of Transformer encoder layers.
-        num_ct_mlp_layers: Number of CT-MLP layers.
+        num_layers: Number of Transformer + CT-MLP blocks (interleaved).
         dropout_rate: Dropout rate throughout.
-        temporal_bias: Whether to use dynamic temporal attention bias.
+        attention_rectification: Whether to use attention weight rectification.
     """
 
     input_height: int = 64
     input_width: int = 128
     input_channels: int = 2
-    cnn_filters: tuple[int, ...] = (32, 64, 128, 256)
+    cnn_filters: tuple[int, ...] = (32, 64, 128)
     cnn_kernel_size: int = 3
     model_dim: int = 256
     num_heads: int = 8
     ff_dim: int = 1024
-    num_transformer_layers: int = 4
-    num_ct_mlp_layers: int = 4
+    num_layers: int = 4
     dropout_rate: float = 0.1
-    temporal_bias: bool = True
+    attention_rectification: bool = True
 
 
 class CWTFeatureExtractor(layers.Layer):
     """CNN frontend that processes CWT scaleograms into feature sequences.
 
-    Architecture: 4 Conv2D blocks → reshape to sequence of spatial patches.
-    Each block: Conv2D → BatchNorm → GELU → Conv2D → BatchNorm → GELU → MaxPool2D
+    Architecture: Single-conv blocks → reshape to sequence of spatial patches.
+    Each block: Conv2D → BatchNorm → ReLU → MaxPool2D(2,2)
 
     After the CNN, the spatial feature map is reshaped into a sequence for
     the Transformer. Each spatial position becomes a "token."
     """
 
-    def __init__(self, filters: tuple[int, ...] = (32, 64, 128, 256),
+    def __init__(self, filters: tuple[int, ...] = (32, 64, 128),
                  kernel_size: int = 3, **kwargs):
         super().__init__(**kwargs)
         self.conv_blocks = []
@@ -89,10 +94,7 @@ class CWTFeatureExtractor(layers.Layer):
             block = [
                 layers.Conv2D(f, kernel_size, padding="same"),
                 layers.BatchNormalization(),
-                layers.Activation("gelu"),
-                layers.Conv2D(f, kernel_size, padding="same"),
-                layers.BatchNormalization(),
-                layers.Activation("gelu"),
+                layers.Activation("relu"),
                 layers.MaxPool2D(2, 2),
             ]
             self.conv_blocks.append(block)
@@ -101,7 +103,7 @@ class CWTFeatureExtractor(layers.Layer):
         for block in self.conv_blocks:
             for layer in block:
                 x = layer(x, training=training) if hasattr(layer, 'training') else layer(x)
-        # x shape: (batch, H/16, W/16, last_filters)
+        # x shape: (batch, H/2^n, W/2^n, last_filters)
         # Reshape to sequence: (batch, num_patches, features)
         batch_size = tf.shape(x)[0]
         h, w, c = x.shape[1], x.shape[2], x.shape[3]
@@ -110,23 +112,24 @@ class CWTFeatureExtractor(layers.Layer):
 
 
 class DynamicTemporalAttention(layers.Layer):
-    """Multi-head attention with dynamic temporal bias.
+    """Multi-head attention with dynamic attention rectification.
 
-    Implements standard scaled dot-product attention with an additive temporal
-    bias that gives recent positions higher importance. The bias is parameterized
-    as: bias[i,j] = -slope * |i - j| where slope is a learned parameter per head.
+    Implements standard scaled dot-product attention with optional
+    soft-threshold gating that attenuates low-importance attention weights.
 
-    This is inspired by ALiBi (Press et al., 2022) but with trainable slopes
-    rather than fixed geometric ones.
+    After softmax, a learned per-head threshold is applied: attention weights
+    below the threshold are smoothly gated toward zero via a sigmoid gate.
+    This implements the paper's concept of "attenuating less important features
+    by weakening their attention or masking through zeroing out."
     """
 
     def __init__(self, model_dim: int, num_heads: int, dropout_rate: float = 0.1,
-                 use_temporal_bias: bool = True, **kwargs):
+                 use_attention_rectification: bool = True, **kwargs):
         super().__init__(**kwargs)
         self.model_dim = model_dim
         self.num_heads = num_heads
         self.head_dim = model_dim // num_heads
-        self.use_temporal_bias = use_temporal_bias
+        self.use_attention_rectification = use_attention_rectification
 
         self.wq = layers.Dense(model_dim)
         self.wk = layers.Dense(model_dim)
@@ -135,13 +138,20 @@ class DynamicTemporalAttention(layers.Layer):
         self.attn_dropout = layers.Dropout(dropout_rate)
 
     def build(self, input_shape):
-        if self.use_temporal_bias:
-            # Learned slopes for temporal decay, one per head
-            # Initialize with small positive values so bias decays with distance
-            self.temporal_slopes = self.add_weight(
-                name="temporal_slopes",
+        if self.use_attention_rectification:
+            # Learned threshold for attention rectification, one per head.
+            # Initialized near 0 so sigmoid(threshold) ≈ 0.5, gating starts moderate.
+            self.learned_threshold = self.add_weight(
+                name="learned_threshold",
                 shape=(self.num_heads,),
-                initializer=keras.initializers.Constant(0.1),
+                initializer=keras.initializers.Zeros(),
+                trainable=True,
+            )
+            # Sharpness of the gating sigmoid. Higher = sharper cutoff.
+            self.gate_sharpness = self.add_weight(
+                name="gate_sharpness",
+                shape=(self.num_heads,),
+                initializer=keras.initializers.Constant(10.0),
                 trainable=True,
             )
         super().build(input_shape)
@@ -167,18 +177,19 @@ class DynamicTemporalAttention(layers.Layer):
         scale = tf.sqrt(tf.cast(self.head_dim, tf.float32))
         attn_logits = tf.matmul(q, k, transpose_b=True) / scale  # (batch, heads, seq, seq)
 
-        # Add temporal bias
-        if self.use_temporal_bias:
-            # distance matrix: |i - j| for all positions
-            positions = tf.cast(tf.range(seq_len), tf.float32)
-            dist = tf.abs(positions[:, None] - positions[None, :])  # (seq, seq)
-            # slopes are softplus'd to ensure positivity
-            slopes = tf.nn.softplus(self.temporal_slopes)  # (heads,)
-            # bias = -slope * distance, broadcast over batch
-            bias = -slopes[:, None, None] * dist[None, :, :]  # (heads, seq, seq)
-            attn_logits = attn_logits + bias[None, :, :, :]  # (batch, heads, seq, seq)
-
         attn_weights = tf.nn.softmax(attn_logits, axis=-1)
+
+        # Attention rectification: soft-threshold gating
+        if self.use_attention_rectification:
+            # threshold in (0, 1) via sigmoid
+            threshold = tf.nn.sigmoid(self.learned_threshold)  # (heads,)
+            # Smooth gate: values above threshold → 1, below → 0
+            gate = tf.nn.sigmoid(
+                self.gate_sharpness[:, None, None]
+                * (attn_weights - threshold[:, None, None])
+            )  # (batch, heads, seq, seq)
+            attn_weights = attn_weights * gate
+
         attn_weights = self.attn_dropout(attn_weights, training=training)
 
         # Apply attention to values
@@ -196,11 +207,11 @@ class TransformerEncoderBlock(layers.Layer):
     """
 
     def __init__(self, model_dim: int, num_heads: int, ff_dim: int,
-                 dropout_rate: float = 0.1, use_temporal_bias: bool = True, **kwargs):
+                 dropout_rate: float = 0.1, use_attention_rectification: bool = True, **kwargs):
         super().__init__(**kwargs)
         self.ln1 = layers.LayerNormalization()
         self.attn = DynamicTemporalAttention(
-            model_dim, num_heads, dropout_rate, use_temporal_bias,
+            model_dim, num_heads, dropout_rate, use_attention_rectification,
         )
         self.drop1 = layers.Dropout(dropout_rate)
 
@@ -287,8 +298,11 @@ def build_dta_mlp(config: DTAMLPConfig | None = None) -> keras.Model:
     """Build the full DTA-MLP model.
 
     Architecture:
-        Input (H, W, 2) → CNN Frontend → Patch Embed → Transformer (DTA) × N
-        → CT-MLP × N → Global Average Pooling → Dense → RUL
+        Input (H, W, 2) → CNN Frontend → Patch Embed
+        → [Transformer (DTA) + CT-MLP] × N → Global Average Pooling → Dense → RUL
+
+    Each block interleaves a Transformer encoder (with attention rectification)
+    and a CT-MLP layer, following the paper's Figure 3.
 
     Args:
         config: Model configuration. Uses defaults if None.
@@ -328,19 +342,16 @@ def build_dta_mlp(config: DTAMLPConfig | None = None) -> keras.Model:
     x = x + pos_embedding(positions)
     x = layers.Dropout(config.dropout_rate)(x)
 
-    # Transformer encoder with DTA
-    for i in range(config.num_transformer_layers):
+    # Interleaved Transformer + CT-MLP blocks (paper Figure 3)
+    for i in range(config.num_layers):
         x = TransformerEncoderBlock(
             model_dim=config.model_dim,
             num_heads=config.num_heads,
             ff_dim=config.ff_dim,
             dropout_rate=config.dropout_rate,
-            use_temporal_bias=config.temporal_bias,
+            use_attention_rectification=config.attention_rectification,
             name=f"transformer_block_{i}",
         )(x)
-
-    # CT-MLP layers
-    for i in range(config.num_ct_mlp_layers):
         x = CTMixedMLP(
             model_dim=config.model_dim,
             seq_len=seq_len,
@@ -359,7 +370,7 @@ def build_dta_mlp(config: DTAMLPConfig | None = None) -> keras.Model:
     x = layers.Dropout(config.dropout_rate)(x)
     x = layers.Dense(64, activation="gelu", name="rul_dense2")(x)
     x = layers.Dropout(config.dropout_rate)(x)
-    outputs = layers.Dense(1, activation="sigmoid", name="rul_output")(x)
+    outputs = layers.Dense(1, name="rul_output")(x)
 
     model = keras.Model(inputs=inputs, outputs=outputs, name="dta_mlp")
     return model
@@ -369,6 +380,5 @@ def create_default_dta_mlp() -> keras.Model:
     """Create DTA-MLP with default configuration for XJTU-SY CWT scaleograms.
 
     Input shape: (64, 128, 2) matching pre-generated CWT scaleograms.
-    Target: ~5.9M parameters (as reported in Jin et al. 2025).
     """
     return build_dta_mlp(DTAMLPConfig())

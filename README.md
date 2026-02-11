@@ -5,7 +5,7 @@
 ![Tests](https://img.shields.io/badge/tests-566%20passed-brightgreen)
 ![uv](https://img.shields.io/badge/package%20manager-uv-blueviolet)
 
-A reproducible benchmark for **Remaining Useful Life (RUL)** prediction of rolling element bearings on the XJTU-SY dataset. Compares 6 models across 3 evaluation protocols with a two-stage onset detection pipeline, a reproduction of [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4), an interactive Gradio dashboard, and experiment tracking via MLflow and Vertex AI. Our best model -- a bidirectional **Feature LSTM with just 5,793 parameters** -- achieves **0.160 LOBO RMSE**, outperforming all deep learning baselines trained on raw signals.
+A reproducible benchmark for **Remaining Useful Life (RUL)** prediction of rolling element bearings on the XJTU-SY dataset. Compares 6 models across 3 evaluation protocols with a two-stage onset detection pipeline, an implementation inspired by [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4), an interactive Gradio dashboard, and experiment tracking via MLflow and Vertex AI. Our best model -- a bidirectional **Feature LSTM with just 5,793 parameters** -- achieves **0.160 LOBO RMSE**, outperforming all deep learning baselines trained on raw signals.
 
 <p align="center">
   <img src="docs/Demonstration-of-test-best-setup-for-XJTU-SY-experimental-study-58.png" alt="XJTU-SY bearing test rig: AC motor driving a shaft with support bearings under hydraulic loading, with horizontal and vertical accelerometers mounted on the tested bearing" width="700">
@@ -43,7 +43,7 @@ Each CSV file contains 32,768 samples (1.28 s recording) captured at regular int
 
 ## Models
 
-Six model architectures are benchmarked. Five are original designs; one is an attempt to reproduce a published method.
+Six model architectures are benchmarked. Five are original designs; one is inspired by a published method.
 
 | Model | Input | Architecture | Params | Source |
 |---|---|---|---|---|
@@ -52,12 +52,12 @@ Six model architectures are benchmarked. Five are original designs; one is an at
 | **1D CNN** | 32768 × 2 raw signal | Conv1D → BatchNorm → GlobalAvgPool → Dense | ~50K | Original |
 | **CNN2D** | 128 × 128 × 2 spectrogram | 2D CNN with progressive downsampling | ~80K | Original |
 | **TCN-Transformer** | 32768 × 2 raw signal | TCN → Cross-Attention → BiLSTM → Dense | ~77K | Inspired by [1, 2, 3] below |
-| **DTA-MLP** | 32768 × 2 raw signal | CNN encoder → Dual Temporal Attention → MLP | ~120K | Reproduction of [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4) |
+| **DTA-MLP** | 64 × 128 × 2 CWT scaleogram | CNN → Transformer (attention rectification) → CT-MLP → Linear | ~5.7M | Inspired by [Jin et al. 2025](https://link.springer.com/article/10.1007/s43684-024-00088-4) |
 
 For a deep dive into the Feature LSTM architecture and design decisions, see the **[Feature LSTM Design Guide](docs/feature_lstm_guide.md)**.
 
 > **Replication notes:**
-> - **DTA-MLP** reproduces the Dual Temporal Attention mechanism and MLP head from Jin et al. 2025. The paper does not fully specify the CNN frontend architecture used to extract temporal features from raw signals; our implementation uses a standard 1D convolutional encoder. The results are not comparable and serve only an experimentation purpose.
+> - **DTA-MLP** is loosely inspired by Jin et al. 2025. The paper describes a CWT → CNN → Dynamic Attention → CT-MLP pipeline. Our implementation follows the paper's high-level architecture but interprets underspecified details: the attention rectification mechanism (we use soft-threshold gating), CNN frontend structure, and integration pattern. It is included as an experimental baseline showing how CWT + Transformer compares to feature engineering on this dataset.
 > - **TCN-Transformer** combines ideas from several published approaches into a single architecture for personal experimentation. The TCN backbone uses dilated causal convolutions from [Bai et al. 2018](https://arxiv.org/abs/1803.01271) [1]; the TCN-LSTM combination for bearing RUL follows work such as [Hsu et al. 2022](https://doi.org/10.1049/icp.2024.3578) [2]; and the parallel TCN-Transformer design draws from [Tong et al. 2024](https://doi.org/10.1088/1361-6501/ad73ee) [3]. Our variant adds bidirectional cross-attention between the two vibration channels and a BiLSTM aggregator. It is not a reproduction of any single paper but a personal testbench to study how TCN-based temporal feature extraction compares to standard convolutions and attention-only approaches on this dataset.
 > - **CNN1D, CNN2D, Feature LSTM, LightGBM** are original architectures designed for this project and are not reproductions of any published method.
 
@@ -89,7 +89,9 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 | **TCN-Transformer** | 0.237 | — | — |
 | **1D CNN** | 0.251 | 0.280 | 0.199 |
 | **CNN2D** | 0.289 | **0.262** | 0.229 |
-| **DTA-MLP** | 0.402 | 0.445 | 0.353 |
+| **DTA-MLP** ¹ | 0.402 | 0.445 | 0.353 |
+
+> ¹ DTA-MLP results are from a prior architecture revision (sigmoid output, ALiBi attention bias, 4-block double-conv CNN). The current architecture has not yet been retrained; results will be updated in a future benchmark run.
 
 #### Comparison with Published Results
 
@@ -113,7 +115,7 @@ All metrics are **normalized RMSE** on the [0, 1] RUL scale. Each bearing's RUL 
 
 #### Per-Bearing Results (LOBO, Normalized RMSE)
 
-| Bearing | Cond | Files | Feature LSTM | LightGBM | TCN-Transf. | 1D CNN | CNN2D | DTA-MLP |
+| Bearing | Cond | Files | Feature LSTM | LightGBM | TCN-Transf. | 1D CNN | CNN2D | DTA-MLP ¹ |
 |---|---|---|---|---|---|---|---|---|
 | Bearing1_1 | 1 | 123 | **0.127** | 0.166 | 0.129 | 0.141 | 0.482 | 0.440 |
 | Bearing1_2 | 1 | 161 | 0.219 | 0.231 | **0.199** | 0.204 | 0.367 | 0.477 |
@@ -359,7 +361,7 @@ All other output files are optional. The dashboard gracefully degrades when they
 │   ├── models/               # Model registry and architectures
 │   │   ├── baselines/        #   LightGBM, 1D CNN, Feature LSTM
 │   │   ├── cnn2d/            #   Spectrogram-based 2D CNN
-│   │   ├── dta_mlp/          #   DTA-MLP (Jin et al. 2025 reproduction)
+│   │   ├── dta_mlp/          #   DTA-MLP (inspired by Jin et al. 2025)
 │   │   ├── pattern1/         #   TCN-Transformer variants
 │   │   └── registry.py       #   Unified model registry
 │   ├── onset/                # Degradation onset detection pipeline

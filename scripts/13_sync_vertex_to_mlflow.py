@@ -59,7 +59,7 @@ MLFLOW_EXPERIMENT_NAME = "bearing_rul_fulllife"
 # Model × protocol matrix
 BENCHMARK_MODELS = [
     "cnn1d_baseline", "cnn2d_simple", "dta_mlp",
-    "mdsct", "tcn_transformer_lstm",
+    "tcn_transformer_lstm",
 ]
 PROTOCOLS = ["lobo", "loco", "jin", "sun"]
 
